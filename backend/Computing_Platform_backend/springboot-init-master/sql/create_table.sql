@@ -40,6 +40,7 @@ CREATE TABLE sys_academic_term (
 CREATE TABLE sys_dict_college (
                                   id BIGINT PRIMARY KEY AUTO_INCREMENT,
                                   college_name VARCHAR(128) NOT NULL COMMENT '学院名称',
+                                  is_deleted TINYINT DEFAULT 0 COMMENT '0未删除 1已删除',
                                   UNIQUE KEY uk_college_name (college_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '学院字典表';
 
@@ -51,6 +52,7 @@ CREATE TABLE sys_dict_major (
                                 major_code VARCHAR(64) NOT NULL COMMENT '专业代码',
                                 major_name VARCHAR(128) NOT NULL COMMENT '专业名称',
                                 college_id BIGINT COMMENT '所属学院ID（关联学院表）',
+                                is_deleted TINYINT DEFAULT 0 COMMENT '0未删除 1已删除',
                                 UNIQUE KEY uk_major_code (major_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '专业字典表';
 

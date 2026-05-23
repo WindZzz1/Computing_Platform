@@ -1,16 +1,18 @@
 package com.yupi.springbootinit.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.yupi.springbootinit.model.entity.SysUser;
 import com.yupi.springbootinit.model.vo.SysUserVO;
-import generator.domain.SysUser;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 /**
  * @author YU
  * @description 针对表【sys_user(用户表)】的数据库操作Mapper
  * @createDate 2026-05-21 18:39:44
- * @Entity generator.domain.SysUser
+ * @Entity com.yupi.springbootinit.model.entity.SysUser
  */
+@Mapper
 public interface SysUserMapper extends BaseMapper<SysUser> {
 
     /**

@@ -8,9 +8,10 @@ import com.yupi.springbootinit.constant.FileConstant;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.manager.CosManager;
 import com.yupi.springbootinit.model.dto.file.UploadFileRequest;
-import com.yupi.springbootinit.model.entity.User;
 import com.yupi.springbootinit.model.enums.FileUploadBizEnum;
-import com.yupi.springbootinit.service.UserService;
+import com.yupi.springbootinit.model.entity.SysUser;
+import com.yupi.springbootinit.service.SysUserService;
+
 import java.io.File;
 import java.util.Arrays;
 import javax.annotation.Resource;
@@ -35,7 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class FileController {
 
     @Resource
-    private UserService userService;
+    private SysUserService sysUserService;
 
     @Resource
     private CosManager cosManager;
@@ -57,7 +58,7 @@ public class FileController {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         validFile(multipartFile, fileUploadBizEnum);
-        User loginUser = userService.getLoginUser(request);
+        SysUser loginUser = sysUserService.getLoginUser(request);
         // 文件目录：根据业务、用户来划分
         String uuid = RandomStringUtils.randomAlphanumeric(8);
         String filename = uuid + "-" + multipartFile.getOriginalFilename();

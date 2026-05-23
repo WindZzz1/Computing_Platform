@@ -1,8 +1,9 @@
 package com.yupi.springbootinit.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.yupi.springbootinit.model.entity.SysUser;
+import com.yupi.springbootinit.model.vo.SysUserLoginVO;
 import com.yupi.springbootinit.model.vo.SysUserVO;
-import generator.domain.SysUser;
 
 import javax.servlet.http.HttpServletRequest;
 
@@ -14,14 +15,23 @@ import javax.servlet.http.HttpServletRequest;
 public interface SysUserService extends IService<SysUser> {
 
     /**
-     * 用户登录
+     * 用户登录（返回Token）
+     *
+     * @param username  用户账号
+     * @param password  用户密码
+     * @return 包含Token的登录响应
+     */
+    SysUserLoginVO loginWithToken(String username, String password);
+
+    /**
+     * 用户登录（Session方式）
      *
      * @param username  用户账号
      * @param password  用户密码
      * @param request
      * @return 脱敏后的用户信息
      */
-    SysUserVO login(String username, String password, HttpServletRequest request);
+//    SysUserVO login(String username, String password, HttpServletRequest request);
 
     /**
      * 用户注销
@@ -29,7 +39,15 @@ public interface SysUserService extends IService<SysUser> {
      * @param request
      * @return
      */
-    boolean logout(HttpServletRequest request);
+//    boolean logout(HttpServletRequest request);
+
+    /**
+     * 根据Token获取登录用户
+     *
+     * @param token JWT Token
+     * @return 登录用户
+     */
+    SysUser getLoginUserByToken(String token);
 
     /**
      * 获取当前登录用户

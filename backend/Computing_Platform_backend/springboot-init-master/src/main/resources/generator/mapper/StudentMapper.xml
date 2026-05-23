@@ -4,20 +4,22 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="generator.mapper.StudentMapper">
 
-    <resultMap id="BaseResultMap" type="generator.domain.Student">
+    <resultMap id="BaseResultMap" type="com.yupi.springbootinit.model.entity.Student">
             <id property="id" column="id" />
-            <result property="student_no" column="student_no" />
-            <result property="student_name" column="student_name" />
-            <result property="major_id" column="major_id" />
-            <result property="grade" column="grade" />
-            <result property="class_name" column="class_name" />
-            <result property="create_time" column="create_time" />
-            <result property="update_time" column="update_time" />
-            <result property="is_deleted" column="is_deleted" />
+            <result property="studentNo" column="student_no" />
+            <result property="name" column="name" />
+            <result property="collegeId" column="college_id" />
+            <result property="majorId" column="major_id" />
+            <result property="className" column="class_name" />
+            <result property="phone" column="phone" />
+            <result property="email" column="email" />
+            <result property="createTime" column="create_time" />
+            <result property="updateTime" column="update_time" />
+            <result property="isDeleted" column="is_deleted" />
     </resultMap>
 
     <sql id="Base_Column_List">
-        id,student_no,student_name,major_id,grade,class_name,
+        id,student_no,name,college_id,major_id,class_name,phone,email,
         create_time,update_time,is_deleted
     </sql>
 </mapper>

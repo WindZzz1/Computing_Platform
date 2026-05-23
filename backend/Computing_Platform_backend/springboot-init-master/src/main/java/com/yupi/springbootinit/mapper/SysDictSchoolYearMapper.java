@@ -1,15 +1,15 @@
 package com.yupi.springbootinit.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.yupi.springbootinit.model.entity.SysDictCollege;
+import com.yupi.springbootinit.model.entity.SysDictSchoolYear;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 学院字典表 Mapper
+ * 学年学期字典表 Mapper
  *
  * @author YU
  */
 @Mapper
-public interface SysDictCollegeMapper extends BaseMapper<SysDictCollege> {
+public interface SysDictSchoolYearMapper extends BaseMapper<SysDictSchoolYear> {
 
 }
