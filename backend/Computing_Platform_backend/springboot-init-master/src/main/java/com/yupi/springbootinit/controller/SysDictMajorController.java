@@ -9,6 +9,7 @@ import com.yupi.springbootinit.model.dto.dict.SysDictMajorAddRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictMajorQueryRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictMajorUpdateRequest;
 import com.yupi.springbootinit.model.vo.PageResultVO;
+import com.yupi.springbootinit.model.vo.SysDictMajorSimpleVO;
 import com.yupi.springbootinit.model.vo.SysDictMajorVO;
 import com.yupi.springbootinit.service.SysDictMajorService;
 import com.yupi.springbootinit.constant.SysUserConstant;
@@ -99,17 +100,14 @@ public class SysDictMajorController {
     }
 
     /**
-     * 获取所有专业列表（不分页）
+     * 获取所有专业列表（简化）
      *
-     * @return 专业列表
+     * @return 专业简化列表
      */
-//    @PostMapping("/list")
-//    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
-//    public BaseResponse<Page<SysDictMajorVO>> listMajor() {
-//        SysDictMajorQueryRequest request = new SysDictMajorQueryRequest();
-//        request.setCurrent(1);
-//        request.setPageSize(1000);
-//        Page<SysDictMajorVO> majorPage = sysDictMajorService.pageMajor(request);
-//        return ResultUtils.success(majorPage);
-//    }
+    @PostMapping("/list")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
+    public BaseResponse<java.util.List<SysDictMajorSimpleVO>> listMajor() {
+        java.util.List<SysDictMajorSimpleVO> list = sysDictMajorService.listMajorSimple();
+        return ResultUtils.success(list);
+    }
 }

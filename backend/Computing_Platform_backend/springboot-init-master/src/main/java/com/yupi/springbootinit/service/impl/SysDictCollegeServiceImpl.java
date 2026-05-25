@@ -10,6 +10,7 @@ import com.yupi.springbootinit.model.dto.dict.SysDictCollegeAddRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictCollegeQueryRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictCollegeUpdateRequest;
 import com.yupi.springbootinit.model.entity.SysDictCollege;
+import com.yupi.springbootinit.model.vo.SysDictCollegeSimpleVO;
 import com.yupi.springbootinit.model.vo.SysDictCollegeVO;
 import com.yupi.springbootinit.service.SysDictCollegeService;
 import lombok.extern.slf4j.Slf4j;
@@ -136,5 +137,18 @@ public class SysDictCollegeServiceImpl extends ServiceImpl<SysDictCollegeMapper,
         SysDictCollegeVO sysDictCollegeVO = new SysDictCollegeVO();
         BeanUtils.copyProperties(sysDictCollege, sysDictCollegeVO);
         return sysDictCollegeVO;
+    }
+
+    @Override
+    public java.util.List<SysDictCollegeSimpleVO> listCollegeSimple() {
+        QueryWrapper<SysDictCollege> queryWrapper = new QueryWrapper<>();
+        queryWrapper.select("id", "college_name");
+        queryWrapper.orderByAsc("id");
+        return this.list(queryWrapper).stream().map(college -> {
+            SysDictCollegeSimpleVO simpleVO = new SysDictCollegeSimpleVO();
+            simpleVO.setId(college.getId());
+            simpleVO.setCollegeName(college.getCollegeName());
+            return simpleVO;
+        }).collect(java.util.stream.Collectors.toList());
     }
 }

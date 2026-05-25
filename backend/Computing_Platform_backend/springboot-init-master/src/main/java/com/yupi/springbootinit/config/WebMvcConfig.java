@@ -27,7 +27,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         // 系统用户JWT认证拦截器
         registry.addInterceptor(sysJwtInterceptor)
-                .addPathPatterns("/dict/**")  // 拦截字典管理相关接口
+                .addPathPatterns("/dict/**")      // 拦截字典管理相关接口
+                .addPathPatterns("/requirement/**") // 拦截毕业要求和指标点相关接口
                 .excludePathPatterns(
                         "/sysuser/login",      // 登录接口
                         "/sysuser/login/token" // Token登录接口

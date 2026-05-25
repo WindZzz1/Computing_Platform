@@ -73,6 +73,18 @@ public class SysJwtInterceptor implements HandlerInterceptor {
             if (!SysUserConstant.ROLE_ADMIN.equals(user.getRoleCode())) {
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要管理员权限");
             }
+        } else if (SysUserConstant.ROLE_LEADER.equals(mustRole)) {
+            if (!SysUserConstant.ROLE_LEADER.equals(user.getRoleCode())) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要专业负责人权限");
+            }
+        } else if (SysUserConstant.ROLE_TEACHER.equals(mustRole)) {
+            if (!SysUserConstant.ROLE_TEACHER.equals(user.getRoleCode())) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要主讲教师权限");
+            }
+        } else if (SysUserConstant.ROLE_EDU.equals(mustRole)) {
+            if (!SysUserConstant.ROLE_EDU.equals(user.getRoleCode())) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要教务管理员权限");
+            }
         }
 
         // 将用户信息存入请求属性，供后续Controller、Service使用，只在本次请求有效

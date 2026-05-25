@@ -9,6 +9,7 @@ import com.yupi.springbootinit.model.dto.dict.SysDictCollegeAddRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictCollegeQueryRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictCollegeUpdateRequest;
 import com.yupi.springbootinit.model.vo.PageResultVO;
+import com.yupi.springbootinit.model.vo.SysDictCollegeSimpleVO;
 import com.yupi.springbootinit.model.vo.SysDictCollegeVO;
 import com.yupi.springbootinit.service.SysDictCollegeService;
 import com.yupi.springbootinit.constant.SysUserConstant;
@@ -99,17 +100,14 @@ public class SysDictCollegeController {
     }
 
     /**
-     * 获取所有学院列表（不分页）
+     * 获取所有学院列表（简化）
      *
-     * @return 学院列表
+     * @return 学院简化列表
      */
-//    @PostMapping("/list")
-//    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
-//    public BaseResponse<Page<SysDictCollegeVO>> listCollege() {
-//        SysDictCollegeQueryRequest request = new SysDictCollegeQueryRequest();
-//        request.setCurrent(1);
-//        request.setPageSize(1000);
-//        Page<SysDictCollegeVO> collegePage = sysDictCollegeService.pageCollege(request);
-//        return ResultUtils.success(collegePage);
-//    }
+    @PostMapping("/list")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
+    public BaseResponse<java.util.List<SysDictCollegeSimpleVO>> listCollege() {
+        java.util.List<SysDictCollegeSimpleVO> list = sysDictCollegeService.listCollegeSimple();
+        return ResultUtils.success(list);
+    }
 }
