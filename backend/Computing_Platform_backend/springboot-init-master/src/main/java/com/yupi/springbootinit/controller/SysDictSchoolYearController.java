@@ -8,6 +8,7 @@ import com.yupi.springbootinit.common.ResultUtils;
 import com.yupi.springbootinit.model.dto.dict.SysDictSchoolYearAddRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictSchoolYearQueryRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictSchoolYearUpdateRequest;
+import com.yupi.springbootinit.model.vo.PageResultVO;
 import com.yupi.springbootinit.model.vo.SysDictSchoolYearVO;
 import com.yupi.springbootinit.service.SysDictSchoolYearService;
 import com.yupi.springbootinit.constant.SysUserConstant;
@@ -92,9 +93,9 @@ public class SysDictSchoolYearController {
      */
     @PostMapping("/page")
     @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
-    public BaseResponse<Page<SysDictSchoolYearVO>> pageSchoolYear(@RequestBody SysDictSchoolYearQueryRequest sysDictSchoolYearQueryRequest) {
+    public BaseResponse<PageResultVO<SysDictSchoolYearVO>> pageSchoolYear(@RequestBody SysDictSchoolYearQueryRequest sysDictSchoolYearQueryRequest) {
         Page<SysDictSchoolYearVO> schoolYearPage = sysDictSchoolYearService.pageSchoolYear(sysDictSchoolYearQueryRequest);
-        return ResultUtils.success(schoolYearPage);
+        return ResultUtils.success(PageResultVO.from(schoolYearPage));
     }
 
     /**
@@ -102,13 +103,13 @@ public class SysDictSchoolYearController {
      *
      * @return 学年学期列表
      */
-    @PostMapping("/list")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
-    public BaseResponse<Page<SysDictSchoolYearVO>> listSchoolYear() {
-        SysDictSchoolYearQueryRequest request = new SysDictSchoolYearQueryRequest();
-        request.setCurrent(1);
-        request.setPageSize(1000);
-        Page<SysDictSchoolYearVO> schoolYearPage = sysDictSchoolYearService.pageSchoolYear(request);
-        return ResultUtils.success(schoolYearPage);
-    }
+//    @PostMapping("/list")
+//    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
+//    public BaseResponse<Page<SysDictSchoolYearVO>> listSchoolYear() {
+//        SysDictSchoolYearQueryRequest request = new SysDictSchoolYearQueryRequest();
+//        request.setCurrent(1);
+//        request.setPageSize(1000);
+//        Page<SysDictSchoolYearVO> schoolYearPage = sysDictSchoolYearService.pageSchoolYear(request);
+//        return ResultUtils.success(schoolYearPage);
+//    }
 }

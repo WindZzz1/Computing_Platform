@@ -41,6 +41,7 @@ public class SysDictCollegeServiceImpl extends ServiceImpl<SysDictCollegeMapper,
         if (StringUtils.isAnyBlank(collegeName, collegeCode)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "学院名称或编码不能为空");
         }
+        //防止并发问题
         synchronized (collegeName.intern()) {
             QueryWrapper<SysDictCollege> queryWrapper = new QueryWrapper<>();
             queryWrapper.eq("college_name", collegeName);
@@ -70,6 +71,7 @@ public class SysDictCollegeServiceImpl extends ServiceImpl<SysDictCollegeMapper,
         String collegeName = sysDictCollegeUpdateRequest.getCollegeName();
         if (StringUtils.isNotBlank(collegeName) && !collegeName.equals(existCollege.getCollegeName())) {
             QueryWrapper<SysDictCollege> queryWrapper = new QueryWrapper<>();
+            //检查新的学院名称是否已经存在
             queryWrapper.eq("college_name", collegeName);
             queryWrapper.ne("id", sysDictCollegeUpdateRequest.getId());
             long count = this.baseMapper.selectCount(queryWrapper);
@@ -121,10 +123,8 @@ public class SysDictCollegeServiceImpl extends ServiceImpl<SysDictCollegeMapper,
             return queryWrapper;
         }
         String collegeName = sysDictCollegeQueryRequest.getCollegeName();
-        String collegeCode = sysDictCollegeQueryRequest.getCollegeCode();
         queryWrapper.like(StringUtils.isNotBlank(collegeName), "college_name", collegeName);
-        queryWrapper.like(StringUtils.isNotBlank(collegeCode), "college_code", collegeCode);
-        queryWrapper.orderByDesc("create_time");
+//        queryWrapper.orderByDesc("create_time");
         return queryWrapper;
     }
 

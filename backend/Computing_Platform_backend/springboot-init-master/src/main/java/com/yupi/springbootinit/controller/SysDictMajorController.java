@@ -8,6 +8,7 @@ import com.yupi.springbootinit.common.ResultUtils;
 import com.yupi.springbootinit.model.dto.dict.SysDictMajorAddRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictMajorQueryRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictMajorUpdateRequest;
+import com.yupi.springbootinit.model.vo.PageResultVO;
 import com.yupi.springbootinit.model.vo.SysDictMajorVO;
 import com.yupi.springbootinit.service.SysDictMajorService;
 import com.yupi.springbootinit.constant.SysUserConstant;
@@ -92,9 +93,9 @@ public class SysDictMajorController {
      */
     @PostMapping("/page")
     @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
-    public BaseResponse<Page<SysDictMajorVO>> pageMajor(@RequestBody SysDictMajorQueryRequest sysDictMajorQueryRequest) {
+    public BaseResponse<PageResultVO<SysDictMajorVO>> pageMajor(@RequestBody SysDictMajorQueryRequest sysDictMajorQueryRequest) {
         Page<SysDictMajorVO> majorPage = sysDictMajorService.pageMajor(sysDictMajorQueryRequest);
-        return ResultUtils.success(majorPage);
+        return ResultUtils.success(PageResultVO.from(majorPage));
     }
 
     /**
@@ -102,13 +103,13 @@ public class SysDictMajorController {
      *
      * @return 专业列表
      */
-    @PostMapping("/list")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
-    public BaseResponse<Page<SysDictMajorVO>> listMajor() {
-        SysDictMajorQueryRequest request = new SysDictMajorQueryRequest();
-        request.setCurrent(1);
-        request.setPageSize(1000);
-        Page<SysDictMajorVO> majorPage = sysDictMajorService.pageMajor(request);
-        return ResultUtils.success(majorPage);
-    }
+//    @PostMapping("/list")
+//    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
+//    public BaseResponse<Page<SysDictMajorVO>> listMajor() {
+//        SysDictMajorQueryRequest request = new SysDictMajorQueryRequest();
+//        request.setCurrent(1);
+//        request.setPageSize(1000);
+//        Page<SysDictMajorVO> majorPage = sysDictMajorService.pageMajor(request);
+//        return ResultUtils.success(majorPage);
+//    }
 }

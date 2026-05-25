@@ -143,7 +143,7 @@ public class SysDictMajorServiceImpl extends ServiceImpl<SysDictMajorMapper, Sys
         queryWrapper.like(StringUtils.isNotBlank(majorCode), "major_code", majorCode);
         queryWrapper.like(StringUtils.isNotBlank(majorName), "major_name", majorName);
         queryWrapper.eq(collegeId != null, "college_id", collegeId);
-        queryWrapper.orderByDesc("create_time");
+//        queryWrapper.orderByDesc("create_time");
         return queryWrapper;
     }
 

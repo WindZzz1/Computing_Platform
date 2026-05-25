@@ -8,6 +8,7 @@ import com.yupi.springbootinit.common.ResultUtils;
 import com.yupi.springbootinit.model.dto.dict.SysDictCollegeAddRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictCollegeQueryRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictCollegeUpdateRequest;
+import com.yupi.springbootinit.model.vo.PageResultVO;
 import com.yupi.springbootinit.model.vo.SysDictCollegeVO;
 import com.yupi.springbootinit.service.SysDictCollegeService;
 import com.yupi.springbootinit.constant.SysUserConstant;
@@ -92,9 +93,9 @@ public class SysDictCollegeController {
      */
     @PostMapping("/page")
     @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
-    public BaseResponse<Page<SysDictCollegeVO>> pageCollege(@RequestBody SysDictCollegeQueryRequest sysDictCollegeQueryRequest) {
+    public BaseResponse<PageResultVO<SysDictCollegeVO>> pageCollege(@RequestBody SysDictCollegeQueryRequest sysDictCollegeQueryRequest) {
         Page<SysDictCollegeVO> collegePage = sysDictCollegeService.pageCollege(sysDictCollegeQueryRequest);
-        return ResultUtils.success(collegePage);
+        return ResultUtils.success(PageResultVO.from(collegePage));
     }
 
     /**
@@ -102,13 +103,13 @@ public class SysDictCollegeController {
      *
      * @return 学院列表
      */
-    @PostMapping("/list")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
-    public BaseResponse<Page<SysDictCollegeVO>> listCollege() {
-        SysDictCollegeQueryRequest request = new SysDictCollegeQueryRequest();
-        request.setCurrent(1);
-        request.setPageSize(1000);
-        Page<SysDictCollegeVO> collegePage = sysDictCollegeService.pageCollege(request);
-        return ResultUtils.success(collegePage);
-    }
+//    @PostMapping("/list")
+//    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
+//    public BaseResponse<Page<SysDictCollegeVO>> listCollege() {
+//        SysDictCollegeQueryRequest request = new SysDictCollegeQueryRequest();
+//        request.setCurrent(1);
+//        request.setPageSize(1000);
+//        Page<SysDictCollegeVO> collegePage = sysDictCollegeService.pageCollege(request);
+//        return ResultUtils.success(collegePage);
+//    }
 }

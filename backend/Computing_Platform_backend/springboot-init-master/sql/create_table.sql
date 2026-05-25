@@ -25,10 +25,10 @@ CREATE TABLE sys_user (
 -- ----------------------------
 -- 3. 学年学期表
 -- ----------------------------
-CREATE TABLE sys_academic_term (
+CREATE TABLE sys_dict_school_year (
                                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                                   year VARCHAR(128) NOT NULL COMMENT '年份名称 如2023-2024学年',
-                                   semester VARCHAR(128) NOT NULL COMMENT '学期名称 如第一学期',
+                                   year_name VARCHAR(128) NOT NULL COMMENT '年份名称 如2023-2024学年',
+                                   semester_name VARCHAR(128) NOT NULL COMMENT '学期名称 如第一学期',
                                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                                    update_time DATETIME ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
                                    is_deleted TINYINT DEFAULT 0 COMMENT '0未删除 1已删除'
