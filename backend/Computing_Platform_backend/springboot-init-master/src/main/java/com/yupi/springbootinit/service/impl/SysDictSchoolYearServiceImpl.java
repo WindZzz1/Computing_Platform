@@ -106,7 +106,7 @@ public class SysDictSchoolYearServiceImpl extends ServiceImpl<SysDictSchoolYearM
         String semesterName = sysDictSchoolYearQueryRequest.getSemesterName();
         queryWrapper.like(StringUtils.isNotBlank(yearName), "year_name", yearName);
         queryWrapper.like(StringUtils.isNotBlank(semesterName), "semester_name", semesterName);
-        queryWrapper.orderByDesc("create_time");
+//        queryWrapper.orderByDesc("create_time");
         return queryWrapper;
     }
 

@@ -1,181 +1,126 @@
-# SpringBoot 项目初始模板
+# Computing Platform Backend
 
-> 作者：[程序员鱼皮](https://github.com/liyupi)
-> 仅分享于 [编程导航知识星球](https://yupi.icu)
+毕业成果管理系统后端服务
 
-基于 Java SpringBoot 的项目初始模板，整合了常用框架和主流业务的示例代码。
+> 本项目基于 [SpringBoot 项目初始模板](https://github.com/liyupi) 开发
 
-只需 1 分钟即可完成内容网站的后端！！！大家还可以在此基础上快速开发自己的项目。
+## 环境要求
 
-[toc]
+- **JDK 17** - 本系统采用 Java 17 开发
+- Maven 3.6+
+- MySQL 8.0+
+- IDE（推荐 IntelliJ IDEA）
 
-## 模板特点
+## 快速开始
 
-### 主流框架 & 特性
+### 第一步：配置 JDK 17
 
-- Spring Boot 2.7.x（贼新）
-- Spring MVC
-- MyBatis + MyBatis Plus 数据访问（开启分页）
-- Spring Boot 调试工具和项目处理器
-- Spring AOP 切面编程
-- Spring Scheduler 定时任务
-- Spring 事务注解
+拉取代码后，**必须**将项目语言级别设置为 JDK 17，否则项目无法正常运行！
 
-### 数据存储
+**IntelliJ IDEA 设置步骤：**
+1. 右键项目 -> `Open Module Settings`（或按 `Ctrl+Alt+Shift+S`）
+2. 在左侧选择 `Project`：
+   - `SDK` 选择 `JDK 17`（如果没有，点击 `Add SDK` -> `Download JDK` 下载）
+   - `Language level` 选择 `17 - Sealed types, always-strict floating-point semantics`
+3. 在左侧选择 `Modules` -> 选择项目模块：
+   - 将 `Language level` 也设置为 `17`
+4. 点击 `Apply` 和 `OK` 保存
 
-- MySQL 数据库
-- Redis 内存数据库
-- Elasticsearch 搜索引擎
-- 腾讯云 COS 对象存储
+**验证配置是否成功：**
+- 打开 `pom.xml`，确认 `<java.version>17</java.version>`
+- 项目编译器显示为 `17`
 
-### 工具类
+### 第二步：初始化数据库
 
-- Easy Excel 表格处理
-- Hutool 工具库
-- Apache Commons Lang3 工具类
-- Lombok 注解
+找到项目根目录下的 SQL 文件并执行：
 
-### 业务特性
+```
+springboot-init-master/sql/create_table.sql
+```
 
-- 业务代码生成器（支持自动生成 Service、Controller、数据模型代码）
-- Spring Session Redis 分布式登录
-- 全局请求响应拦截器（记录日志）
-- 全局异常处理器
-- 自定义错误码
-- 封装通用响应类
-- Swagger + Knife4j 接口文档
-- 自定义权限注解 + 全局校验
-- 全局跨域处理
-- 长整数丢失精度解决
-- 多环境配置
+该脚本会自动：
+- 创建名为 `graduation_achievement` 的数据库
+- 初始化系统所需的所有数据表（用户表、学院字典表、专业字典表、学年学期表等）
 
+**执行方式：**
+- 使用 Navicat / MySQL Workbench / DBeaver 等数据库工具直接运行该 SQL 文件
 
-## 业务功能
+### 第三步：修改数据库配置
 
-- 提供示例 SQL（用户、帖子、帖子点赞、帖子收藏表）
-- 用户登录、注册、注销、更新、检索、权限管理
-- 帖子创建、删除、编辑、更新、数据库检索、ES 灵活检索
-- 帖子点赞、取消点赞
-- 帖子收藏、取消收藏、检索已收藏帖子
-- 帖子全量同步 ES、增量同步 ES 定时任务
-- 支持微信开放平台登录
-- 支持微信公众号订阅、收发消息、设置菜单
-- 支持分业务的文件上传
+打开配置文件修改为你的本地数据库连接信息：
 
-### 单元测试
+**文件路径：** `src/main/resources/application.yml`
 
-- JUnit5 单元测试
-- 示例单元测试类
-
-### 架构设计
-
-- 合理分层
-
-
-## 快速上手
-
-> 所有需要修改的地方鱼皮都标记了 `todo`，便于大家找到修改的位置~
-
-### MySQL 数据库
-
-1）修改 `application.yml` 的数据库配置为你自己的：
-
-```yml
+**找到以下内容并修改：**
+```yaml
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/my_db
-    username: root
-    password: 123456
+    url: jdbc:mysql://localhost:3306/graduation_achievement?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    username: root        # 改为你的数据库用户名
+    password: 125103      # 改为你的数据库密码
 ```
 
-2）执行 `sql/create_table.sql` 中的数据库语句，自动创建库表
+### 第四步：启动项目
 
-3）启动项目，访问 `http://localhost:8101/api/doc.html` 即可打开接口文档，不需要写前端就能在线调试接口了~
-
-![](doc/swagger.png)
-
-### Redis 分布式登录
-
-1）修改 `application.yml` 的 Redis 配置为你自己的：
-
-```yml
-spring:
-  redis:
-    database: 1
-    host: localhost
-    port: 6379
-    timeout: 5000
-    password: 123456
-```
-
-2）修改 `application.yml` 中的 session 存储方式：
-
-```yml
-spring:
-  session:
-    store-type: redis
-```
-
-3）移除 `MainApplication` 类开头 `@SpringBootApplication` 注解内的 exclude 参数：
-
-修改前：
-
-```java
-@SpringBootApplication(exclude = {RedisAutoConfiguration.class})
-```
-
-修改后：
-
-
-```java
-@SpringBootApplication
-```
-
-### Elasticsearch 搜索引擎
-
-1）修改 `application.yml` 的 Elasticsearch 配置为你自己的：
-
-```yml
-spring:
-  elasticsearch:
-    uris: http://localhost:9200
-    username: root
-    password: 123456
-```
-
-2）复制 `sql/post_es_mapping.json` 文件中的内容，通过调用 Elasticsearch 的接口或者 Kibana Dev Tools 来创建索引（相当于数据库建表）
+找到主启动类并运行：
 
 ```
-PUT post_v1
-{
- 参数见 sql/post_es_mapping.json 文件
-}
+src/main/java/com/yupi/springbootinit/SpringbootInitApplication.java
 ```
 
-这步不会操作的话需要补充下 Elasticsearch 的知识，或者自行百度一下~
+启动成功后，服务地址为：**`http://localhost:8101/api`**
 
-3）开启同步任务，将数据库的帖子同步到 Elasticsearch
+### 第五步：测试接口
 
-找到 job 目录下的 `FullSyncPostToEs` 和 `IncSyncPostToEs` 文件，取消掉 `@Component` 注解的注释，再次执行程序即可触发同步：
+**后端接口测试网址：** `http://localhost:8101/api/doc.html`
 
-```java
-// todo 取消注释开启任务
-//@Component
-```
+项目运行后登录上述网址，可以在 Knife4j 在线接口文档页面直接测试所有接口，无需编写前端代码。
 
-### 业务代码生成器
+## 接口文档
 
-支持自动生成 Service、Controller、数据模型代码，配合 MyBatisX 插件，可以快速开发增删改查等实用基础功能。
-
-找到 `generate.CodeGenerator` 类，修改生成参数和生成路径，并且支持注释掉不需要的生成逻辑，然后运行即可。
+## 项目结构
 
 ```
-// 指定生成参数
-String packageName = "com.yupi.springbootinit";
-String dataName = "用户评论";
-String dataKey = "userComment";
-String upperDataKey = "UserComment";
+springboot-init-master/
+├── src/main/java/com/yupi/springbootinit/
+│   ├── controller/        # 接口层
+│   ├── service/           # 业务逻辑层
+│   ├── model/             # 数据模型
+│   │   ├── entity/        # 实体类
+│   │   ├── dto/           # 请求/响应对象
+│   │   └── vo/            # 视图对象
+│   ├── common/            # 公共类
+│   ├── exception/         # 异常处理
+│   └── constant/          # 常量定义
+├── src/main/resources/
+│   └── application.yml    # 配置文件
+└── sql/
+    └── create_table.sql   # 数据库初始化脚本
 ```
 
-生成代码后，可以移动到实际项目中，并且按照 `// todo` 注释的提示来针对自己的业务需求进行修改。
+## 技术栈
+
+| 技术 | 版本 | 说明 |
+|------|------|------|
+| Spring Boot | 2.7.18 | 基础框架 |
+| MyBatis-Plus | 3.5.2 | ORM 框架 |
+| MySQL | 8.0+ | 数据库 |
+| Knife4j | 4.4.0 | 接口文档 |
+| JWT | 0.11.5 | 登录认证 |
+| Hutool | 5.8.8 | 工具库 |
+
+## 常见问题
+
+**Q: 启动报错 "Unsupported class file major version" 或 "Release version 17 not supported"**
+- A: 确认 JDK 版本是否为 17，项目语言级别是否设置为 17（见第一步）
+
+**Q: 数据库连接失败 "Communications link failure"**
+- A: 检查 MySQL 服务是否启动，application.yml 中的数据库账号密码是否正确
+
+**Q: 接口返回 401 未授权**
+- A: 部分接口需要管理员权限，先调用登录接口获取 token，然后在请求头中添加 `Authorization: token`
+
+## 许可证
+
+仅用于内部学习交流

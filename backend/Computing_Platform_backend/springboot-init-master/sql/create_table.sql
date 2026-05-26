@@ -25,10 +25,10 @@ CREATE TABLE sys_user (
 -- ----------------------------
 -- 3. 学年学期表
 -- ----------------------------
-CREATE TABLE sys_academic_term (
+CREATE TABLE sys_dict_school_year (
                                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                                   year VARCHAR(128) NOT NULL COMMENT '年份名称 如2023-2024学年',
-                                   semester VARCHAR(128) NOT NULL COMMENT '学期名称 如第一学期',
+                                   year_name VARCHAR(128) NOT NULL COMMENT '年份名称 如2023-2024学年',
+                                   semester_name VARCHAR(128) NOT NULL COMMENT '学期名称 如第一学期',
                                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                                    update_time DATETIME ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
                                    is_deleted TINYINT DEFAULT 0 COMMENT '0未删除 1已删除'
@@ -64,7 +64,7 @@ CREATE TABLE course (
                         major_id BIGINT NOT NULL COMMENT '专业ID（关联sys_dict_major）',
                         course_code VARCHAR(64) NOT NULL COMMENT '课程代码',
                         course_name VARCHAR(255) NOT NULL COMMENT '课程名称',
-                        course_attr VARCHAR(32) COMMENT '课程性质：必修/选修',
+                        course_nature VARCHAR(32) COMMENT '课程性质：必修/选修',
                         credit DECIMAL(3,1) COMMENT '学分',
                         create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                         update_time DATETIME ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -128,30 +128,30 @@ CREATE TABLE class_student (
 CREATE TABLE graduation_requirement (
                                         id BIGINT PRIMARY KEY AUTO_INCREMENT,
                                         major_id BIGINT NOT NULL COMMENT '专业ID',
-                                        req_code VARCHAR(32) NOT NULL COMMENT 'GR1/GR2...',
-                                        req_name VARCHAR(255) NOT NULL COMMENT '毕业要求名称',
-                                        req_desc TEXT COMMENT '描述',
+                                        requirement_code VARCHAR(32) NOT NULL COMMENT 'GR1/GR2...',
+                                        requirement_name VARCHAR(255) NOT NULL COMMENT '毕业要求名称',
+                                        description TEXT COMMENT '描述',
                                         create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                                         update_time DATETIME ON UPDATE CURRENT_TIMESTAMP,
                                         is_deleted TINYINT DEFAULT 0,
-                                        UNIQUE KEY uk_major_req (major_id, req_code),
+                                        UNIQUE KEY uk_major_req (major_id, requirement_code),
                                         INDEX idx_major_id (major_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '毕业要求主表';
 
 -- ----------------------------
 -- 11. 毕业要求指标点表
 -- ----------------------------
-CREATE TABLE indicator (
+CREATE TABLE indicator_point (
                            id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                           req_id BIGINT NOT NULL COMMENT '毕业要求ID',
+                           requirement_id BIGINT NOT NULL COMMENT '毕业要求ID',
                            indicator_code VARCHAR(32) NOT NULL COMMENT '1.1/1.2/2.1',
                            indicator_name VARCHAR(255) NOT NULL COMMENT '指标点名称',
-                           indicator_desc TEXT COMMENT '描述',
+                           description TEXT COMMENT '描述',
                            create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                            update_time DATETIME ON UPDATE CURRENT_TIMESTAMP,
                            is_deleted TINYINT DEFAULT 0,
-                           UNIQUE KEY uk_req_code (req_id, indicator_code),
-                           INDEX idx_req_id (req_id)
+                           UNIQUE KEY uk_req_code (requirement_id, indicator_code),
+                           INDEX idx_req_id (requirement_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '毕业要求二级指标点表';
 
 -- ----------------------------

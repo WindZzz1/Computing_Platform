@@ -3,6 +3,7 @@ package com.yupi.springbootinit.model.dto.dict;
 import com.yupi.springbootinit.common.PageRequest;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 /**
  * 专业字典查询请求
@@ -11,6 +12,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
+//@NoArgsConstructor
 public class SysDictMajorQueryRequest extends PageRequest {
 
     /**

@@ -8,7 +8,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import javax.annotation.Resource;
 
 /**
- * Web MVC configuration.
+ * Web MVC配置
+ *
+ * @author YU
  */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
@@ -19,7 +21,14 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(sysJwtInterceptor)
-                .addPathPatterns("/dict/**", "/course/**", "/weight/**", "/assessment/**")
+                .addPathPatterns(
+                        "/dict/**",
+                        "/requirement/**",
+                        "/course/**",
+                        "/teaching-class/**",
+                        "/weight/**",
+                        "/assessment/**"
+                )
                 .excludePathPatterns(
                         "/sysuser/login",
                         "/sysuser/login/token"

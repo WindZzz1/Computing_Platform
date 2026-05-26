@@ -12,6 +12,7 @@ import com.yupi.springbootinit.model.dto.dict.SysDictMajorQueryRequest;
 import com.yupi.springbootinit.model.dto.dict.SysDictMajorUpdateRequest;
 import com.yupi.springbootinit.model.entity.SysDictCollege;
 import com.yupi.springbootinit.model.entity.SysDictMajor;
+import com.yupi.springbootinit.model.vo.SysDictMajorSimpleVO;
 import com.yupi.springbootinit.model.vo.SysDictMajorVO;
 import com.yupi.springbootinit.service.SysDictMajorService;
 import lombok.extern.slf4j.Slf4j;
@@ -143,7 +144,7 @@ public class SysDictMajorServiceImpl extends ServiceImpl<SysDictMajorMapper, Sys
         queryWrapper.like(StringUtils.isNotBlank(majorCode), "major_code", majorCode);
         queryWrapper.like(StringUtils.isNotBlank(majorName), "major_name", majorName);
         queryWrapper.eq(collegeId != null, "college_id", collegeId);
-        queryWrapper.orderByDesc("create_time");
+//        queryWrapper.orderByDesc("create_time");
         return queryWrapper;
     }
 
@@ -161,5 +162,18 @@ public class SysDictMajorServiceImpl extends ServiceImpl<SysDictMajorMapper, Sys
             }
         }
         return sysDictMajorVO;
+    }
+
+    @Override
+    public java.util.List<SysDictMajorSimpleVO> listMajorSimple() {
+        QueryWrapper<SysDictMajor> queryWrapper = new QueryWrapper<>();
+        queryWrapper.select("id", "major_name");
+        queryWrapper.orderByAsc("id");
+        return this.list(queryWrapper).stream().map(major -> {
+            SysDictMajorSimpleVO simpleVO = new SysDictMajorSimpleVO();
+            simpleVO.setId(major.getId());
+            simpleVO.setMajorName(major.getMajorName());
+            return simpleVO;
+        }).collect(java.util.stream.Collectors.toList());
     }
 }

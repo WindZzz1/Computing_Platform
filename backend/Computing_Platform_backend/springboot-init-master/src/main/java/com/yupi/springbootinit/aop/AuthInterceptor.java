@@ -48,10 +48,22 @@ public class AuthInterceptor {
         if (currentUserObj instanceof SysUser) {
             // JWT验证通过的系统用户
             SysUser sysUser = (SysUser) currentUserObj;
-            // 检查管理员权限
+            // 检查权限
             if (SysUserConstant.ROLE_ADMIN.equals(mustRole)) {
                 if (!SysUserConstant.ROLE_ADMIN.equals(sysUser.getRoleCode())) {
                     throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要管理员权限");
+                }
+            } else if (SysUserConstant.ROLE_LEADER.equals(mustRole)) {
+                if (!SysUserConstant.ROLE_LEADER.equals(sysUser.getRoleCode())) {
+                    throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要专业负责人权限");
+                }
+            } else if (SysUserConstant.ROLE_TEACHER.equals(mustRole)) {
+                if (!SysUserConstant.ROLE_TEACHER.equals(sysUser.getRoleCode())) {
+                    throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要主讲教师权限");
+                }
+            } else if (SysUserConstant.ROLE_EDU.equals(mustRole)) {
+                if (!SysUserConstant.ROLE_EDU.equals(sysUser.getRoleCode())) {
+                    throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要教务管理员权限");
                 }
             }
             return joinPoint.proceed();
@@ -70,10 +82,22 @@ public class AuthInterceptor {
             if (sysUser == null) {
                 throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
             }
-            // 检查管理员权限
+            // 检查权限
             if (SysUserConstant.ROLE_ADMIN.equals(mustRole)) {
                 if (!SysUserConstant.ROLE_ADMIN.equals(sysUser.getRoleCode())) {
                     throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要管理员权限");
+                }
+            } else if (SysUserConstant.ROLE_LEADER.equals(mustRole)) {
+                if (!SysUserConstant.ROLE_LEADER.equals(sysUser.getRoleCode())) {
+                    throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要专业负责人权限");
+                }
+            } else if (SysUserConstant.ROLE_TEACHER.equals(mustRole)) {
+                if (!SysUserConstant.ROLE_TEACHER.equals(sysUser.getRoleCode())) {
+                    throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要主讲教师权限");
+                }
+            } else if (SysUserConstant.ROLE_EDU.equals(mustRole)) {
+                if (!SysUserConstant.ROLE_EDU.equals(sysUser.getRoleCode())) {
+                    throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要教务管理员权限");
                 }
             }
             return joinPoint.proceed();
