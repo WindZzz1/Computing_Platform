@@ -2,8 +2,8 @@ package generator.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.yupi.springbootinit.mapper.StudentMapper;
 import com.yupi.springbootinit.model.entity.Student;
-import generator.mapper.StudentMapper;
 import org.springframework.stereotype.Service;
 
 /**

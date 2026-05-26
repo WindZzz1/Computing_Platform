@@ -64,7 +64,7 @@ CREATE TABLE course (
                         major_id BIGINT NOT NULL COMMENT '专业ID（关联sys_dict_major）',
                         course_code VARCHAR(64) NOT NULL COMMENT '课程代码',
                         course_name VARCHAR(255) NOT NULL COMMENT '课程名称',
-                        course_attr VARCHAR(32) COMMENT '课程性质：必修/选修',
+                        course_nature VARCHAR(32) COMMENT '课程性质：必修/选修',
                         credit DECIMAL(3,1) COMMENT '学分',
                         create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                         update_time DATETIME ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
