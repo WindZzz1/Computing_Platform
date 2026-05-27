@@ -18,22 +18,21 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Resource
     private SysJwtInterceptor sysJwtInterceptor;
 
-    /**
-     * 配置拦截器
-     *
-     * @param registry 拦截器注册器
-     */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // 系统用户JWT认证拦截器
         registry.addInterceptor(sysJwtInterceptor)
-                .addPathPatterns("/dict/**")          // 拦截字典管理相关接口
-                .addPathPatterns("/requirement/**")   // 拦截毕业要求和指标点相关接口
-                .addPathPatterns("/course/**")        // 拦截课程管理相关接口
-                .addPathPatterns("/teaching-class/**") // 拦截教学班级管理相关接口
+                .addPathPatterns(
+                        "/dict/**",
+                        "/requirement/**",
+                        "/course/**",
+                        "/teaching-class/**",
+                        "/weight/**",
+                        "/assessment/**"
+                )
                 .excludePathPatterns(
-                        "/sysuser/login",      // 登录接口
-                        "/sysuser/login/token" // Token登录接口
+                        "/sysuser/login",
+                        "/sysuser/login/token"
                 );
     }
 }
+
