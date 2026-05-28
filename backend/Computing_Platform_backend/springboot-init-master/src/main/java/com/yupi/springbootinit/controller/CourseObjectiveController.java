@@ -5,6 +5,7 @@ import com.yupi.springbootinit.annotation.AuthCheck;
 import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.DeleteRequest;
 import com.yupi.springbootinit.common.ResultUtils;
+import com.yupi.springbootinit.constant.SysUserConstant;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveAddRequest;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveQueryRequest;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveUpdateRequest;
@@ -35,7 +36,7 @@ public class CourseObjectiveController {
      * @return 课程目标ID
      */
     @PostMapping("/add")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<Long> addCourseObjective(@RequestBody CourseObjectiveAddRequest request) {
         return ResultUtils.success(courseObjectiveService.createCourseObjective(request));
     }
@@ -47,7 +48,7 @@ public class CourseObjectiveController {
      * @return 是否成功
      */
     @PostMapping("/update")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<Boolean> updateCourseObjective(@RequestBody CourseObjectiveUpdateRequest request) {
         return ResultUtils.success(courseObjectiveService.updateCourseObjective(request));
     }
@@ -59,7 +60,7 @@ public class CourseObjectiveController {
      * @return 是否成功
      */
     @PostMapping("/delete")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<Boolean> deleteCourseObjective(@RequestBody DeleteRequest request) {
         return ResultUtils.success(courseObjectiveService.deleteCourseObjective(request.getId()));
     }
@@ -71,7 +72,7 @@ public class CourseObjectiveController {
      * @return 课程目标信息
      */
     @PostMapping("/get")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<CourseObjectiveVO> getCourseObjective(@RequestBody DeleteRequest request) {
         return ResultUtils.success(courseObjectiveService.getCourseObjectiveById(request.getId()));
     }
@@ -83,7 +84,7 @@ public class CourseObjectiveController {
      * @return 分页结果
      */
     @PostMapping("/page")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<Page<CourseObjectiveVO>> pageCourseObjective(@RequestBody CourseObjectiveQueryRequest request) {
         return ResultUtils.success(courseObjectiveService.pageCourseObjective(request));
     }
@@ -95,7 +96,7 @@ public class CourseObjectiveController {
      * @return 课程目标列表
      */
     @PostMapping("/list")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<Page<CourseObjectiveVO>> listCourseObjective(@RequestBody CourseObjectiveQueryRequest request) {
         if (request == null) {
             request = new CourseObjectiveQueryRequest();
