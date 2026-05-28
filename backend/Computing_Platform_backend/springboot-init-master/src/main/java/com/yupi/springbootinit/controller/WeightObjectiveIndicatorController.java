@@ -3,6 +3,7 @@ package com.yupi.springbootinit.controller;
 import com.yupi.springbootinit.annotation.AuthCheck;
 import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.ResultUtils;
+import com.yupi.springbootinit.constant.SysUserConstant;
 import com.yupi.springbootinit.model.dto.weight.AvailableIndicatorRequest;
 import com.yupi.springbootinit.model.dto.weight.WeightObjectiveIndicatorCheckRequest;
 import com.yupi.springbootinit.model.dto.weight.WeightObjectiveIndicatorSaveRequest;
@@ -36,7 +37,7 @@ public class WeightObjectiveIndicatorController {
      * @return 指标点列表
      */
     @PostMapping("/available")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<List<IndicatorVO>> listAvailableIndicators(@RequestBody AvailableIndicatorRequest request) {
         return ResultUtils.success(weightObjectiveIndicatorService.listAvailableIndicators(request.getCourseId()));
     }
@@ -48,7 +49,7 @@ public class WeightObjectiveIndicatorController {
      * @return 是否成功
      */
     @PostMapping("/save")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<Boolean> saveWeights(@RequestBody WeightObjectiveIndicatorSaveRequest request) {
         return ResultUtils.success(weightObjectiveIndicatorService.saveWeights(request));
     }
@@ -60,7 +61,7 @@ public class WeightObjectiveIndicatorController {
      * @return 内部权重列表
      */
     @PostMapping("/list")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<List<WeightObjectiveIndicatorVO>> listWeights(@RequestBody AvailableIndicatorRequest request) {
         return ResultUtils.success(weightObjectiveIndicatorService.listWeights(request.getCourseId()));
     }
@@ -72,9 +73,8 @@ public class WeightObjectiveIndicatorController {
      * @return 校验结果
      */
     @PostMapping("/check")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<WeightCheckVO> checkWeights(@RequestBody WeightObjectiveIndicatorCheckRequest request) {
         return ResultUtils.success(weightObjectiveIndicatorService.checkWeights(request));
     }
 }
-

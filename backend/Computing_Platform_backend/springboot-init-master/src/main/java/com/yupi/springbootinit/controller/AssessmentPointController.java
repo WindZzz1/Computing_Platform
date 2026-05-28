@@ -5,6 +5,7 @@ import com.yupi.springbootinit.annotation.AuthCheck;
 import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.DeleteRequest;
 import com.yupi.springbootinit.common.ResultUtils;
+import com.yupi.springbootinit.constant.SysUserConstant;
 import com.yupi.springbootinit.model.dto.assessment.AssessmentPointAddRequest;
 import com.yupi.springbootinit.model.dto.assessment.AssessmentPointQueryRequest;
 import com.yupi.springbootinit.model.dto.assessment.AssessmentPointUpdateRequest;
@@ -35,7 +36,7 @@ public class AssessmentPointController {
      * @return 考核点ID
      */
     @PostMapping("/add")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<Long> addAssessmentPoint(@RequestBody AssessmentPointAddRequest request) {
         return ResultUtils.success(assessmentPointService.createAssessmentPoint(request));
     }
@@ -47,7 +48,7 @@ public class AssessmentPointController {
      * @return 是否成功
      */
     @PostMapping("/update")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<Boolean> updateAssessmentPoint(@RequestBody AssessmentPointUpdateRequest request) {
         return ResultUtils.success(assessmentPointService.updateAssessmentPoint(request));
     }
@@ -59,7 +60,7 @@ public class AssessmentPointController {
      * @return 是否成功
      */
     @PostMapping("/delete")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<Boolean> deleteAssessmentPoint(@RequestBody DeleteRequest request) {
         return ResultUtils.success(assessmentPointService.deleteAssessmentPoint(request.getId()));
     }
@@ -71,7 +72,7 @@ public class AssessmentPointController {
      * @return 考核点信息
      */
     @PostMapping("/get")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<AssessmentPointVO> getAssessmentPoint(@RequestBody DeleteRequest request) {
         return ResultUtils.success(assessmentPointService.getAssessmentPointById(request.getId()));
     }
@@ -83,7 +84,7 @@ public class AssessmentPointController {
      * @return 分页结果
      */
     @PostMapping("/page")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<Page<AssessmentPointVO>> pageAssessmentPoint(@RequestBody AssessmentPointQueryRequest request) {
         return ResultUtils.success(assessmentPointService.pageAssessmentPoint(request));
     }
@@ -95,7 +96,7 @@ public class AssessmentPointController {
      * @return 考核点列表
      */
     @PostMapping("/list")
-    @AuthCheck
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
     public BaseResponse<Page<AssessmentPointVO>> listAssessmentPoint(@RequestBody AssessmentPointQueryRequest request) {
         if (request == null) {
             request = new AssessmentPointQueryRequest();
@@ -105,4 +106,3 @@ public class AssessmentPointController {
         return ResultUtils.success(assessmentPointService.pageAssessmentPoint(request));
     }
 }
-
