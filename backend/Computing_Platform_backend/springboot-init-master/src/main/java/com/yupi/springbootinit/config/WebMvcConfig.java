@@ -25,6 +25,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/dict/**",
                         "/requirement/**",
                         "/course/**",
+                        "/student/**",
                         "/teaching-class/**",
                         "/weight/**",
                         "/assessment/**"

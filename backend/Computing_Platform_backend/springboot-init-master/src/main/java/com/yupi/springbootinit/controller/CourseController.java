@@ -15,10 +15,15 @@ import com.yupi.springbootinit.model.vo.CourseVO;
 import com.yupi.springbootinit.model.vo.PageResultVO;
 import com.yupi.springbootinit.service.CourseService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -130,31 +135,35 @@ public class CourseController {
 
     /**
      * 下载课程导入模板
-     *
-     * @param response HTTP响应
      */
     @GetMapping("/template")
     @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
-    public void downloadCourseTemplate(javax.servlet.http.HttpServletResponse response) throws Exception {
-        byte[] template = courseService.generateCourseTemplate();
-        log.info("模板下载请求处理成功，模板大小: {} bytes", template.length);
-
-        // 设置响应头（注意：不要设置 CharacterEncoding，避免二进制数据被转换）
+    @com.yupi.springbootinit.annotation.NoLog
+    public void downloadCourseTemplate(HttpServletResponse response) throws Exception {
+        // 设置响应头
         String filename = "课程导入模板.xlsx";
-        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8);
+        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
+                .replaceAll("\\+", "%20");
 
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=" + encodedFilename);
-        response.setHeader("Content-Length", String.valueOf(template.length));
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFilename);
         response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         response.setHeader("Pragma", "no-cache");
         response.setHeader("Expires", "0");
 
-        // 直接以二进制方式写入响应流
+        // 直接读取并写入文件
+        org.springframework.core.io.ClassPathResource resource =
+            new org.springframework.core.io.ClassPathResource("templates/course_template.xlsx");
+        java.io.InputStream inputStream = resource.getInputStream();
         javax.servlet.ServletOutputStream outputStream = response.getOutputStream();
-        outputStream.write(template);
+
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = inputStream.read(buffer)) != -1) {
+            outputStream.write(buffer, 0, bytesRead);
+        }
+        inputStream.close();
         outputStream.flush();
-        log.info("模板文件已写入响应流");
     }
 
     /**

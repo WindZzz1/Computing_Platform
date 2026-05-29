@@ -2,16 +2,19 @@ package com.yupi.springbootinit.aop;
 
 import java.util.UUID;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StopWatch;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import com.yupi.springbootinit.annotation.NoLog;
 
 /**
  * 请求响应日志 AOP
@@ -25,9 +28,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 public class LogInterceptor {
 
     /**
-     * 执行拦截
+     * 执行拦截（排除@NoLog注解的方法和文件下载方法）
      */
-    @Around("execution(* com.yupi.springbootinit.controller.*.*(..)) && !execution(* com.yupi.springbootinit.controller.*.*template*(..))")
+    @Around("execution(* com.yupi.springbootinit.controller.*.*(..)) && " +
+            "!@annotation(com.yupi.springbootinit.annotation.NoLog)")
     public Object doInterceptor(ProceedingJoinPoint point) throws Throwable {
         // 计时
         StopWatch stopWatch = new StopWatch();
@@ -38,12 +42,24 @@ public class LogInterceptor {
         // 生成请求唯一 id
         String requestId = UUID.randomUUID().toString();
         String url = httpServletRequest.getRequestURI();
-        // 获取请求参数
+
+        // 获取请求参数（排除HttpServletResponse和HttpServletRequest）
         Object[] args = point.getArgs();
-        String reqParam = "[" + StringUtils.join(args, ", ") + "]";
+        StringBuilder reqParam = new StringBuilder("[");
+        for (int i = 0; i < args.length; i++) {
+            if (args[i] instanceof HttpServletRequest || args[i] instanceof HttpServletResponse) {
+                continue;
+            }
+            if (i > 0 && reqParam.length() > 1) {
+                reqParam.append(", ");
+            }
+            reqParam.append(args[i] != null ? args[i].toString() : "null");
+        }
+        reqParam.append("]");
+
         // 输出请求日志
         log.info("request start，id: {}, path: {}, ip: {}, params: {}", requestId, url,
-                httpServletRequest.getRemoteHost(), reqParam);
+                httpServletRequest.getRemoteHost(), reqParam.toString());
         // 执行原方法
         Object result = point.proceed();
         // 输出响应日志

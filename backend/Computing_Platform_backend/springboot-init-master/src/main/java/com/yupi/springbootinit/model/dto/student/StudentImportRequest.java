@@ -33,7 +33,7 @@ public class StudentImportRequest implements Serializable {
         /**
          * 姓名
          */
-        private String name;
+        private String studentName;
 
         /**
          * 年级
@@ -43,7 +43,7 @@ public class StudentImportRequest implements Serializable {
         /**
          * 所属专业代码
          */
-        private String majorCode;
+        private String majorId;
 
         /**
          * 班级

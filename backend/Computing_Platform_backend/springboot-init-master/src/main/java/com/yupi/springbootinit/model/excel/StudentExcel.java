@@ -17,20 +17,15 @@ public class StudentExcel {
     private String studentNo;
 
     @ExcelProperty(value = "姓名*", index = 1)
-    private String name;
+    private String studentName;
 
     @ExcelProperty(value = "年级", index = 2)
     private String grade;
 
     @ExcelProperty(value = "专业代码*", index = 3)
-    private String majorCode;
+    private String majorId;
 
     @ExcelProperty(value = "班级", index = 4)
     private String className;
 
-    @ExcelProperty(value = "联系方式", index = 5)
-    private String phone;
-
-    @ExcelProperty(value = "邮箱", index = 6)
-    private String email;
 }
