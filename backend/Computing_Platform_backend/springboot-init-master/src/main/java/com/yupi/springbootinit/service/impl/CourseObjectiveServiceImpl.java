@@ -5,11 +5,15 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.mapper.AssessmentPointMapper;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
+import com.yupi.springbootinit.mapper.WeightObjectiveIndicatorMapper;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveAddRequest;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveQueryRequest;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveUpdateRequest;
+import com.yupi.springbootinit.model.entity.AssessmentPoint;
 import com.yupi.springbootinit.model.entity.CourseObjective;
+import com.yupi.springbootinit.model.entity.WeightObjectiveIndicator;
 import com.yupi.springbootinit.model.vo.CourseObjectiveVO;
 import com.yupi.springbootinit.service.CourseObjectiveService;
 import lombok.extern.slf4j.Slf4j;
@@ -17,12 +21,20 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
+
 //课程目标服务实现
 
 @Service
 @Slf4j
 public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMapper, CourseObjective>
         implements CourseObjectiveService {
+
+    @Resource
+    private AssessmentPointMapper assessmentPointMapper;
+
+    @Resource
+    private WeightObjectiveIndicatorMapper weightObjectiveIndicatorMapper;
 
     @Override
     public Long createCourseObjective(CourseObjectiveAddRequest request) {
@@ -73,6 +85,11 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "课程目标ID不合法");
         }
+        CourseObjective exist = this.getById(id);
+        if (exist == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "课程目标不存在");
+        }
+        validateObjectiveNotReferenced(id);
         return this.removeById(id);
     }
 
@@ -141,6 +158,27 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         long count = this.count(queryWrapper);
         if (count > 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "该课程下目标编号已存在");
+        }
+    }
+
+    /**
+     * 校验课程目标是否已被下游数据引用
+     *
+     * @param objectiveId 课程目标ID
+     */
+    private void validateObjectiveNotReferenced(Long objectiveId) {
+        QueryWrapper<AssessmentPoint> assessmentQueryWrapper = new QueryWrapper<>();
+        assessmentQueryWrapper.eq("objective_id", objectiveId);
+        Long assessmentCount = assessmentPointMapper.selectCount(assessmentQueryWrapper);
+        if (assessmentCount != null && assessmentCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "课程目标已被考核点引用，不能删除");
+        }
+
+        QueryWrapper<WeightObjectiveIndicator> weightQueryWrapper = new QueryWrapper<>();
+        weightQueryWrapper.eq("objective_id", objectiveId);
+        Long weightCount = weightObjectiveIndicatorMapper.selectCount(weightQueryWrapper);
+        if (weightCount != null && weightCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "课程目标已被内部权重配置引用，不能删除");
         }
     }
 }
