@@ -5,16 +5,16 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
-import com.yupi.springbootinit.mapper.IndicatorMapper;
+import com.yupi.springbootinit.mapper.IndicatorPointMapper;
 import com.yupi.springbootinit.mapper.MatrixCourseIndicatorMapper;
 import com.yupi.springbootinit.mapper.WeightObjectiveIndicatorMapper;
 import com.yupi.springbootinit.model.dto.weight.WeightObjectiveIndicatorCheckRequest;
 import com.yupi.springbootinit.model.dto.weight.WeightObjectiveIndicatorSaveRequest;
 import com.yupi.springbootinit.model.entity.CourseObjective;
-import com.yupi.springbootinit.model.entity.Indicator;
+import com.yupi.springbootinit.model.entity.IndicatorPoint;
 import com.yupi.springbootinit.model.entity.MatrixCourseIndicator;
 import com.yupi.springbootinit.model.entity.WeightObjectiveIndicator;
-import com.yupi.springbootinit.model.vo.IndicatorVO;
+import com.yupi.springbootinit.model.vo.IndicatorPointVO;
 import com.yupi.springbootinit.model.vo.WeightCheckVO;
 import com.yupi.springbootinit.model.vo.WeightObjectiveIndicatorVO;
 import com.yupi.springbootinit.service.WeightObjectiveIndicatorService;
@@ -50,7 +50,7 @@ public class WeightObjectiveIndicatorServiceImpl
     private MatrixCourseIndicatorMapper matrixCourseIndicatorMapper;
 
     @Resource
-    private IndicatorMapper indicatorMapper;
+    private IndicatorPointMapper indicatorPointMapper;
 
     @Resource
     private CourseObjectiveMapper courseObjectiveMapper;
@@ -59,7 +59,7 @@ public class WeightObjectiveIndicatorServiceImpl
     private WeightObjectiveIndicatorMapper weightObjectiveIndicatorMapper;
 
     @Override
-    public List<IndicatorVO> listAvailableIndicators(Long courseId) {
+    public List<IndicatorPointVO> listAvailableIndicators(Long courseId) {
         validateId(courseId, "课程ID");
         List<MatrixCourseIndicator> matrixList = listMatrixByCourseId(courseId);
         if (matrixList.isEmpty()) {
@@ -67,8 +67,8 @@ public class WeightObjectiveIndicatorServiceImpl
         }
         List<Long> indicatorIds = matrixList.stream().map(MatrixCourseIndicator::getIndicatorId)
                 .distinct().collect(Collectors.toList());
-        List<Indicator> indicators = indicatorMapper.selectBatchIds(indicatorIds);
-        return indicators.stream().map(this::getIndicatorVO).collect(Collectors.toList());
+        List<IndicatorPoint> indicators = indicatorPointMapper.selectBatchIds(indicatorIds);
+        return indicators.stream().map(this::getIndicatorPointVO).collect(Collectors.toList());
     }
 
     @Override
@@ -214,8 +214,8 @@ public class WeightObjectiveIndicatorServiceImpl
         Set<Long> indicatorIds = weights.stream().map(WeightObjectiveIndicator::getIndicatorId).collect(Collectors.toSet());
         Map<Long, CourseObjective> objectiveMap = courseObjectiveMapper.selectBatchIds(objectiveIds).stream()
                 .collect(Collectors.toMap(CourseObjective::getId, Function.identity()));
-        Map<Long, Indicator> indicatorMap = indicatorMapper.selectBatchIds(indicatorIds).stream()
-                .collect(Collectors.toMap(Indicator::getId, Function.identity()));
+        Map<Long, IndicatorPoint> indicatorMap = indicatorPointMapper.selectBatchIds(indicatorIds).stream()
+                .collect(Collectors.toMap(IndicatorPoint::getId, Function.identity()));
         List<WeightObjectiveIndicatorVO> result = new ArrayList<>();
         for (WeightObjectiveIndicator weight : weights) {
             WeightObjectiveIndicatorVO vo = new WeightObjectiveIndicatorVO();
@@ -225,7 +225,7 @@ public class WeightObjectiveIndicatorServiceImpl
                 vo.setObjCode(objective.getObjCode());
                 vo.setObjName(objective.getObjName());
             }
-            Indicator indicator = indicatorMap.get(weight.getIndicatorId());
+            IndicatorPoint indicator = indicatorMap.get(weight.getIndicatorId());
             if (indicator != null) {
                 vo.setIndicatorCode(indicator.getIndicatorCode());
                 vo.setIndicatorName(indicator.getIndicatorName());
@@ -241,11 +241,11 @@ public class WeightObjectiveIndicatorServiceImpl
      * @param indicator 指标点实体
      * @return 指标点VO
      */
-    private IndicatorVO getIndicatorVO(Indicator indicator) {
+    private IndicatorPointVO getIndicatorPointVO(IndicatorPoint indicator) {
         if (indicator == null) {
             return null;
         }
-        IndicatorVO vo = new IndicatorVO();
+        IndicatorPointVO vo = new IndicatorPointVO();
         BeanUtils.copyProperties(indicator, vo);
         return vo;
     }
