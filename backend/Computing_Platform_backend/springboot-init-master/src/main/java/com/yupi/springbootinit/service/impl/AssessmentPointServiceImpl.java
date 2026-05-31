@@ -75,6 +75,11 @@ public class AssessmentPointServiceImpl extends ServiceImpl<AssessmentPointMappe
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "考核点ID不合法");
         }
+        AssessmentPoint exist = this.getById(id);
+        if (exist == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "考核点不存在");
+        }
+        validateAssessmentPointNotReferenced(id);
         return this.removeById(id);
     }
 
@@ -166,6 +171,18 @@ public class AssessmentPointServiceImpl extends ServiceImpl<AssessmentPointMappe
         long count = this.count(queryWrapper);
         if (count > 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "该课程下考核点编号已存在");
+        }
+    }
+
+    /**
+     * 校验考核点是否已被学生成绩引用
+     *
+     * @param pointId 考核点ID
+     */
+    private void validateAssessmentPointNotReferenced(Long pointId) {
+        Long scoreCount = baseMapper.countStudentScoreByPointId(pointId);
+        if (scoreCount != null && scoreCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "考核点已被学生成绩引用，不能删除");
         }
     }
 }
