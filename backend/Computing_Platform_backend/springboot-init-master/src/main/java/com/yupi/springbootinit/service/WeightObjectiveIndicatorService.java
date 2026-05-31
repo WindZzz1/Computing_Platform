@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.yupi.springbootinit.model.dto.weight.WeightObjectiveIndicatorCheckRequest;
 import com.yupi.springbootinit.model.dto.weight.WeightObjectiveIndicatorSaveRequest;
 import com.yupi.springbootinit.model.entity.WeightObjectiveIndicator;
-import com.yupi.springbootinit.model.vo.IndicatorVO;
+import com.yupi.springbootinit.model.vo.IndicatorPointVO;
 import com.yupi.springbootinit.model.vo.WeightCheckVO;
 import com.yupi.springbootinit.model.vo.WeightObjectiveIndicatorVO;
 
@@ -20,7 +20,7 @@ public interface WeightObjectiveIndicatorService extends IService<WeightObjectiv
      * @param courseId 课程ID
      * @return 指标点列表
      */
-    List<IndicatorVO> listAvailableIndicators(Long courseId);
+    List<IndicatorPointVO> listAvailableIndicators(Long courseId);
 
     /**
      * 保存课程内部权重配置

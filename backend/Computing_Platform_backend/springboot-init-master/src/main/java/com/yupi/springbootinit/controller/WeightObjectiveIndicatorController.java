@@ -7,7 +7,7 @@ import com.yupi.springbootinit.constant.SysUserConstant;
 import com.yupi.springbootinit.model.dto.weight.AvailableIndicatorRequest;
 import com.yupi.springbootinit.model.dto.weight.WeightObjectiveIndicatorCheckRequest;
 import com.yupi.springbootinit.model.dto.weight.WeightObjectiveIndicatorSaveRequest;
-import com.yupi.springbootinit.model.vo.IndicatorVO;
+import com.yupi.springbootinit.model.vo.IndicatorPointVO;
 import com.yupi.springbootinit.model.vo.WeightCheckVO;
 import com.yupi.springbootinit.model.vo.WeightObjectiveIndicatorVO;
 import com.yupi.springbootinit.service.WeightObjectiveIndicatorService;
@@ -38,7 +38,7 @@ public class WeightObjectiveIndicatorController {
      */
     @PostMapping("/available")
     @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
-    public BaseResponse<List<IndicatorVO>> listAvailableIndicators(@RequestBody AvailableIndicatorRequest request) {
+    public BaseResponse<List<IndicatorPointVO>> listAvailableIndicators(@RequestBody AvailableIndicatorRequest request) {
         return ResultUtils.success(weightObjectiveIndicatorService.listAvailableIndicators(request.getCourseId()));
     }
 
