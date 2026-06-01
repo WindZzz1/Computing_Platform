@@ -5,6 +5,7 @@ import lombok.Data;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.Date;
+import java.util.List;
 
 // 考核点视图对象
 
@@ -52,6 +53,16 @@ public class AssessmentPointVO implements Serializable {
      * 课程目标名称
      */
     private String objName;
+
+    /**
+     * 关联课程目标ID列表
+     */
+    private List<Long> objectiveIds;
+
+    /**
+     * 关联课程目标列表
+     */
+    private List<CourseObjectiveVO> objectives;
 
     /**
      * 创建时间
