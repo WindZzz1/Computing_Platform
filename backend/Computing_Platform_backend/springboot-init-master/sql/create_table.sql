@@ -139,7 +139,7 @@ CREATE TABLE graduation_requirement (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '毕业要求主表';
 
 -- ----------------------------
--- 11. 毕业要求指标点表
+-- 11. 毕业要求指标点表   每个毕业要求细分的指标点
 -- ----------------------------
 CREATE TABLE indicator_point (
                            id BIGINT PRIMARY KEY AUTO_INCREMENT,

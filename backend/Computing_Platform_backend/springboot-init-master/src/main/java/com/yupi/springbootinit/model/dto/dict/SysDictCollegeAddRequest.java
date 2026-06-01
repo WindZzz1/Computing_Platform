@@ -19,8 +19,4 @@ public class SysDictCollegeAddRequest implements Serializable {
      */
     private String collegeName;
 
-    /**
-     * 学院编码
-     */
-    private String collegeCode;
 }

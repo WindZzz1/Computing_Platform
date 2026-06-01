@@ -38,9 +38,8 @@ public class SysDictCollegeServiceImpl extends ServiceImpl<SysDictCollegeMapper,
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         String collegeName = sysDictCollegeAddRequest.getCollegeName();
-        String collegeCode = sysDictCollegeAddRequest.getCollegeCode();
-        if (StringUtils.isAnyBlank(collegeName, collegeCode)) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "学院名称或编码不能为空");
+        if (StringUtils.isAnyBlank(collegeName)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "学院名称不能为空");
         }
         //防止并发问题
         synchronized (collegeName.intern()) {
