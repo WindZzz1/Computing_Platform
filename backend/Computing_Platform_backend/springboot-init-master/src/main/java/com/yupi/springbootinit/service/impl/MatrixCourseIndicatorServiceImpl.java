@@ -133,9 +133,7 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
         }
 
         // 删除该专业原有的所有矩阵数据
-        QueryWrapper<MatrixCourseIndicator> deleteWrapper = new QueryWrapper<>();
-        deleteWrapper.eq("major_id", majorId);
-        matrixCourseIndicatorMapper.delete(deleteWrapper);
+        matrixCourseIndicatorMapper.deleteByMajorIdPhysically(majorId);
 
         // 批量插入新的矩阵数据
         if (saveRequest.getMatrixItems() != null && !saveRequest.getMatrixItems().isEmpty()) {
