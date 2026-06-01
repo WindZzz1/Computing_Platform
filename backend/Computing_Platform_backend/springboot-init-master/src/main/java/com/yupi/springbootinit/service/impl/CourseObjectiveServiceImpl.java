@@ -5,13 +5,12 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
-import com.yupi.springbootinit.mapper.AssessmentPointMapper;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
+import com.yupi.springbootinit.mapper.RelPointObjectiveMapper;
 import com.yupi.springbootinit.mapper.WeightObjectiveIndicatorMapper;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveAddRequest;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveQueryRequest;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveUpdateRequest;
-import com.yupi.springbootinit.model.entity.AssessmentPoint;
 import com.yupi.springbootinit.model.entity.CourseObjective;
 import com.yupi.springbootinit.model.entity.WeightObjectiveIndicator;
 import com.yupi.springbootinit.model.vo.CourseObjectiveVO;
@@ -31,7 +30,7 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         implements CourseObjectiveService {
 
     @Resource
-    private AssessmentPointMapper assessmentPointMapper;
+    private RelPointObjectiveMapper relPointObjectiveMapper;
 
     @Resource
     private WeightObjectiveIndicatorMapper weightObjectiveIndicatorMapper;
@@ -167,9 +166,7 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
      * @param objectiveId 课程目标ID
      */
     private void validateObjectiveNotReferenced(Long objectiveId) {
-        QueryWrapper<AssessmentPoint> assessmentQueryWrapper = new QueryWrapper<>();
-        assessmentQueryWrapper.eq("objective_id", objectiveId);
-        Long assessmentCount = assessmentPointMapper.selectCount(assessmentQueryWrapper);
+        Long assessmentCount = relPointObjectiveMapper.countByObjectiveId(objectiveId);
         if (assessmentCount != null && assessmentCount > 0) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "课程目标已被考核点引用，不能删除");
         }

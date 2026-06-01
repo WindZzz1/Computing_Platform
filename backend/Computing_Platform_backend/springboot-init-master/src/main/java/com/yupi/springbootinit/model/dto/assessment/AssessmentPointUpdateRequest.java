@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.util.List;
 
 //考核点更新请求
 
@@ -41,4 +42,9 @@ public class AssessmentPointUpdateRequest implements Serializable {
      * 关联课程目标ID
      */
     private Long objectiveId;
+
+    /**
+     * 关联课程目标ID列表
+     */
+    private List<Long> objectiveIds;
 }

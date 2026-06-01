@@ -10,12 +10,12 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 课程考核点表
- * @TableName assessment_point
+ * 考核点-课程目标关联表
+ * @TableName rel_point_objective
  */
-@TableName("assessment_point")
+@TableName("rel_point_objective")
 @Data
-public class AssessmentPoint {
+public class RelPointObjective {
 
     /**
      * 主键ID
@@ -24,34 +24,24 @@ public class AssessmentPoint {
     private Long id;
 
     /**
-     * 课程ID
+     * 考核点ID
      */
-    private Long courseId;
+    private Long pointId;
 
     /**
-     * 考核点编号
+     * 课程目标ID
      */
-    private String pointCode;
+    private Long objectiveId;
 
     /**
-     * 考核点名称
+     * 支撑权重
      */
-    private String pointName;
-
-    /**
-     * 满分值
-     */
-    private BigDecimal fullScore;
+    private BigDecimal weight;
 
     /**
      * 创建时间
      */
     private Date createTime;
-
-    /**
-     * 更新时间
-     */
-    private Date updateTime;
 
     /**
      * 是否删除：0-未删除，1-已删除
