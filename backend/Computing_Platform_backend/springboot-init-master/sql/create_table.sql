@@ -212,13 +212,23 @@ CREATE TABLE assessment_point (
                                   point_code VARCHAR(64) NOT NULL COMMENT '考核点编号',
                                   point_name VARCHAR(255) NOT NULL COMMENT '考核点名称',
                                   full_score DECIMAL(5,1) NOT NULL COMMENT '满分值',
-                                  objective_id BIGINT NOT NULL COMMENT '关联课程目标ID',
                                   create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                                   update_time DATETIME ON UPDATE CURRENT_TIMESTAMP,
                                   is_deleted TINYINT DEFAULT 0,
-                                  INDEX idx_course_id (course_id),
-                                  INDEX idx_objective_id (objective_id)
+                                  INDEX idx_course_id (course_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '课程考核点表';
+-- 考核点 ↔ 课程目标 关联表
+CREATE TABLE rel_point_objective (
+                                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                                     point_id BIGINT NOT NULL COMMENT '考核点ID',
+                                     objective_id BIGINT NOT NULL COMMENT '课程目标ID',
+                                     weight DECIMAL(5,4) DEFAULT 1.0 COMMENT '支撑权重',
+                                     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                     is_deleted TINYINT DEFAULT 0,
+                                     UNIQUE KEY uk_point_objective (point_id, objective_id),
+                                     INDEX idx_point_id (point_id),
+                                     INDEX idx_objective_id (objective_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '考核点-课程目标关联表(多对多)';
 
 -- ----------------------------
 -- 16. 学生考核点成绩表
