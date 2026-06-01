@@ -7,31 +7,47 @@
       </div>
       <el-card class="box" shadow="never">
         <h2>进入系统</h2>
-        <p class="muted">选择角色查看对应业务入口</p>
-        <el-select v-model="role" style="width: 100%; margin: 18px 0">
-          <el-option label="系统管理员" value="admin" />
-          <el-option label="教务管理员" value="edu" />
-          <el-option label="专业负责人" value="leader" />
-          <el-option label="课程教师" value="teacher" />
-        </el-select>
-        <el-button type="primary" style="width: 100%" @click="submit">登录</el-button>
+        <p class="muted">使用后端账号登录，系统会自动保存 JWT Token</p>
+        <el-form label-position="top" @submit.prevent>
+          <el-form-item label="账号">
+            <el-input v-model="form.username" placeholder="请输入账号" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="form.password" type="password" placeholder="请输入密码" show-password />
+          </el-form-item>
+          <el-button type="primary" style="width: 100%" :loading="loading" @click="submit">登录</el-button>
+        </el-form>
       </el-card>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import type { Role } from '@/types'
 
-const role = ref<Role>('admin')
+const form = reactive({
+  username: 'admin',
+  password: '123456'
+})
+const loading = ref(false)
 const user = useUserStore()
 const router = useRouter()
-const submit = () => {
-  user.login(role.value)
-  router.push('/dashboard')
+const submit = async () => {
+  if (!form.username || !form.password) {
+    ElMessage.warning('请输入账号和密码')
+    return
+  }
+  loading.value = true
+  try {
+    await user.login(form.username, form.password)
+    ElMessage.success('登录成功')
+    router.push('/dashboard')
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
