@@ -1,4 +1,4 @@
-package com.yupi.springbootinit.model.dto.student;
+package com.yupi.springbootinit.model.dto.teachingClass;
 
 import lombok.Data;
 
@@ -6,14 +6,19 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * 学生批量导入请求
+ * 教学班级学生批量导入请求
  *
  * @author YU
  */
 @Data
-public class StudentImportRequest implements Serializable {
+public class ClassStudentImportRequest implements Serializable {
 
     private static final long serialVersionUID = 1L;
+
+    /**
+     * 教学班级ID
+     */
+    private Long classId;
 
     /**
      * 学生列表
@@ -34,20 +39,5 @@ public class StudentImportRequest implements Serializable {
          * 姓名
          */
         private String studentName;
-
-        /**
-         * 专业代码
-         */
-        private String majorCode;
-
-        /**
-         * 年级
-         */
-        private String grade;
-
-        /**
-         * 班级
-         */
-        private String className;
     }
 }

@@ -35,17 +35,7 @@ public class TeachingClassUpdateRequest implements Serializable {
     private Long teacherId;
 
     /**
-     * 学年ID
+     * 学年学期ID
      */
-    private Long schoolYearId;
-
-    /**
-     * 学期（1/2）
-     */
-    private Integer semester;
-
-    /**
-     * 所属专业ID
-     */
-    private Long majorId;
+    private Long termId;
 }

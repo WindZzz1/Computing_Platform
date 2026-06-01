@@ -50,10 +50,13 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
     private SysDictSchoolYearMapper sysDictSchoolYearMapper;
 
     @Resource
+    private StudentMapper studentMapper;
+
+    @Resource
     private SysDictMajorMapper sysDictMajorMapper;
 
     @Resource
-    private StudentMapper studentMapper;
+    private SysDictCollegeMapper sysDictCollegeMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -64,11 +67,10 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
         String className = teachingClassAddRequest.getClassName();
         Long courseId = teachingClassAddRequest.getCourseId();
         Long teacherId = teachingClassAddRequest.getTeacherId();
-        Long schoolYearId = teachingClassAddRequest.getSchoolYearId();
-        Integer semester = teachingClassAddRequest.getSemester();
+        Long termId = teachingClassAddRequest.getTermId();
 
-        if (StringUtils.isAnyBlank(className) || courseId == null || teacherId == null || schoolYearId == null || semester == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "班级名称、课程、教师、学年或学期不能为空");
+        if (StringUtils.isAnyBlank(className) || courseId == null || teacherId == null || termId == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "班级名称、课程、教师、学年学期不能为空");
         }
 
         // 校验课程存在
@@ -83,18 +85,17 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "教师不存在");
         }
 
-        // 校验学年存在
-        SysDictSchoolYear schoolYear = sysDictSchoolYearMapper.selectById(schoolYearId);
+        // 校验学年学期存在
+        SysDictSchoolYear schoolYear = sysDictSchoolYearMapper.selectById(termId);
         if (schoolYear == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "学年不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "学年学期不存在");
         }
 
-        // 检查是否已存在相同课程、教师、学年的班级
+        // 检查是否已存在相同课程、教师、学年学期的班级
         QueryWrapper<TeachingClass> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("course_id", courseId);
         queryWrapper.eq("teacher_id", teacherId);
-        queryWrapper.eq("school_year_id", schoolYearId);
-        queryWrapper.eq("semester", semester);
+        queryWrapper.eq("term_id", termId);
         Long count = this.baseMapper.selectCount(queryWrapper);
         if (count > 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "该课程、教师、学期组合已存在教学班级");
@@ -102,7 +103,6 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
 
         TeachingClass teachingClass = new TeachingClass();
         BeanUtils.copyProperties(teachingClassAddRequest, teachingClass);
-        teachingClass.setMajorId(course.getMajorId());
         boolean saveResult = this.save(teachingClass);
         if (!saveResult) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "创建教学班级失败");
@@ -122,11 +122,10 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "教学班级不存在");
         }
 
-        // 检查是否修改了课程、教师、学年、学期
+        // 检查是否修改了课程、教师、学年学期
         Long courseId = teachingClassUpdateRequest.getCourseId() != null ? teachingClassUpdateRequest.getCourseId() : existClass.getCourseId();
         Long teacherId = teachingClassUpdateRequest.getTeacherId() != null ? teachingClassUpdateRequest.getTeacherId() : existClass.getTeacherId();
-        Long schoolYearId = teachingClassUpdateRequest.getSchoolYearId() != null ? teachingClassUpdateRequest.getSchoolYearId() : existClass.getSchoolYearId();
-        Integer semester = teachingClassUpdateRequest.getSemester() != null ? teachingClassUpdateRequest.getSemester() : existClass.getSemester();
+        Long termId = teachingClassUpdateRequest.getTermId() != null ? teachingClassUpdateRequest.getTermId() : existClass.getTermId();
 
         // 校验课程存在
         Course course = courseMapper.selectById(courseId);
@@ -134,12 +133,19 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "课程不存在");
         }
 
-        // 检查是否已存在相同课程、教师、学年的班级（排除自己）
+        // 校验学年学期存在
+        if (teachingClassUpdateRequest.getTermId() != null) {
+            SysDictSchoolYear schoolYear = sysDictSchoolYearMapper.selectById(termId);
+            if (schoolYear == null) {
+                throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "学年学期不存在");
+            }
+        }
+
+        // 检查是否已存在相同课程、教师、学年学期的班级（排除自己）
         QueryWrapper<TeachingClass> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("course_id", courseId);
         queryWrapper.eq("teacher_id", teacherId);
-        queryWrapper.eq("school_year_id", schoolYearId);
-        queryWrapper.eq("semester", semester);
+        queryWrapper.eq("term_id", termId);
         queryWrapper.ne("id", teachingClassUpdateRequest.getId());
         Long count = this.baseMapper.selectCount(queryWrapper);
         if (count > 0) {
@@ -148,9 +154,6 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
 
         TeachingClass teachingClass = new TeachingClass();
         BeanUtils.copyProperties(teachingClassUpdateRequest, teachingClass);
-        if (teachingClassUpdateRequest.getCourseId() != null) {
-            teachingClass.setMajorId(course.getMajorId());
-        }
         return this.updateById(teachingClass);
     }
 
@@ -163,7 +166,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
 
         // 删除班级学生关联
         QueryWrapper<ClassStudent> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("class_id", id);
+        queryWrapper.eq("teaching_class_id", id);
         classStudentMapper.delete(queryWrapper);
 
         boolean result = this.removeById(id);
@@ -202,16 +205,12 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
         String className = teachingClassQueryRequest.getClassName();
         Long courseId = teachingClassQueryRequest.getCourseId();
         Long teacherId = teachingClassQueryRequest.getTeacherId();
-        Long schoolYearId = teachingClassQueryRequest.getSchoolYearId();
-        Integer semester = teachingClassQueryRequest.getSemester();
-        Long majorId = teachingClassQueryRequest.getMajorId();
+        Long termId = teachingClassQueryRequest.getTermId();
 
         queryWrapper.like(StringUtils.isNotBlank(className), "class_name", className);
         queryWrapper.eq(courseId != null, "course_id", courseId);
         queryWrapper.eq(teacherId != null, "teacher_id", teacherId);
-        queryWrapper.eq(schoolYearId != null, "school_year_id", schoolYearId);
-        queryWrapper.eq(semester != null, "semester", semester);
-        queryWrapper.eq(majorId != null, "major_id", majorId);
+        queryWrapper.eq(termId != null, "term_id", termId);
         queryWrapper.orderByDesc("create_time");
         return queryWrapper;
     }
@@ -241,30 +240,18 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
             }
         }
 
-        // 获取学年信息
-        if (teachingClass.getSchoolYearId() != null) {
-            SysDictSchoolYear schoolYear = sysDictSchoolYearMapper.selectById(teachingClass.getSchoolYearId());
+        // 获取学年学期信息
+        if (teachingClass.getTermId() != null) {
+            SysDictSchoolYear schoolYear = sysDictSchoolYearMapper.selectById(teachingClass.getTermId());
             if (schoolYear != null) {
-                teachingClassVO.setSchoolYearName(schoolYear.getYearName());
-            }
-        }
-
-        // 学期名称
-        if (teachingClass.getSemester() != null) {
-            teachingClassVO.setSemesterName(teachingClass.getSemester() == 1 ? "第一学期" : "第二学期");
-        }
-
-        // 获取专业信息
-        if (teachingClass.getMajorId() != null) {
-            SysDictMajor major = sysDictMajorMapper.selectById(teachingClass.getMajorId());
-            if (major != null) {
-                teachingClassVO.setMajorName(major.getMajorName());
+                teachingClassVO.setYearName(schoolYear.getYearName());
+                teachingClassVO.setSemesterName(schoolYear.getSemesterName());
             }
         }
 
         // 获取学生数量
         QueryWrapper<ClassStudent> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("class_id", teachingClass.getId());
+        queryWrapper.eq("teaching_class_id", teachingClass.getId());
         Long studentCount = classStudentMapper.selectCount(queryWrapper);
         teachingClassVO.setStudentCount(studentCount.intValue());
 
@@ -299,7 +286,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
 
             // 检查是否已绑定
             QueryWrapper<ClassStudent> queryWrapper = new QueryWrapper<>();
-            queryWrapper.eq("class_id", classId);
+            queryWrapper.eq("teaching_class_id", classId);
             queryWrapper.eq("student_id", studentId);
             Long count = classStudentMapper.selectCount(queryWrapper);
             if (count > 0) {
@@ -310,7 +297,6 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
             ClassStudent classStudent = new ClassStudent();
             classStudent.setClassId(classId);
             classStudent.setStudentId(studentId);
-            classStudent.setStudentNo(student.getStudentNo());
             if (classStudentMapper.insert(classStudent) > 0) {
                 bindCount++;
             }
@@ -327,7 +313,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
         }
 
         QueryWrapper<ClassStudent> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("class_id", classId);
+        queryWrapper.eq("teaching_class_id", classId);
         queryWrapper.eq("student_id", studentId);
 
         return classStudentMapper.delete(queryWrapper) > 0;
@@ -340,7 +326,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
         }
 
         QueryWrapper<ClassStudent> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("class_id", classId);
+        queryWrapper.eq("teaching_class_id", classId);
         List<ClassStudent> classStudents = classStudentMapper.selectList(queryWrapper);
 
         List<StudentVO> studentVOList = new ArrayList<>();
@@ -349,10 +335,140 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
             if (student != null) {
                 StudentVO studentVO = new StudentVO();
                 BeanUtils.copyProperties(student, studentVO);
+
+                // 获取专业信息
+                if (student.getMajorId() != null) {
+                    SysDictMajor major = sysDictMajorMapper.selectById(student.getMajorId());
+                    if (major != null) {
+                        studentVO.setMajorName(major.getMajorName());
+                        // 获取学院信息
+                        if (major.getCollegeId() != null) {
+                            SysDictCollege college = sysDictCollegeMapper.selectById(major.getCollegeId());
+                            if (college != null) {
+                                studentVO.setCollegeName(college.getCollegeName());
+                                studentVO.setCollegeId(college.getId());
+                            }
+                        }
+                    }
+                }
+
                 studentVOList.add(studentVO);
             }
         }
 
         return studentVOList;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public java.util.Map<String, Object> importStudents(com.yupi.springbootinit.model.dto.teachingClass.ClassStudentImportRequest classStudentImportRequest) {
+        if (classStudentImportRequest == null || classStudentImportRequest.getClassId() == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "教学班级ID不能为空");
+        }
+
+        Long classId = classStudentImportRequest.getClassId();
+        TeachingClass teachingClass = this.getById(classId);
+        if (teachingClass == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "教学班级不存在");
+        }
+
+        java.util.List<com.yupi.springbootinit.model.dto.teachingClass.ClassStudentImportRequest.StudentItem> students = classStudentImportRequest.getStudents();
+        if (students == null || students.isEmpty()) {
+            java.util.Map<String, Object> result = new java.util.HashMap<>();
+            result.put("totalCount", 0);
+            result.put("successCount", 0);
+            result.put("failCount", 0);
+            result.put("failDetails", new java.util.ArrayList<>());
+            return result;
+        }
+
+        int successCount = 0;
+        int failCount = 0;
+        java.util.List<java.util.Map<String, String>> failDetails = new java.util.ArrayList<>();
+
+        for (int i = 0; i < students.size(); i++) {
+            com.yupi.springbootinit.model.dto.teachingClass.ClassStudentImportRequest.StudentItem item = students.get(i);
+            try {
+                // 检查必填字段
+                if (StringUtils.isAnyBlank(item.getStudentNo())) {
+                    failCount++;
+                    java.util.Map<String, String> detail = new java.util.HashMap<>();
+                    detail.put("row", String.valueOf(i + 1));
+                    detail.put("studentNo", item.getStudentNo() != null ? item.getStudentNo() : "");
+                    detail.put("reason", "学号不能为空");
+                    failDetails.add(detail);
+                    continue;
+                }
+
+                // 根据学号查询学生
+                QueryWrapper<Student> studentQueryWrapper = new QueryWrapper<>();
+                studentQueryWrapper.eq("student_no", item.getStudentNo());
+                Student student = studentMapper.selectOne(studentQueryWrapper);
+                if (student == null) {
+                    failCount++;
+                    java.util.Map<String, String> detail = new java.util.HashMap<>();
+                    detail.put("row", String.valueOf(i + 1));
+                    detail.put("studentNo", item.getStudentNo());
+                    detail.put("reason", "学生不存在");
+                    failDetails.add(detail);
+                    continue;
+                }
+
+                // 验证姓名（可选）
+                if (StringUtils.isNotBlank(item.getStudentName()) && !item.getStudentName().equals(student.getName())) {
+                    failCount++;
+                    java.util.Map<String, String> detail = new java.util.HashMap<>();
+                    detail.put("row", String.valueOf(i + 1));
+                    detail.put("studentNo", item.getStudentNo());
+                    detail.put("reason", "姓名不匹配，期望：" + student.getName());
+                    failDetails.add(detail);
+                    continue;
+                }
+
+                // 检查是否已绑定
+                QueryWrapper<ClassStudent> queryWrapper = new QueryWrapper<>();
+                queryWrapper.eq("teaching_class_id", classId);
+                queryWrapper.eq("student_id", student.getId());
+                long count = classStudentMapper.selectCount(queryWrapper);
+                if (count > 0) {
+                    failCount++;
+                    java.util.Map<String, String> detail = new java.util.HashMap<>();
+                    detail.put("row", String.valueOf(i + 1));
+                    detail.put("studentNo", item.getStudentNo());
+                    detail.put("reason", "学生已在班级中");
+                    failDetails.add(detail);
+                    continue;
+                }
+
+                // 绑定学生
+                ClassStudent classStudent = new ClassStudent();
+                classStudent.setClassId(classId);
+                classStudent.setStudentId(student.getId());
+                if (classStudentMapper.insert(classStudent) > 0) {
+                    successCount++;
+                } else {
+                    failCount++;
+                    java.util.Map<String, String> detail = new java.util.HashMap<>();
+                    detail.put("row", String.valueOf(i + 1));
+                    detail.put("studentNo", item.getStudentNo());
+                    detail.put("reason", "绑定失败");
+                    failDetails.add(detail);
+                }
+            } catch (Exception e) {
+                failCount++;
+                java.util.Map<String, String> detail = new java.util.HashMap<>();
+                detail.put("row", String.valueOf(i + 1));
+                detail.put("studentNo", item.getStudentNo() != null ? item.getStudentNo() : "");
+                detail.put("reason", "系统错误：" + e.getMessage());
+                failDetails.add(detail);
+            }
+        }
+
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        result.put("totalCount", students.size());
+        result.put("successCount", successCount);
+        result.put("failCount", failCount);
+        result.put("failDetails", failDetails);
+        return result;
     }
 }

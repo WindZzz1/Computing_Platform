@@ -29,17 +29,7 @@ public class TeachingClassQueryRequest extends PageRequest {
     private Long teacherId;
 
     /**
-     * 学年ID
+     * 学年学期ID
      */
-    private Long schoolYearId;
-
-    /**
-     * 学期
-     */
-    private Integer semester;
-
-    /**
-     * 所属专业ID
-     */
-    private Long majorId;
+    private Long termId;
 }

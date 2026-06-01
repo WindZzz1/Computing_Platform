@@ -21,6 +21,7 @@ public class ClassStudent {
     /**
      * 教学班级ID
      */
+    @TableField("teaching_class_id")
     private Long classId;
 
     /**
@@ -29,15 +30,16 @@ public class ClassStudent {
     private Long studentId;
 
     /**
-     * 学号（冗余字段，便于查询）
-     */
-    private String studentNo;
-
-    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
+
+    /**
+     * 更新时间
+     */
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private Date updateTime;
 
     /**
      * 是否删除

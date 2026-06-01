@@ -6,15 +6,14 @@ import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.DeleteRequest;
 import com.yupi.springbootinit.common.ResultUtils;
 import com.yupi.springbootinit.constant.SysUserConstant;
-import com.yupi.springbootinit.model.dto.student.StudentImportRequest;
 import com.yupi.springbootinit.model.dto.teachingClass.ClassStudentBindRequest;
+import com.yupi.springbootinit.model.dto.teachingClass.ClassStudentImportRequest;
 import com.yupi.springbootinit.model.dto.teachingClass.TeachingClassAddRequest;
 import com.yupi.springbootinit.model.dto.teachingClass.TeachingClassQueryRequest;
 import com.yupi.springbootinit.model.dto.teachingClass.TeachingClassUpdateRequest;
 import com.yupi.springbootinit.model.vo.PageResultVO;
 import com.yupi.springbootinit.model.vo.StudentVO;
 import com.yupi.springbootinit.model.vo.TeachingClassVO;
-import com.yupi.springbootinit.service.StudentService;
 import com.yupi.springbootinit.service.TeachingClassService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,9 +38,6 @@ public class TeachingClassController {
 
     @Resource
     private TeachingClassService teachingClassService;
-
-    @Resource
-    private StudentService studentService;
 
     /**
      * 创建教学班级
@@ -149,15 +145,15 @@ public class TeachingClassController {
     }
 
     /**
-     * 批量导入学生
+     * 批量导入学生到教学班级
      *
-     * @param studentImportRequest 导入请求
+     * @param classStudentImportRequest 导入请求
      * @return 导入结果
      */
     @PostMapping("/import-students")
     @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
-    public BaseResponse<Map<String, Object>> importStudents(@RequestBody StudentImportRequest studentImportRequest) {
-        Map<String, Object> result = studentService.importStudents(studentImportRequest);
+    public BaseResponse<Map<String, Object>> importStudents(@RequestBody ClassStudentImportRequest classStudentImportRequest) {
+        Map<String, Object> result = teachingClassService.importStudents(classStudentImportRequest);
         return ResultUtils.success(result);
     }
 }

@@ -60,16 +60,6 @@ public class Student implements Serializable {
     private String className;
 
     /**
-     * 联系方式
-     */
-    private String phone;
-
-    /**
-     * 邮箱
-     */
-    private String email;
-
-    /**
      * 创建时间
      */
     private Date createTime;

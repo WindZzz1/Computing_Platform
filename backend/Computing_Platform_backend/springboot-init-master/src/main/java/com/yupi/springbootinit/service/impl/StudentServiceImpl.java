@@ -59,7 +59,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
             StudentImportRequest.StudentItem item = students.get(i);
             try {
                 // 检查必填字段
-                if (StringUtils.isAnyBlank(item.getStudentNo(), item.getStudentName(), item.getMajorId())) {
+                if (StringUtils.isAnyBlank(item.getStudentNo(), item.getStudentName(), item.getMajorCode())) {
                     failCount++;
                     Map<String, String> detail = new HashMap<>();
                     detail.put("row", String.valueOf(i + 1));
@@ -85,7 +85,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
 
                 // 根据专业代码查询专业ID
                 QueryWrapper<SysDictMajor> majorQueryWrapper = new QueryWrapper<>();
-                majorQueryWrapper.eq("major_code", item.getMajorId());
+                majorQueryWrapper.eq("major_code", item.getMajorCode());
                 SysDictMajor major = sysDictMajorMapper.selectOne(majorQueryWrapper);
                 if (major == null) {
                     failCount++;
@@ -104,8 +104,6 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
                 student.setGrade(item.getGrade());
                 student.setMajorId(major.getId());
                 student.setClassName(item.getClassName());
-                student.setPhone(item.getPhone());
-                student.setEmail(item.getEmail());
 
                 if (this.save(student)) {
                     successCount++;
@@ -167,7 +165,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
                 StudentExcel excel = studentExcels.get(i);
                 try {
                     // 检查必填字段
-                    if (StringUtils.isAnyBlank(excel.getStudentNo(), excel.getStudentName(), excel.getMajorId())) {
+                    if (StringUtils.isAnyBlank(excel.getStudentNo(), excel.getStudentName(), excel.getMajorCode())) {
                         failCount++;
                         Map<String, String> detail = new HashMap<>();
                         detail.put("row", String.valueOf(i + 2));
@@ -193,7 +191,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
 
                     // 根据专业代码查询专业ID
                     QueryWrapper<SysDictMajor> majorQueryWrapper = new QueryWrapper<>();
-                    majorQueryWrapper.eq("major_code", excel.getMajorId());
+                    majorQueryWrapper.eq("major_code", excel.getMajorCode());
                     SysDictMajor major = sysDictMajorMapper.selectOne(majorQueryWrapper);
                     if (major == null) {
                         failCount++;

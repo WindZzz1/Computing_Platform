@@ -51,34 +51,19 @@ public class TeachingClassVO implements Serializable {
     private String teacherName;
 
     /**
-     * 学年ID
+     * 学年学期ID
      */
-    private Long schoolYearId;
+    private Long termId;
 
     /**
      * 学年名称
      */
-    private String schoolYearName;
-
-    /**
-     * 学期（1/2）
-     */
-    private Integer semester;
+    private String yearName;
 
     /**
      * 学期名称
      */
     private String semesterName;
-
-    /**
-     * 所属专业ID
-     */
-    private Long majorId;
-
-    /**
-     * 所属专业名称
-     */
-    private String majorName;
 
     /**
      * 学生数量

@@ -97,4 +97,12 @@ public interface TeachingClassService extends IService<TeachingClass> {
      * @return 学生列表
      */
     java.util.List<com.yupi.springbootinit.model.vo.StudentVO> getClassStudents(Long classId);
+
+    /**
+     * 批量导入学生到教学班级
+     *
+     * @param classStudentImportRequest 导入请求
+     * @return 导入结果
+     */
+    java.util.Map<String, Object> importStudents(com.yupi.springbootinit.model.dto.teachingClass.ClassStudentImportRequest classStudentImportRequest);
 }
