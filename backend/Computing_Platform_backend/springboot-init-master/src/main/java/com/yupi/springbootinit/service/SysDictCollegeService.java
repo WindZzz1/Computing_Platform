@@ -71,4 +71,11 @@ public interface SysDictCollegeService extends IService<SysDictCollege> {
      * @return 学院VO
      */
     SysDictCollegeVO getCollegeVO(SysDictCollege sysDictCollege);
+
+    /**
+     * 获取所有学院简化列表
+     *
+     * @return 学院简化列表
+     */
+    java.util.List<com.yupi.springbootinit.model.vo.SysDictCollegeSimpleVO> listCollegeSimple();
 }

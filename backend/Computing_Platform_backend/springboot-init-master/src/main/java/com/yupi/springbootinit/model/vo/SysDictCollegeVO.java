@@ -25,18 +25,4 @@ public class SysDictCollegeVO implements Serializable {
      */
     private String collegeName;
 
-    /**
-     * 学院编码
-     */
-    private String collegeCode;
-
-    /**
-     * 创建时间
-     */
-    private Date createTime;
-
-    /**
-     * 更新时间
-     */
-    private Date updateTime;
 }

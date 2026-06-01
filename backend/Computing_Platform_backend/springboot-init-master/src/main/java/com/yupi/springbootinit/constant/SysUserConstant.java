@@ -18,17 +18,17 @@ public interface SysUserConstant {
     String ROLE_ADMIN = "admin";
 
     /**
-     * 角色编码 - 教师
+     * 角色编码 - 主讲教师
      */
     String ROLE_TEACHER = "teacher";
 
     /**
-     * 角色编码 - 领导
+     * 角色编码 - 专业负责人
      */
     String ROLE_LEADER = "leader";
 
     /**
-     * 角色编码 - 教务
+     * 角色编码 - 教务管理员
      */
     String ROLE_EDU = "edu";
 

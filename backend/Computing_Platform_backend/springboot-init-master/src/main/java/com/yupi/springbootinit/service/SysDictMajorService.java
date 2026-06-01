@@ -71,4 +71,11 @@ public interface SysDictMajorService extends IService<SysDictMajor> {
      * @return 专业VO
      */
     SysDictMajorVO getMajorVO(SysDictMajor sysDictMajor);
+
+    /**
+     * 获取所有专业简化列表
+     *
+     * @return 专业简化列表
+     */
+    java.util.List<com.yupi.springbootinit.model.vo.SysDictMajorSimpleVO> listMajorSimple();
 }

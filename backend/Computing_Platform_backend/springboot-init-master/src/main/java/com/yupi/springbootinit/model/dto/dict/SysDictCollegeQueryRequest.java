@@ -3,6 +3,7 @@ package com.yupi.springbootinit.model.dto.dict;
 import com.yupi.springbootinit.common.PageRequest;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 /**
  * 学院字典查询请求
@@ -18,8 +19,4 @@ public class SysDictCollegeQueryRequest extends PageRequest {
      */
     private String collegeName;
 
-    /**
-     * 学院编码
-     */
-    private String collegeCode;
 }

@@ -1,6 +1,7 @@
 package com.yupi.springbootinit.model.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -34,11 +35,18 @@ public class Student implements Serializable {
     /**
      * 姓名
      */
+    @TableField("student_name")
     private String name;
+
+    /**
+     * 年级
+     */
+    private String grade;
 
     /**
      * 学院ID
      */
+    @TableField(exist = false)
     private Long collegeId;
 
     /**
@@ -50,16 +58,6 @@ public class Student implements Serializable {
      * 班级
      */
     private String className;
-
-    /**
-     * 联系方式
-     */
-    private String phone;
-
-    /**
-     * 邮箱
-     */
-    private String email;
 
     /**
      * 创建时间
