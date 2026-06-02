@@ -14,13 +14,12 @@ import com.yupi.springbootinit.model.dto.teachingClass.TeachingClassUpdateReques
 import com.yupi.springbootinit.model.vo.PageResultVO;
 import com.yupi.springbootinit.model.vo.StudentVO;
 import com.yupi.springbootinit.model.vo.TeachingClassVO;
+import com.yupi.springbootinit.service.AchievementCalculationService;
 import com.yupi.springbootinit.service.TeachingClassService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import javax.annotation.Resource;
 
 import javax.annotation.Resource;
 import java.util.List;
@@ -38,6 +37,9 @@ public class TeachingClassController {
 
     @Resource
     private TeachingClassService teachingClassService;
+
+    @Resource
+    private AchievementCalculationService achievementCalculationService;
 
     /**
      * 创建教学班级
@@ -155,5 +157,45 @@ public class TeachingClassController {
     public BaseResponse<Map<String, Object>> importStudents(@RequestBody ClassStudentImportRequest classStudentImportRequest) {
         Map<String, Object> result = teachingClassService.importStudents(classStudentImportRequest);
         return ResultUtils.success(result);
+    }
+
+    /**
+     * 锁定教学班级成绩
+     * 锁定后无法修改成绩和课程配置
+     *
+     * @param id 教学班级ID
+     * @return 是否成功
+     */
+    @PostMapping("/lock/{id}")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
+    public BaseResponse<Boolean> lockScores(@PathVariable Long id) {
+
+        log.info("锁定教学班级成绩，班级ID：{}", id);
+
+        Boolean success = achievementCalculationService.lockScores(id);
+
+        log.info("锁定教学班级成绩{}", success ? "成功" : "失败");
+
+        return ResultUtils.success(success);
+    }
+
+    /**
+     * 解锁教学班级成绩
+     * 只有教务管理员可以解锁
+     *
+     * @param id 教学班级ID
+     * @return 是否成功
+     */
+    @PostMapping("/unlock/{id}")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    public BaseResponse<Boolean> unlockScores(@PathVariable Long id) {
+
+        log.info("解锁教学班级成绩，班级ID：{}", id);
+
+        Boolean success = achievementCalculationService.unlockScores(id);
+
+        log.info("解锁教学班级成绩{}", success ? "成功" : "失败");
+
+        return ResultUtils.success(success);
     }
 }

@@ -39,6 +39,26 @@ public class TeachingClass {
     private Long termId;
 
     /**
+     * 计算状态：0-未计算，1-已计算
+     */
+    private Integer calculatedStatus;
+
+    /**
+     * 锁定状态：0-未锁定，1-已锁定
+     */
+    private Integer lockedStatus;
+
+    /**
+     * 计算时间
+     */
+    private Date calculateTime;
+
+    /**
+     * 锁定时间
+     */
+    private Date lockTime;
+
+    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)
