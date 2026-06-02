@@ -109,8 +109,32 @@ public class IndicatorPointServiceImpl extends ServiceImpl<IndicatorPointMapper,
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "指标点ID不能为空");
         }
+        IndicatorPoint indicatorPoint = this.getById(id);
+        if (indicatorPoint == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "指标点不存在");
+        }
+        validateIndicatorPointNotReferenced(id);
         boolean result = this.removeById(id);
         return result;
+    }
+
+    private void validateIndicatorPointNotReferenced(Long indicatorId) {
+        Long matrixCount = indicatorPointMapper.countMatrixByIndicatorId(indicatorId);
+        if (matrixCount != null && matrixCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "指标点已被宏观支撑矩阵引用，不能删除");
+        }
+        Long weightCount = indicatorPointMapper.countWeightByIndicatorId(indicatorId);
+        if (weightCount != null && weightCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "指标点已被内部权重配置引用，不能删除");
+        }
+        Long courseResultCount = indicatorPointMapper.countCourseResultByIndicatorId(indicatorId);
+        if (courseResultCount != null && courseResultCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "指标点已被课程级达成度结果引用，不能删除");
+        }
+        Long majorResultCount = indicatorPointMapper.countMajorResultByIndicatorId(indicatorId);
+        if (majorResultCount != null && majorResultCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "指标点已被专业级达成度结果引用，不能删除");
+        }
     }
 
     @Override
