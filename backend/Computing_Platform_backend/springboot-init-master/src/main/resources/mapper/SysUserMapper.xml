@@ -57,4 +57,18 @@
           AND u.is_deleted = 0
     </select>
 
+    <select id="selectUsersByRole" resultMap="SysUserVOResultMap">
+        SELECT u.id,
+               u.username,
+               u.role_code as roleCode,
+               c.college_name as collegeName,
+               u.status,
+               u.create_time as createTime
+        FROM sys_user u
+        LEFT JOIN sys_dict_college c ON u.college_id = c.id
+        WHERE u.role_code = #{roleCode}
+          AND u.is_deleted = 0
+        ORDER BY u.create_time DESC
+    </select>
+
 </mapper>
