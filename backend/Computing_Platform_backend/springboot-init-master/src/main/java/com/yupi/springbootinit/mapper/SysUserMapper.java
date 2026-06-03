@@ -6,6 +6,8 @@ import com.yupi.springbootinit.model.vo.SysUserVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * @author YU
  * @description 针对表【sys_user(用户表)】的数据库操作Mapper
@@ -31,4 +33,12 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
      * @return 用户VO（含学院名称）
      */
     SysUserVO selectUserVOById(@Param("userId") Long userId);
+
+    /**
+     * 按角色查询用户列表
+     *
+     * @param roleCode 角色编码
+     * @return 用户列表
+     */
+    List<SysUserVO> selectUsersByRole(@Param("roleCode") String roleCode);
 }
