@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.mapper.GraduationRequirementMapper;
+import com.yupi.springbootinit.mapper.IndicatorPointMapper;
 import com.yupi.springbootinit.mapper.SysDictCollegeMapper;
 import com.yupi.springbootinit.mapper.SysDictMajorMapper;
 import com.yupi.springbootinit.model.dto.requirement.GraduationRequirementAddRequest;
@@ -40,6 +41,9 @@ public class GraduationRequirementServiceImpl extends ServiceImpl<GraduationRequ
 
     @Resource
     private SysDictCollegeMapper sysDictCollegeMapper;
+
+    @Resource
+    private IndicatorPointMapper indicatorPointMapper;
 
     @Override
     public Long createRequirement(GraduationRequirementAddRequest graduationRequirementAddRequest) {
@@ -112,8 +116,20 @@ public class GraduationRequirementServiceImpl extends ServiceImpl<GraduationRequ
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "毕业要求ID不能为空");
         }
+        GraduationRequirement requirement = this.getById(id);
+        if (requirement == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "毕业要求不存在");
+        }
+        validateRequirementNotReferenced(id);
         boolean result = this.removeById(id);
         return result;
+    }
+
+    private void validateRequirementNotReferenced(Long requirementId) {
+        Long indicatorCount = indicatorPointMapper.countByRequirementId(requirementId);
+        if (indicatorCount != null && indicatorCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "毕业要求已被指标点引用，不能删除");
+        }
     }
 
     @Override
