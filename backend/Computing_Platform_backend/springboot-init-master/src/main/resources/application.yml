@@ -21,7 +21,7 @@ spring:
   # todo 需替换配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://120.27.221.219:3306/graduation_achievement?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://120.27.221.219:3306/graduation_achievement?serverTimezone=Asia/Shanghai&useUnicode=true
     username: yu
     password: 125103Dbqwan
   # Redis 配置
