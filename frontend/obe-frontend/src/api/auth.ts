@@ -1,34 +1,21 @@
-import request from './request'
-import type { Role } from '@/types'
+import { apiGet, apiPost, type CreateUserRequest, type SysUserLoginRequest, type SysUserLoginVO, type SysUserVO } from './backend'
 
-export interface LoginPayload {
-  username: string
-  password: string
+export function loginWithToken(payload: SysUserLoginRequest) {
+  return apiPost<SysUserLoginVO>('/sysuser/login/token', payload)
 }
 
-export interface LoginUser {
-  id: number
-  username: string
-  roleCode: Role
-  collegeName?: string
-  status: number
-  createTime?: string
-  token: string
+export function createSysUser(payload: CreateUserRequest) {
+  return apiPost<number>('/sysuser/add', payload)
 }
 
-export interface CurrentUser {
-  id: number
-  username: string
-  roleCode: Role
-  collegeName?: string
-  status: number
-  createTime?: string
+export function getLoginUser() {
+  return apiGet<SysUserLoginVO>('/sysuser/get/login')
 }
 
-export const loginWithToken = (payload: LoginPayload) => {
-  return request.post<LoginUser, LoginUser>('/sysuser/login/token', payload)
-}
-
-export const getLoginUser = () => {
-  return request.get<CurrentUser, CurrentUser>('/sysuser/get/login')
+export function listUsersByRole(roleCode: string) {
+  return apiGet<SysUserVO[]>('/sysuser/list/by-role', {
+    params: {
+      roleCode
+    }
+  })
 }

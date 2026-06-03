@@ -1,0 +1,19 @@
+server:
+  address: 0.0.0.0
+  port: 8101
+  servlet:
+    context-path: /api
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://120.27.221.219:3306/graduation_achievement?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    username: yu
+    password: 125103Dbqwan
+
+mybatis-plus:
+  configuration:
+    log-impl: ''
+
+knife4j:
+  enable: true

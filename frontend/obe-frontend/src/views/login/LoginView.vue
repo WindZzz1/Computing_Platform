@@ -2,18 +2,26 @@
   <div class="login">
     <section class="login-panel">
       <div class="login-copy">
-        <h1>OBE达成度计算平台</h1>
-        <p>面向工程教育认证的毕业要求、课程目标、考核点和三层达成度计算原型。</p>
+        <h1>OBE 达成度计算平台</h1>
+        <p>前端已切到真实后端接口，登录后可以直接继续做接口联调与页面开发。</p>
       </div>
       <el-card class="box" shadow="never">
         <h2>进入系统</h2>
-        <p class="muted">使用后端账号登录，系统会自动保存 JWT Token</p>
-        <el-form label-position="top" @submit.prevent>
-          <el-form-item label="账号">
-            <el-input v-model="form.username" placeholder="请输入账号" />
+        <p class="muted">请输入后端环境中的真实账号和密码</p>
+        <el-form label-position="top" @submit.prevent="submit">
+          <el-form-item label="用户名">
+            <el-input v-model="username" placeholder="请输入用户名" />
           </el-form-item>
           <el-form-item label="密码">
-            <el-input v-model="form.password" type="password" placeholder="请输入密码" show-password />
+            <el-input v-model="password" type="password" show-password placeholder="请输入密码" />
+          </el-form-item>
+          <el-form-item label="角色">
+            <el-select v-model="role" style="width: 100%">
+              <el-option label="系统管理员" value="admin" />
+              <el-option label="教务管理员" value="edu" />
+              <el-option label="专业负责人" value="leader" />
+              <el-option label="课程教师" value="teacher" />
+            </el-select>
           </el-form-item>
           <el-button type="primary" style="width: 100%" :loading="loading" @click="submit">登录</el-button>
         </el-form>
@@ -23,28 +31,38 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import type { Role } from '@/types'
 
-const form = reactive({
-  username: 'admin',
-  password: '123456'
-})
+const role = ref<Role>('admin')
+const username = ref('')
+const password = ref('')
 const loading = ref(false)
 const user = useUserStore()
 const router = useRouter()
+
 const submit = async () => {
-  if (!form.username || !form.password) {
-    ElMessage.warning('请输入账号和密码')
+  if (!username.value || !password.value) {
+    ElMessage.warning('请输入用户名和密码')
     return
   }
+
   loading.value = true
   try {
-    await user.login(form.username, form.password)
-    ElMessage.success('登录成功')
-    router.push('/dashboard')
+    await user.login(username.value, password.value)
+    await router.push('/dashboard')
+  } catch (error) {
+    const message =
+      axios.isAxiosError(error) && error.code === 'ECONNABORTED'
+        ? '登录请求超时，本地后端首次响应较慢，请稍等后重试。'
+        : error instanceof Error
+          ? error.message
+          : '登录失败'
+    ElMessage.error(message)
   } finally {
     loading.value = false
   }
