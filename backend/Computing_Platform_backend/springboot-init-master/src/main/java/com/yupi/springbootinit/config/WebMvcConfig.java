@@ -22,9 +22,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(sysJwtInterceptor)
                 .addPathPatterns(
+                        "/sysuser/**",
                         "/dict/**",
                         "/requirement/**",
                         "/course/**",
+                        "/matrix/**",
                         "/student/**",
                         "/teaching-class/**",
                         "/weight/**",
