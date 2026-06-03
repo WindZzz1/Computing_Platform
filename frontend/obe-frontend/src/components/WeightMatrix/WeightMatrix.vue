@@ -1,36 +1,55 @@
 <template>
-  <el-table :data="rows" border height="430" size="small">
-    <el-table-column fixed prop="course" label="课程名称" width="140" />
-    <el-table-column v-for="ind in indicators" :key="ind.id" :label="ind.code" min-width="106" align="center">
-      <template #default="{ row }">
-        <el-input-number
-          v-if="(row.weights[ind.id] || 0) > 0"
-          v-model="row.weights[ind.id]"
-          :min="0"
-          :max="1"
-          :step="0.05"
-          :precision="2"
-          controls-position="right"
-          class="cell-input"
-        />
-        <span v-else class="muted">--</span>
-      </template>
-    </el-table-column>
-  </el-table>
-  <div class="sum-row">
-    <span>列合计</span>
-    <div v-for="ind in indicators" :key="ind.id" :class="ok(ind.id) ? 'success-text' : 'danger-text'">
-      {{ ind.code }}: {{ sum(ind.id).toFixed(2) }}
+  <div v-loading="loading">
+    <el-table :data="rows" border height="430" size="small">
+      <el-table-column fixed prop="courseName" label="课程名称" min-width="180" />
+      <el-table-column v-for="indicator in indicators" :key="indicator.id" :label="indicator.indicatorCode" min-width="110" align="center">
+        <template #default="{ row }">
+          <el-input-number
+            v-model="row.weights[indicator.id]"
+            :min="0"
+            :max="1"
+            :step="0.05"
+            :precision="2"
+            controls-position="right"
+            class="cell-input"
+          />
+        </template>
+      </el-table-column>
+    </el-table>
+    <div class="sum-row">
+      <span>列合计</span>
+      <div v-for="indicator in indicators" :key="indicator.id" :class="ok(indicator.id) ? 'success-text' : 'danger-text'">
+        {{ indicator.indicatorCode }}: {{ sum(indicator.id).toFixed(2) }}
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { indicators, supportMatrixRows } from '@/api/mock'
+import { computed } from 'vue'
 
-const rows = ref(supportMatrixRows.map((row) => ({ course: row.course, weights: { ...row.weights } })))
-const sum = (id: number) => rows.value.reduce((acc, row) => acc + (row.weights[id] || 0), 0)
+interface MatrixIndicator {
+  id: number
+  indicatorCode: string
+}
+
+interface MatrixRow {
+  courseId: number
+  courseName: string
+  weights: Record<number, number>
+}
+
+const props = defineProps<{
+  loading?: boolean
+  indicators: MatrixIndicator[]
+  rows: MatrixRow[]
+}>()
+
+const loading = computed(() => props.loading ?? false)
+const indicators = computed(() => props.indicators ?? [])
+const rows = computed(() => props.rows ?? [])
+
+const sum = (id: number) => rows.value.reduce((acc, row) => acc + (Number(row.weights[id]) || 0), 0)
 const ok = (id: number) => Math.abs(sum(id) - 1) <= 0.001
 </script>
 

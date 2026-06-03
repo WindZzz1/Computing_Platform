@@ -1,16 +1,43 @@
 <template>
   <div class="page">
     <h1 class="page-title">课程大纲配置</h1>
-    <p class="page-desc">课程教师维护课程目标 CO、课程目标到指标点的内部贡献权重 wjk，以及考核点和满分值。</p>
+    <p class="page-desc">继续使用真实课程目标、考核点和内部权重接口，不再展示示例达成度或占位字段。</p>
 
     <section class="page-grid">
+      <div class="panel span-12">
+        <div class="toolbar">
+          <div>
+            <h3 class="panel-title">当前课程</h3>
+            <span class="muted">{{ currentCourseLabel }}</span>
+          </div>
+          <div class="toolbar-actions">
+            <el-select v-model="currentCourseId" style="width: 280px" @change="reloadCourseData">
+              <el-option
+                v-for="course in courses"
+                :key="course.id"
+                :label="`${course.courseCode} - ${course.courseName}`"
+                :value="course.id"
+              />
+            </el-select>
+            <el-button @click="reloadCourseData">刷新</el-button>
+          </div>
+        </div>
+      </div>
+
       <div class="panel span-5">
-        <h3 class="panel-title">课程目标</h3>
-        <el-table :data="objectives" border>
-          <el-table-column prop="code" label="课程目标" width="110" />
-          <el-table-column prop="content" label="目标描述" />
-          <el-table-column label="示例达成度" width="110">
-            <template #default="{ row }">{{ row.achievement.toFixed(2) }}</template>
+        <div class="toolbar">
+          <h3 class="panel-title">课程目标</h3>
+          <el-button type="primary" :disabled="!currentCourseId" @click="openObjectiveCreateDialog">新增目标</el-button>
+        </div>
+        <el-table v-loading="loading" :data="objectiveRows" border>
+          <el-table-column prop="code" label="目标编号" width="120" />
+          <el-table-column prop="name" label="目标名称" min-width="180" />
+          <el-table-column prop="content" label="目标描述" min-width="240" />
+          <el-table-column label="操作" width="150">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openObjectiveEditDialog(row.raw)">编辑</el-button>
+              <el-button link type="danger" @click="handleDeleteObjective(row.raw)">删除</el-button>
+            </template>
           </el-table-column>
         </el-table>
       </div>
@@ -18,65 +45,494 @@
       <div class="panel span-7">
         <div class="toolbar">
           <h3 class="panel-title">内部贡献权重</h3>
-          <el-tag type="success">列合计必须为 1.00</el-tag>
+          <el-tag type="success">列合计应为 1.00</el-tag>
         </div>
-        <el-table :data="weightRows" border>
-          <el-table-column prop="objective" label="目标点" width="130" />
-          <el-table-column label="3.1（专业知识）">
-            <template #default="{ row }"><el-input-number v-model="row.w31" :min="0" :max="1" :step="0.1" :precision="2" /></template>
-          </el-table-column>
-          <el-table-column label="3.3（工具实践）">
-            <template #default="{ row }"><el-input-number v-model="row.w33" :min="0" :max="1" :step="0.1" :precision="2" /></template>
-          </el-table-column>
-          <el-table-column label="3.4（信息技术组织）">
-            <template #default="{ row }"><el-input-number v-model="row.w34" :min="0" :max="1" :step="0.1" :precision="2" /></template>
+        <el-table v-loading="loading" :data="weightRows" border>
+          <el-table-column prop="objectiveCode" label="课程目标" width="140" />
+          <el-table-column
+            v-for="indicator in indicators"
+            :key="indicator.id"
+            :label="indicator.indicatorCode"
+            min-width="120"
+          >
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.weights[indicator.id]"
+                :min="0"
+                :max="1"
+                :step="0.1"
+                :precision="2"
+                controls-position="right"
+              />
+            </template>
           </el-table-column>
         </el-table>
         <div class="weight-footer">
           <span>列合计</span>
-          <span class="success-text">3.1 = 1.00</span>
-          <span class="success-text">3.3 = 1.00</span>
-          <span class="success-text">3.4 = 1.00</span>
+          <span
+            v-for="indicator in indicators"
+            :key="indicator.id"
+            :class="isColumnOk(indicator.id) ? 'success-text' : 'danger-text'"
+          >
+            {{ indicator.indicatorCode }} = {{ getColumnSum(indicator.id).toFixed(2) }}
+          </span>
         </div>
-        <el-button type="primary" style="margin-top: 14px">保存</el-button>
+        <el-button type="primary" style="margin-top: 14px" :disabled="!currentCourseId" @click="saveWeights">
+          保存
+        </el-button>
       </div>
 
       <div class="panel span-12">
-        <h3 class="panel-title">考核点管理</h3>
-        <el-table :data="assessments" border>
-          <el-table-column prop="name" label="考核点名称" />
+        <div class="toolbar">
+          <h3 class="panel-title">考核点管理</h3>
+          <el-button type="primary" :disabled="!currentCourseId || !objectives.length" @click="openAssessmentCreateDialog">
+            新增考核点
+          </el-button>
+        </div>
+        <el-table v-loading="loading" :data="assessmentRows" border>
+          <el-table-column prop="code" label="考核点编号" width="120" />
+          <el-table-column prop="name" label="考核点名称" min-width="220" />
           <el-table-column prop="score" label="分值" width="90" />
-          <el-table-column label="对应课程目标" width="150">
-            <template #default="{ row }">{{ objectives.find((item) => item.id === row.objectiveId)?.code }}</template>
-          </el-table-column>
-          <el-table-column prop="method" label="考核方式" width="120" />
+          <el-table-column prop="objective" label="对应课程目标" width="220" />
+          <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
           <el-table-column label="操作" width="150">
-            <template #default>
-              <el-button link type="primary">编辑</el-button>
-              <el-button link type="danger">删除</el-button>
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openAssessmentEditDialog(row.raw)">编辑</el-button>
+              <el-button link type="danger" @click="handleDeleteAssessment(row.raw)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
       </div>
     </section>
+
+    <el-dialog v-model="objectiveDialogVisible" :title="objectiveEditing ? '编辑课程目标' : '新增课程目标'" width="520px" destroy-on-close>
+      <el-form ref="objectiveFormRef" :model="objectiveForm" :rules="objectiveRules" label-width="88px">
+        <el-form-item label="目标编号" prop="objCode">
+          <el-input v-model="objectiveForm.objCode" placeholder="例如 CO1" />
+        </el-form-item>
+        <el-form-item label="目标名称" prop="objName">
+          <el-input v-model="objectiveForm.objName" placeholder="请输入目标名称" />
+        </el-form-item>
+        <el-form-item label="目标描述" prop="objDesc">
+          <el-input v-model="objectiveForm.objDesc" type="textarea" :rows="4" placeholder="请输入课程目标描述" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="objectiveDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingObjective" @click="submitObjective">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="assessmentDialogVisible" :title="assessmentEditing ? '编辑考核点' : '新增考核点'" width="560px" destroy-on-close>
+      <el-form ref="assessmentFormRef" :model="assessmentForm" :rules="assessmentRules" label-width="96px">
+        <el-form-item label="考核点编号" prop="pointCode">
+          <el-input v-model="assessmentForm.pointCode" placeholder="例如 AP1" />
+        </el-form-item>
+        <el-form-item label="考核点名称" prop="pointName">
+          <el-input v-model="assessmentForm.pointName" placeholder="请输入考核点名称" />
+        </el-form-item>
+        <el-form-item label="满分值" prop="fullScore">
+          <el-input-number v-model="assessmentForm.fullScore" :min="1" :step="1" :precision="0" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="关联目标" prop="objectiveIds">
+          <el-select v-model="assessmentForm.objectiveIds" multiple collapse-tags collapse-tags-tooltip style="width: 100%">
+            <el-option
+              v-for="objective in objectives"
+              :key="objective.id"
+              :label="`${objective.objCode} ${objective.objName || ''}`.trim()"
+              :value="objective.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="assessmentDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingAssessment" @click="submitAssessment">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { assessments, objectives } from '@/api/mock'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
+import { listCourses } from '@/api/course'
+import {
+  createAssessmentPoint,
+  checkObjectiveIndicatorWeights,
+  createCourseObjective,
+  deleteAssessmentPoint,
+  deleteCourseObjective,
+  listAssessmentPoints,
+  listAvailableIndicators,
+  listCourseObjectives,
+  listObjectiveIndicatorWeights,
+  saveObjectiveIndicatorWeights,
+  updateAssessmentPoint,
+  updateCourseObjective
+} from '@/api/syllabus'
+import type {
+  AssessmentPointCreateRequest,
+  AssessmentPointUpdateRequest,
+  AssessmentPointVO,
+  CourseObjectiveCreateRequest,
+  CourseObjectiveUpdateRequest,
+  CourseObjectiveVO,
+  CourseSimpleVO,
+  IndicatorPointVO
+} from '@/api/backend'
 
-const weightRows = ref([
-  { objective: '目标1-1 知识', w31: 1.0, w33: 0, w34: 0 },
-  { objective: '目标2-1 能力', w31: 0, w33: 0.5, w34: 0 },
-  { objective: '目标2-2 能力', w31: 0, w33: 0.5, w34: 0 },
-  { objective: '目标3-1 价值', w31: 0, w33: 0, w34: 1.0 }
-])
+type WeightRow = {
+  objectiveId: number
+  objectiveCode: string
+  weights: Record<number, number>
+}
+
+type ObjectiveRow = {
+  id: number
+  code: string
+  name: string
+  content: string
+  raw: CourseObjectiveVO
+}
+
+type AssessmentRow = {
+  id: number
+  code: string
+  name: string
+  score: number | string
+  objective: string
+  updatedAt: string
+  raw: AssessmentPointVO
+}
+
+const loading = ref(false)
+const courses = ref<CourseSimpleVO[]>([])
+const currentCourseId = ref<number>()
+const objectives = ref<CourseObjectiveVO[]>([])
+const assessments = ref<AssessmentPointVO[]>([])
+const indicators = ref<IndicatorPointVO[]>([])
+const weightRows = ref<WeightRow[]>([])
+const objectiveDialogVisible = ref(false)
+const assessmentDialogVisible = ref(false)
+const objectiveEditing = ref<CourseObjectiveVO>()
+const assessmentEditing = ref<AssessmentPointVO>()
+const savingObjective = ref(false)
+const savingAssessment = ref(false)
+const objectiveFormRef = ref<FormInstance>()
+const assessmentFormRef = ref<FormInstance>()
+
+const objectiveForm = reactive<CourseObjectiveCreateRequest>({
+  courseId: 0,
+  objCode: '',
+  objName: '',
+  objDesc: ''
+})
+
+const assessmentForm = reactive<AssessmentPointCreateRequest>({
+  courseId: 0,
+  pointCode: '',
+  pointName: '',
+  fullScore: 100,
+  objectiveIds: []
+})
+
+const objectiveRules: FormRules<CourseObjectiveCreateRequest> = {
+  objCode: [{ required: true, message: '请输入目标编号', trigger: 'blur' }],
+  objName: [{ required: true, message: '请输入目标名称', trigger: 'blur' }]
+}
+
+const assessmentRules: FormRules<AssessmentPointCreateRequest> = {
+  pointCode: [{ required: true, message: '请输入考核点编号', trigger: 'blur' }],
+  pointName: [{ required: true, message: '请输入考核点名称', trigger: 'blur' }],
+  fullScore: [{ required: true, message: '请输入满分值', trigger: 'change' }],
+  objectiveIds: [{ required: true, message: '请至少选择一个课程目标', trigger: 'change' }]
+}
+
+const currentCourseLabel = computed(() => {
+  const course = courses.value.find((item) => item.id === currentCourseId.value)
+  return course ? `${course.courseCode} - ${course.courseName}` : '未选择课程'
+})
+
+const objectiveRows = computed<ObjectiveRow[]>(() =>
+  objectives.value.map((objective) => ({
+    id: objective.id,
+    code: objective.objCode,
+    name: objective.objName || '-',
+    content: objective.objDesc || '-',
+    raw: objective
+  }))
+)
+
+const assessmentRows = computed<AssessmentRow[]>(() =>
+  assessments.value.map((assessment) => ({
+    id: assessment.id,
+    code: assessment.pointCode,
+    name: assessment.pointName,
+    score: assessment.fullScore ?? '-',
+    objective:
+      assessment.objCode || assessment.objectives?.map((item: CourseObjectiveVO) => item.objCode).join(' / ') || '-',
+    updatedAt: assessment.updateTime || assessment.createTime || '-',
+    raw: assessment
+  }))
+)
+
+const getColumnSum = (indicatorId: number) =>
+  weightRows.value.reduce((sum, row) => sum + (Number(row.weights[indicatorId]) || 0), 0)
+
+const isColumnOk = (indicatorId: number) => Math.abs(getColumnSum(indicatorId) - 1) <= 0.001
+
+const resetObjectiveForm = () => {
+  objectiveForm.courseId = currentCourseId.value ?? 0
+  objectiveForm.objCode = ''
+  objectiveForm.objName = ''
+  objectiveForm.objDesc = ''
+  objectiveFormRef.value?.clearValidate()
+}
+
+const resetAssessmentForm = () => {
+  assessmentForm.courseId = currentCourseId.value ?? 0
+  assessmentForm.pointCode = ''
+  assessmentForm.pointName = ''
+  assessmentForm.fullScore = 100
+  assessmentForm.objectiveIds = []
+  assessmentFormRef.value?.clearValidate()
+}
+
+const openObjectiveCreateDialog = () => {
+  objectiveEditing.value = undefined
+  resetObjectiveForm()
+  objectiveDialogVisible.value = true
+}
+
+const openObjectiveEditDialog = (objective: CourseObjectiveVO) => {
+  objectiveEditing.value = objective
+  objectiveForm.courseId = objective.courseId
+  objectiveForm.objCode = objective.objCode
+  objectiveForm.objName = objective.objName || ''
+  objectiveForm.objDesc = objective.objDesc || ''
+  objectiveDialogVisible.value = true
+}
+
+const openAssessmentCreateDialog = () => {
+  assessmentEditing.value = undefined
+  resetAssessmentForm()
+  assessmentDialogVisible.value = true
+}
+
+const openAssessmentEditDialog = (assessment: AssessmentPointVO) => {
+  assessmentEditing.value = assessment
+  assessmentForm.courseId = assessment.courseId
+  assessmentForm.pointCode = assessment.pointCode
+  assessmentForm.pointName = assessment.pointName
+  assessmentForm.fullScore = Number(assessment.fullScore ?? 100)
+  assessmentForm.objectiveIds = assessment.objectiveIds?.length
+    ? [...assessment.objectiveIds]
+    : assessment.objectiveId
+      ? [assessment.objectiveId]
+      : []
+  assessmentDialogVisible.value = true
+}
+
+const reloadCourseData = async () => {
+  if (!currentCourseId.value) return
+
+  loading.value = true
+  try {
+    const [objectivePage, assessmentPage, indicatorList, weightList] = await Promise.all([
+      listCourseObjectives(currentCourseId.value),
+      listAssessmentPoints(currentCourseId.value),
+      listAvailableIndicators(currentCourseId.value),
+      listObjectiveIndicatorWeights(currentCourseId.value)
+    ])
+
+    objectives.value = objectivePage.records
+    assessments.value = assessmentPage.records
+    indicators.value = indicatorList
+
+    const rowMap = new Map<number, WeightRow>()
+    for (const objective of objectives.value) {
+      rowMap.set(objective.id, {
+        objectiveId: objective.id,
+        objectiveCode: objective.objCode,
+        weights: Object.fromEntries(indicators.value.map((indicator) => [indicator.id, 0]))
+      })
+    }
+
+    for (const item of weightList) {
+      const row = rowMap.get(item.objectiveId)
+      if (row) {
+        row.weights[item.indicatorId] = Number(item.innerWeight ?? 0)
+      }
+    }
+
+    weightRows.value = Array.from(rowMap.values())
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '课程大纲数据加载失败'
+    ElMessage.error(message)
+  } finally {
+    loading.value = false
+  }
+}
+
+const submitObjective = async () => {
+  const isValid = await objectiveFormRef.value?.validate().catch(() => false)
+  if (!isValid || !currentCourseId.value) return
+
+  savingObjective.value = true
+  try {
+    if (objectiveEditing.value) {
+      await updateCourseObjective({
+        id: objectiveEditing.value.id,
+        courseId: currentCourseId.value,
+        objCode: objectiveForm.objCode.trim(),
+        objName: objectiveForm.objName.trim(),
+        objDesc: objectiveForm.objDesc?.trim()
+      } satisfies CourseObjectiveUpdateRequest)
+      ElMessage.success('课程目标已更新')
+    } else {
+      await createCourseObjective({
+        courseId: currentCourseId.value,
+        objCode: objectiveForm.objCode.trim(),
+        objName: objectiveForm.objName.trim(),
+        objDesc: objectiveForm.objDesc?.trim()
+      })
+      ElMessage.success('课程目标已创建')
+    }
+
+    objectiveDialogVisible.value = false
+    await reloadCourseData()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '课程目标保存失败'
+    ElMessage.error(message)
+  } finally {
+    savingObjective.value = false
+  }
+}
+
+const submitAssessment = async () => {
+  const isValid = await assessmentFormRef.value?.validate().catch(() => false)
+  if (!isValid || !currentCourseId.value) return
+
+  const payload = {
+    courseId: currentCourseId.value,
+    pointCode: assessmentForm.pointCode.trim(),
+    pointName: assessmentForm.pointName.trim(),
+    fullScore: Number(assessmentForm.fullScore),
+    objectiveIds: [...(assessmentForm.objectiveIds || [])]
+  }
+
+  savingAssessment.value = true
+  try {
+    if (assessmentEditing.value) {
+      await updateAssessmentPoint({
+        id: assessmentEditing.value.id,
+        ...payload
+      } satisfies AssessmentPointUpdateRequest)
+      ElMessage.success('考核点已更新')
+    } else {
+      await createAssessmentPoint(payload)
+      ElMessage.success('考核点已创建')
+    }
+
+    assessmentDialogVisible.value = false
+    await reloadCourseData()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '考核点保存失败'
+    ElMessage.error(message)
+  } finally {
+    savingAssessment.value = false
+  }
+}
+
+const handleDeleteObjective = async (objective: CourseObjectiveVO) => {
+  try {
+    await ElMessageBox.confirm(`确认删除课程目标 ${objective.objCode} 吗？`, '删除确认', {
+      type: 'warning'
+    })
+    await deleteCourseObjective(objective.id)
+    ElMessage.success('课程目标已删除')
+    await reloadCourseData()
+  } catch (error) {
+    if (error === 'cancel') return
+    const message = error instanceof Error ? error.message : '课程目标删除失败'
+    ElMessage.error(message)
+  }
+}
+
+const handleDeleteAssessment = async (assessment: AssessmentPointVO) => {
+  try {
+    await ElMessageBox.confirm(`确认删除考核点 ${assessment.pointCode} 吗？`, '删除确认', {
+      type: 'warning'
+    })
+    await deleteAssessmentPoint(assessment.id)
+    ElMessage.success('考核点已删除')
+    await reloadCourseData()
+  } catch (error) {
+    if (error === 'cancel') return
+    const message = error instanceof Error ? error.message : '考核点删除失败'
+    ElMessage.error(message)
+  }
+}
+
+const saveWeights = async () => {
+  if (!currentCourseId.value) return
+
+  const items = weightRows.value.flatMap((row) =>
+    Object.entries(row.weights)
+      .filter(([, value]) => Number(value) > 0)
+      .map(([indicatorId, value]) => ({
+        objectiveId: row.objectiveId,
+        indicatorId: Number(indicatorId),
+        innerWeight: Number(value)
+      }))
+  )
+
+  try {
+    const checkResult = await checkObjectiveIndicatorWeights(currentCourseId.value, items)
+    if (!checkResult.valid) {
+      const indicatorSummary = indicators.value
+        .map((indicator) => {
+          const sum = checkResult.indicatorWeightSumMap?.[indicator.id] ?? getColumnSum(indicator.id).toFixed(2)
+          return `${indicator.indicatorCode}=${sum}`
+        })
+        .join('，')
+
+      ElMessage.warning(`各指标点内部权重合计必须为 1，当前校验未通过：${indicatorSummary}`)
+      return
+    }
+
+    await saveObjectiveIndicatorWeights(currentCourseId.value, items)
+    ElMessage.success('内部贡献权重已保存')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '权重保存失败'
+    ElMessage.error(message)
+  }
+}
+
+onMounted(async () => {
+  try {
+    courses.value = await listCourses()
+    currentCourseId.value = courses.value[0]?.id
+    await reloadCourseData()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '课程列表加载失败'
+    ElMessage.error(message)
+  }
+})
 </script>
 
 <style scoped>
+.toolbar-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .weight-footer {
   display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   padding: 12px;
   border: 1px solid var(--line);
