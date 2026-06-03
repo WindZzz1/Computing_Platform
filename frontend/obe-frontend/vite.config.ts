@@ -4,6 +4,17 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [vue()],
+  build: {
+    outDir: 'release'
+  },
   resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
-  server: { port: 5173 }
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8101',
+        changeOrigin: true
+      }
+    }
+  }
 })
