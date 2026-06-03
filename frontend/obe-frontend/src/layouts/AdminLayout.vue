@@ -1,7 +1,7 @@
 <template>
   <el-container class="shell">
     <el-aside width="224px" class="side">
-      <div class="brand">OBE达成度计算平台</div>
+      <div class="brand">OBE 达成度计算平台</div>
       <el-menu router :default-active="$route.path" class="menu">
         <el-menu-item index="/dashboard">
           <el-icon><House /></el-icon>
@@ -16,7 +16,7 @@
         </el-sub-menu>
         <el-menu-item index="/matrix">
           <el-icon><Grid /></el-icon>
-          <span>宏观支撑矩阵</span>
+          <span>矩阵配置</span>
         </el-menu-item>
         <el-sub-menu index="course">
           <template #title>
@@ -98,6 +98,7 @@ import { useUserStore } from '@/stores/user'
 
 const user = useUserStore()
 const router = useRouter()
+
 const logout = () => {
   user.logout()
   router.push('/login')
