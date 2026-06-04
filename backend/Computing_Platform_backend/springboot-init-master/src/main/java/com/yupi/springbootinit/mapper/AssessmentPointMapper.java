@@ -28,6 +28,6 @@ public interface AssessmentPointMapper extends BaseMapper<AssessmentPoint> {
      * @param pointId 考核点ID
      * @return 学生成绩数量
      */
-    @Select("select count(1) from student_score where point_id = #{pointId}")
+    @Select("select count(1) from student_score where point_id = #{pointId} and is_deleted = 0")
     Long countStudentScoreByPointId(@Param("pointId") Long pointId);
 }
