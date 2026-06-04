@@ -5,12 +5,14 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
+import com.yupi.springbootinit.mapper.GraduationRequirementMapper;
 import com.yupi.springbootinit.mapper.IndicatorPointMapper;
 import com.yupi.springbootinit.mapper.MatrixCourseIndicatorMapper;
 import com.yupi.springbootinit.mapper.WeightObjectiveIndicatorMapper;
 import com.yupi.springbootinit.model.dto.weight.WeightObjectiveIndicatorCheckRequest;
 import com.yupi.springbootinit.model.dto.weight.WeightObjectiveIndicatorSaveRequest;
 import com.yupi.springbootinit.model.entity.CourseObjective;
+import com.yupi.springbootinit.model.entity.GraduationRequirement;
 import com.yupi.springbootinit.model.entity.IndicatorPoint;
 import com.yupi.springbootinit.model.entity.MatrixCourseIndicator;
 import com.yupi.springbootinit.model.entity.WeightObjectiveIndicator;
@@ -51,6 +53,9 @@ public class WeightObjectiveIndicatorServiceImpl
 
     @Resource
     private IndicatorPointMapper indicatorPointMapper;
+
+    @Resource
+    private GraduationRequirementMapper graduationRequirementMapper;
 
     @Resource
     private CourseObjectiveMapper courseObjectiveMapper;
@@ -247,6 +252,14 @@ public class WeightObjectiveIndicatorServiceImpl
         }
         IndicatorPointVO vo = new IndicatorPointVO();
         BeanUtils.copyProperties(indicator, vo);
+        // 查询并设置毕业要求信息
+        if (indicator.getRequirementId() != null) {
+            GraduationRequirement requirement = graduationRequirementMapper.selectById(indicator.getRequirementId());
+            if (requirement != null) {
+                vo.setRequirementCode(requirement.getRequirementCode());
+                vo.setRequirementName(requirement.getRequirementName());
+            }
+        }
         return vo;
     }
 
