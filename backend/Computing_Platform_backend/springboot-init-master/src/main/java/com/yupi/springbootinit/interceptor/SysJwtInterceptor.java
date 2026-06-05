@@ -14,6 +14,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 /**
  * 系统用户 JWT 认证拦截器
@@ -51,36 +53,60 @@ public class SysJwtInterceptor implements HandlerInterceptor {
             throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用");
         }
 
-        validateRole(user.getRoleCode(), authCheck.mustRole());
+        validateRole(user.getRoleCode(), authCheck.mustRole(), authCheck.anyRole());
         request.setAttribute("currentUser", user);
         return true;
     }
 
-    private void validateRole(String userRole, String mustRole) {
-        if (mustRole == null || mustRole.isEmpty()) {
-            return;
-        }
-
+    private void validateRole(String userRole, String mustRole, String anyRole) {
         // admin 视为超级管理员，放行全部角色接口
         if (SysUserConstant.ROLE_ADMIN.equals(userRole)) {
             return;
         }
 
-        if (mustRole.equals(userRole)) {
-            return;
+        // 检查 mustRole
+        if (mustRole != null && !mustRole.isEmpty()) {
+            if (mustRole.equals(userRole)) {
+                return;
+            }
+
+            if (SysUserConstant.ROLE_ADMIN.equals(mustRole)) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要管理员权限");
+            }
+            if (SysUserConstant.ROLE_LEADER.equals(mustRole)) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要专业负责人权限");
+            }
+            if (SysUserConstant.ROLE_TEACHER.equals(mustRole)) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要主讲教师权限");
+            }
+            if (SysUserConstant.ROLE_EDU.equals(mustRole)) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要教务管理员权限");
+            }
         }
 
-        if (SysUserConstant.ROLE_ADMIN.equals(mustRole)) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要管理员权限");
-        }
-        if (SysUserConstant.ROLE_LEADER.equals(mustRole)) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要专业负责人权限");
-        }
-        if (SysUserConstant.ROLE_TEACHER.equals(mustRole)) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要主讲教师权限");
-        }
-        if (SysUserConstant.ROLE_EDU.equals(mustRole)) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要教务管理员权限");
+        // 检查 anyRole（支持多个角色，逗号分隔）
+        if (anyRole != null && !anyRole.isEmpty()) {
+            String[] allowedRoles = anyRole.split(",");
+            for (String allowedRole : allowedRoles) {
+                if (allowedRole.trim().equals(userRole)) {
+                    return; // 匹配任一角色即可
+                }
+            }
+
+            // 构建错误消息
+            String roleNames = String.join("或", Arrays.stream(allowedRoles)
+                    .map(role -> {
+                        switch (role.trim()) {
+                            case SysUserConstant.ROLE_ADMIN: return "管理员";
+                            case SysUserConstant.ROLE_LEADER: return "专业负责人";
+                            case SysUserConstant.ROLE_TEACHER: return "主讲教师";
+                            case SysUserConstant.ROLE_EDU: return "教务管理员";
+                            default: return "相关角色";
+                        }
+                    })
+                    .collect(Collectors.toList()));
+
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要" + roleNames + "权限");
         }
     }
 

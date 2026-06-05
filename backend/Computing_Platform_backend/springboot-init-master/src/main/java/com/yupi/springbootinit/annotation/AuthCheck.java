@@ -22,5 +22,12 @@ public @interface AuthCheck {
      */
     String mustRole() default "";
 
+    /**
+     * 可以有任一角色（多个角色用逗号分隔）
+     *
+     * @return
+     */
+    String anyRole() default "";
+
 }
 

@@ -30,7 +30,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/student/**",
                         "/teaching-class/**",
                         "/weight/**",
-                        "/assessment/**"
+                        "/assessment/**",
+                        "/grade-entry/**",
+                        "/achievement-calculation/**",
+                        "/major-calculation/**"
                 )
                 .excludePathPatterns(
                         "/sysuser/login",
