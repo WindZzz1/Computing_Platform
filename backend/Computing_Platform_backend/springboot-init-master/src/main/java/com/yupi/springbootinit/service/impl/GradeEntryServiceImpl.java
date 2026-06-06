@@ -367,10 +367,8 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
                                     StudentScore studentScore = new StudentScore();
                                     studentScore.setClassId(classId);
                                     studentScore.setStudentId(student.getId());
-                                    studentScore.setAssessmentPointId(point.getId());
-                                    studentScore.setScore(score);
-                                    studentScore.setIsLocked(0);
-                                    studentScore.setEnteredBy(getCurrentUserId());
+                                    studentScore.setPointId(point.getId());
+                                    studentScore.setActualScore(score);
 
                                     scoresToSave.add(studentScore);
 
@@ -453,11 +451,11 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
             queryWrapper.eq("student_id", request.getStudentId());
         }
 
-        if (request.getAssessmentPointId() != null) {
-            queryWrapper.eq("assessment_point_id", request.getAssessmentPointId());
+        if (request.getPointId() != null) {
+            queryWrapper.eq("point_id", request.getPointId());
         }
 
-        queryWrapper.orderByAsc("student_id", "assessment_point_id");
+        queryWrapper.orderByAsc("student_id", "point_id");
 
         // 分页查询成绩数据
         Page<StudentScore> page = studentScoreMapper.selectPage(new Page<>(current, size), queryWrapper);
@@ -469,17 +467,17 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
         if (!page.getRecords().isEmpty()) {
             // 获取学生ID和考核点ID
             Set<Long> studentIds = new HashSet<>();
-            Set<Long> assessmentPointIds = new HashSet<>();
+            Set<Long> pointIds = new HashSet<>();
 
             for (StudentScore score : page.getRecords()) {
                 studentIds.add(score.getStudentId());
-                assessmentPointIds.add(score.getAssessmentPointId());
+                pointIds.add(score.getPointId());
             }
 
             // 批量查询学生和考核点信息
             Map<Long, Student> studentMap = studentMapper.selectBatchIds(studentIds).stream()
                     .collect(Collectors.toMap(Student::getId, s -> s));
-            Map<Long, AssessmentPoint> assessmentPointMap = assessmentPointMapper.selectBatchIds(assessmentPointIds).stream()
+            Map<Long, AssessmentPoint> assessmentPointMap = assessmentPointMapper.selectBatchIds(pointIds).stream()
                     .collect(Collectors.toMap(AssessmentPoint::getId, p -> p));
 
             // 构建VO列表
@@ -493,7 +491,7 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
                     vo.setName(student.getName());
                 }
 
-                AssessmentPoint point = assessmentPointMap.get(score.getAssessmentPointId());
+                AssessmentPoint point = assessmentPointMap.get(score.getPointId());
                 if (point != null) {
                     vo.setPointCode(point.getPointCode());
                     vo.setPointName(point.getPointName());
@@ -545,12 +543,12 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
         // 处理每个成绩项
         for (StudentScoreUpdateRequest.ScoreItem scoreItem : request.getScores()) {
             // 参数校验
-            if (scoreItem.getStudentId() == null || scoreItem.getAssessmentPointId() == null) {
+            if (scoreItem.getStudentId() == null || scoreItem.getPointId() == null) {
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, "学生ID和考核点ID不能为空");
             }
 
             // 验证考核点是否存在
-            AssessmentPoint point = assessmentPointMap.get(scoreItem.getAssessmentPointId());
+            AssessmentPoint point = assessmentPointMap.get(scoreItem.getPointId());
             if (point == null) {
                 throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "考核点不存在");
             }
@@ -569,14 +567,13 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
             QueryWrapper<StudentScore> queryWrapper = new QueryWrapper<>();
             queryWrapper.eq("teaching_class_id", classId);
             queryWrapper.eq("student_id", scoreItem.getStudentId());
-            queryWrapper.eq("assessment_point_id", scoreItem.getAssessmentPointId());
+            queryWrapper.eq("point_id", scoreItem.getPointId());
             StudentScore existingScore = studentScoreMapper.selectOne(queryWrapper);
 
             if (existingScore != null) {
                 // 更新现有记录
                 if (scoreItem.getScore() != null) {
-                    existingScore.setScore(scoreItem.getScore());
-                    existingScore.setEnteredBy(getCurrentUserId());
+                    existingScore.setActualScore(scoreItem.getScore());
                     studentScoreMapper.updateById(existingScore);
                 }
             } else {
@@ -585,10 +582,8 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
                     StudentScore newScore = new StudentScore();
                     newScore.setClassId(classId);
                     newScore.setStudentId(scoreItem.getStudentId());
-                    newScore.setAssessmentPointId(scoreItem.getAssessmentPointId());
-                    newScore.setScore(scoreItem.getScore());
-                    newScore.setIsLocked(0);
-                    newScore.setEnteredBy(getCurrentUserId());
+                    newScore.setPointId(scoreItem.getPointId());
+                    newScore.setActualScore(scoreItem.getScore());
                     studentScoreMapper.insert(newScore);
                 }
             }

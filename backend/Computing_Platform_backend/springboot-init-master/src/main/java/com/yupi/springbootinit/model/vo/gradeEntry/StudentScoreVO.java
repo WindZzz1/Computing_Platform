@@ -39,7 +39,7 @@ public class StudentScoreVO implements Serializable {
     /**
      * 考核点ID
      */
-    private Long assessmentPointId;
+    private Long pointId;
 
     /**
      * 考核点编号
@@ -60,19 +60,4 @@ public class StudentScoreVO implements Serializable {
      * 满分
      */
     private BigDecimal fullScore;
-
-    /**
-     * 是否锁定：0-未锁定，1-已锁定
-     */
-    private Integer isLocked;
-
-    /**
-     * 录入人ID
-     */
-    private Long enteredBy;
-
-    /**
-     * 录入时间
-     */
-    private Date enterTime;
 }

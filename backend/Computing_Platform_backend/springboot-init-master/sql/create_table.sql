@@ -82,7 +82,6 @@ CREATE TABLE teaching_class (
                                 teacher_id BIGINT NOT NULL COMMENT '主讲教师ID（sys_user.id）',
                                 term_id BIGINT NOT NULL COMMENT '学年学期ID（关联sys_academic_term）',
                                 class_name VARCHAR(128) NOT NULL COMMENT '班级名称',
-                                status TINYINT DEFAULT 1 COMMENT '1正常 0关闭',
                                 create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                                 update_time DATETIME ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
                                 is_deleted TINYINT DEFAULT 0,
@@ -249,47 +248,60 @@ CREATE TABLE student_score (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '学生考核点原始成绩表';
 
 -- ----------------------------
--- 17. 一级计算结果：学生-课程目标达成度
+-- 17. 学生课程目标达成度表（一级达成度）
 -- ----------------------------
-CREATE TABLE result_student_objective (
-                                          id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                                          teaching_class_id BIGINT NOT NULL COMMENT '教学班级ID',
-                                          student_id BIGINT NOT NULL COMMENT '学生ID',
-                                          objective_id BIGINT NOT NULL COMMENT '课程目标ID',
-                                          achievement DECIMAL(5,4) NOT NULL COMMENT '达成度',
-                                          create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-                                          is_deleted TINYINT DEFAULT 0,
-                                          UNIQUE KEY uk_stu_obj (student_id, objective_id),
-                                          INDEX idx_class_obj (teaching_class_id, objective_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '一级计算结果：学生-课程目标达成度';
+CREATE TABLE student_objective_achievement (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    teaching_class_id BIGINT NOT NULL COMMENT '教学班级ID',
+    student_id BIGINT NOT NULL COMMENT '学生ID',
+    objective_id BIGINT NOT NULL COMMENT '课程目标ID',
+    objective_code VARCHAR(50) COMMENT '课程目标编号',
+    objective_name VARCHAR(255) COMMENT '课程目标名称',
+    achievement DECIMAL(10,4) COMMENT '一级达成度值',
+    calculate_time DATETIME COMMENT '计算时间',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    is_deleted TINYINT DEFAULT 0 COMMENT '是否删除',
+    INDEX idx_class_student_objective (teaching_class_id, student_id, objective_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '学生课程目标达成度表（一级达成度）';
 
 -- ----------------------------
--- 18. 二级计算结果：课程-指标点达成度
+-- 18. 课程指标点达成度表（二级达成度）
 -- ----------------------------
-CREATE TABLE result_course_indicator (
-                                         id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                                         teaching_class_id BIGINT NOT NULL COMMENT '教学班级ID',
-                                         course_id BIGINT NOT NULL COMMENT '课程ID',
-                                         indicator_id BIGINT NOT NULL COMMENT '指标点ID',
-                                         course_achievement DECIMAL(5,4) NOT NULL COMMENT '课程达成度Ek',
-                                         calculate_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-                                         is_deleted TINYINT DEFAULT 0,
-                                         UNIQUE KEY uk_class_indicator (teaching_class_id, indicator_id),
-                                         INDEX idx_course_indicator (course_id, indicator_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '二级计算：课程级指标点达成度';
+CREATE TABLE course_indicator_achievement (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    teaching_class_id BIGINT NOT NULL COMMENT '教学班级ID',
+    course_id BIGINT NOT NULL COMMENT '课程ID',
+    indicator_id BIGINT NOT NULL COMMENT '指标点ID',
+    indicator_code VARCHAR(50) COMMENT '指标点编号',
+    indicator_name VARCHAR(255) COMMENT '指标点名称',
+    achievement DECIMAL(10,4) COMMENT '二级达成度值',
+    calculate_time DATETIME COMMENT '计算时间',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    is_deleted TINYINT DEFAULT 0 COMMENT '是否删除',
+    INDEX idx_class_indicator (teaching_class_id, indicator_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '课程指标点达成度表（二级达成度）';
 
 -- ----------------------------
--- 19. 三级计算结果：专业级指标点最终达成度
+-- 19. 专业级指标点达成度表（三级达成度）
 -- ----------------------------
-CREATE TABLE result_major_indicator (
-                                        id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                                        major_id BIGINT NOT NULL COMMENT '专业ID',
-                                        term_id BIGINT NOT NULL COMMENT '学年学期ID',
-                                        indicator_id BIGINT NOT NULL COMMENT '指标点ID',
-                                        final_achievement DECIMAL(5,4) NOT NULL COMMENT '专业最终达成度Gk',
-                                        calculate_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-                                        calculate_user_id BIGINT COMMENT '执行人',
-                                        is_deleted TINYINT DEFAULT 0,
-                                        UNIQUE KEY uk_major_term_ind (major_id, term_id, indicator_id),
-                                        INDEX idx_major_term (major_id, term_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '三级计算：专业级指标点达成度';
+CREATE TABLE major_indicator_achievement (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    major_id BIGINT NOT NULL COMMENT '专业ID',
+    term_id BIGINT COMMENT '学年学期ID',
+    grade VARCHAR(20) COMMENT '年级',
+    indicator_id BIGINT NOT NULL COMMENT '指标点ID',
+    indicator_code VARCHAR(50) COMMENT '指标点编号',
+    indicator_name VARCHAR(255) COMMENT '指标点名称',
+    requirement_id BIGINT COMMENT '毕业要求ID',
+    requirement_code VARCHAR(50) COMMENT '毕业要求编号',
+    requirement_name VARCHAR(255) COMMENT '毕业要求名称',
+    achievement DECIMAL(10,4) COMMENT '三级达成度值',
+    calculate_time DATETIME COMMENT '计算时间',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    is_deleted TINYINT DEFAULT 0 COMMENT '是否删除',
+    INDEX idx_major_term_grade (major_id, term_id, grade),
+    INDEX idx_indicator_id (indicator_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '专业级指标点达成度表（三级达成度）';

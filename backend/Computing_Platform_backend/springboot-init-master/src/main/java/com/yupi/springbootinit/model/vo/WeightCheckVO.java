@@ -22,4 +22,10 @@ public class WeightCheckVO implements Serializable {
      * 指标点ID与该指标点下内部权重合计的映射
      */
     private Map<Long, BigDecimal> indicatorWeightSumMap;
+
+    /**
+     * 校验结果消息
+     * 成功时显示成功信息，失败时显示详细的错误信息
+     */
+    private String message;
 }

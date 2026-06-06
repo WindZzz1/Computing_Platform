@@ -1,14 +1,11 @@
 package com.yupi.springbootinit.controller;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yupi.springbootinit.annotation.AuthCheck;
 import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.ResultUtils;
 import com.yupi.springbootinit.constant.SysUserConstant;
 import com.yupi.springbootinit.model.dto.majorCalculation.MajorCalculationRequest;
 import com.yupi.springbootinit.model.dto.majorCalculation.MajorDashboardQueryRequest;
-import com.yupi.springbootinit.model.vo.majorCalculation.CourseCalculationStatusVO;
-import com.yupi.springbootinit.model.vo.majorCalculation.MajorCalculationResultVO;
 import com.yupi.springbootinit.service.MajorCalculationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
+import java.util.Map;
 
 /**
  * 专业级达成度计算接口
@@ -39,22 +37,9 @@ public class MajorCalculationController {
      */
     @PostMapping("/dashboard")
     @AuthCheck(anyRole = SysUserConstant.ROLE_LEADER + "," + SysUserConstant.ROLE_EDU)
-    public BaseResponse<MajorCalculationResultVO> getDashboardOverview(@RequestBody MajorDashboardQueryRequest request) {
-        MajorCalculationResultVO result = majorCalculationService.getDashboardOverview(request);
+    public BaseResponse<Map<String, Object>> getDashboardOverview(@RequestBody MajorDashboardQueryRequest request) {
+        Map<String, Object> result = majorCalculationService.getDashboardOverview(request);
         return ResultUtils.success(result);
-    }
-
-    /**
-     * 分页查询课程计算状态
-     *
-     * @param request 查询请求
-     * @return 课程计算状态分页
-     */
-    @PostMapping("/course-status")
-    @AuthCheck(anyRole = SysUserConstant.ROLE_LEADER + "," + SysUserConstant.ROLE_EDU)
-    public BaseResponse<Page<CourseCalculationStatusVO>> getCourseCalculationStatus(@RequestBody MajorDashboardQueryRequest request) {
-        Page<CourseCalculationStatusVO> page = majorCalculationService.getCourseCalculationStatus(request);
-        return ResultUtils.success(page);
     }
 
     /**
@@ -65,8 +50,8 @@ public class MajorCalculationController {
      */
     @PostMapping("/calculate")
     @AuthCheck(anyRole = SysUserConstant.ROLE_LEADER + "," + SysUserConstant.ROLE_EDU)
-    public BaseResponse<MajorCalculationResultVO> calculateMajorAchievement(@RequestBody MajorCalculationRequest request) {
-        MajorCalculationResultVO result = majorCalculationService.calculateMajorAchievement(request);
+    public BaseResponse<Map<String, Object>> calculateMajorAchievement(@RequestBody MajorCalculationRequest request) {
+        Map<String, Object> result = majorCalculationService.calculateMajorAchievement(request);
         return ResultUtils.success(result);
     }
 
@@ -78,8 +63,8 @@ public class MajorCalculationController {
      */
     @PostMapping("/result")
     @AuthCheck(anyRole = SysUserConstant.ROLE_LEADER + "," + SysUserConstant.ROLE_EDU)
-    public BaseResponse<MajorCalculationResultVO> getMajorCalculationResult(@RequestBody MajorCalculationRequest request) {
-        MajorCalculationResultVO result = majorCalculationService.getMajorCalculationResult(request);
+    public BaseResponse<Map<String, Object>> getMajorCalculationResult(@RequestBody MajorCalculationRequest request) {
+        Map<String, Object> result = majorCalculationService.getMajorCalculationResult(request);
         return ResultUtils.success(result);
     }
 

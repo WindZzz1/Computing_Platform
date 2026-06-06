@@ -27,7 +27,7 @@ public class GradeEntryQueryRequest implements Serializable {
     /**
      * 考核点ID（可选）
      */
-    private Long assessmentPointId;
+    private Long pointId;
 
     /**
      * 当前页码

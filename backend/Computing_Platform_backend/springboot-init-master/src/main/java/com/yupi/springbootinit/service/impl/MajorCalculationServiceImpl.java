@@ -8,8 +8,6 @@ import com.yupi.springbootinit.mapper.*;
 import com.yupi.springbootinit.model.dto.majorCalculation.MajorCalculationRequest;
 import com.yupi.springbootinit.model.dto.majorCalculation.MajorDashboardQueryRequest;
 import com.yupi.springbootinit.model.entity.*;
-import com.yupi.springbootinit.model.vo.majorCalculation.CourseCalculationStatusVO;
-import com.yupi.springbootinit.model.vo.majorCalculation.MajorCalculationResultVO;
 import com.yupi.springbootinit.service.MajorCalculationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,9 +30,6 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
 
     @Resource
     private TeachingClassMapper teachingClassMapper;
-
-    @Resource
-    private GradeCalculationStatusMapper gradeCalculationStatusMapper;
 
     @Resource
     private CourseIndicatorAchievementMapper courseIndicatorAchievementMapper;
@@ -66,14 +61,11 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
     @Resource
     private MajorIndicatorAchievementMapper majorIndicatorAchievementMapper;
 
-    @Resource
-    private MajorCalculationSummaryMapper majorCalculationSummaryMapper;
-
     private static final int SCALE = 4; // 计算精度：4位小数
     private static final BigDecimal THRESHOLD = new BigDecimal("0.7"); // 达成度阈值
 
     @Override
-    public MajorCalculationResultVO getDashboardOverview(MajorDashboardQueryRequest request) {
+    public Map<String, Object> getDashboardOverview(MajorDashboardQueryRequest request) {
         // 参数校验
         if (request == null || request.getMajorId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "专业ID不能为空");
@@ -83,101 +75,72 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
         Long termId = request.getTermId();
         String grade = request.getGrade();
 
-        MajorCalculationResultVO result = new MajorCalculationResultVO();
-        result.setMajorId(majorId);
-        result.setTermId(termId);
-        result.setGrade(grade);
+        Map<String, Object> result = new HashMap<>();
+        result.put("majorId", majorId);
+        result.put("termId", termId);
+        result.put("grade", grade);
 
         // 查询专业信息
         SysDictMajor major = sysDictMajorMapper.selectById(majorId);
         if (major != null) {
-            result.setMajorName(major.getMajorName());
+            result.put("majorName", major.getMajorName());
         }
 
         // 查询学年学期信息
         if (termId != null) {
             SysDictSchoolYear term = sysDictSchoolYearMapper.selectById(termId);
             if (term != null) {
-                result.setTermName(term.getYearName());
+                result.put("termName", term.getYearName());
             }
         }
 
         // 获取涉及的教学班级
         List<TeachingClass> teachingClasses = getTeachingClasses(majorId, termId, grade);
-        result.setTotalCourses(teachingClasses.size());
+        result.put("totalCourses", teachingClasses.size());
 
-        // 统计计算状态
-        int calculatedCount = 0;
-        int lockedCount = 0;
-        List<CourseCalculationStatusVO> courseStatusList = new ArrayList<>();
+        // 统计各课程达成度数据情况
+        int hasDataCount = 0;
+        List<Map<String, Object>> courseStatusList = new ArrayList<>();
 
         for (TeachingClass teachingClass : teachingClasses) {
-            CourseCalculationStatusVO statusVO = getCourseStatus(teachingClass);
-            courseStatusList.add(statusVO);
+            Map<String, Object> courseStatus = new HashMap<>();
+            courseStatus.put("classId", teachingClass.getId());
+            courseStatus.put("className", teachingClass.getClassName());
+            courseStatus.put("courseId", teachingClass.getCourseId());
 
-            if (statusVO.getCalcStatus() == 2) { // 计算完成
-                calculatedCount++;
+            // 检查该课程是否有达成度数据
+            QueryWrapper<CourseIndicatorAchievement> achievementQuery = new QueryWrapper<>();
+            achievementQuery.eq("teaching_class_id", teachingClass.getId());
+            long achievementCount = courseIndicatorAchievementMapper.selectCount(achievementQuery);
+
+            boolean hasData = achievementCount > 0;
+            if (hasData) {
+                hasDataCount++;
             }
-            if (statusVO.getIsLocked()) {
-                lockedCount++;
-            }
+
+            courseStatus.put("hasAchievementData", hasData);
+            courseStatus.put("achievementDataCount", achievementCount);
+            courseStatusList.add(courseStatus);
         }
 
-        result.setCalculatedCourses(calculatedCount);
-        result.setLockedCourses(lockedCount);
-        result.setCourseStatusList(courseStatusList);
+        result.put("coursesWithData", hasDataCount);
+        result.put("courseStatusList", courseStatusList);
 
-        // 检查是否可以计算
-        boolean canCalculate = (teachingClasses.size() > 0) && (calculatedCount == teachingClasses.size()) && (lockedCount == teachingClasses.size());
-        result.setCalcStatus(canCalculate ? 0 : 3); // 0-可以计算，3-不满足计算条件
+        // 检查是否可以计算（所有课程都有达成度数据）
+        boolean canCalculate = !teachingClasses.isEmpty() && hasDataCount == teachingClasses.size();
+        result.put("canCalculate", canCalculate);
 
-        if (!canCalculate) {
-            result.setErrorMessage("还有课程未完成计算或未锁定，无法进行专业级计算");
+        if (!canCalculate && !teachingClasses.isEmpty()) {
+            result.put("errorMessage", "还有课程未计算达成度，无法进行专业级计算");
         }
 
         return result;
     }
 
     @Override
-    public Page<CourseCalculationStatusVO> getCourseCalculationStatus(MajorDashboardQueryRequest request) {
-        // 参数校验
-        if (request == null || request.getMajorId() == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "专业ID不能为空");
-        }
-
-        Long majorId = request.getMajorId();
-        Long termId = request.getTermId();
-        String grade = request.getGrade();
-        long current = request.getCurrent() != null ? request.getCurrent() : 1;
-        long size = request.getPageSize() != null ? request.getPageSize() : 10;
-
-        // 获取涉及的教学班级
-        List<TeachingClass> teachingClasses = getTeachingClasses(majorId, termId, grade);
-
-        // 构建课程状态VO列表
-        List<CourseCalculationStatusVO> statusList = new ArrayList<>();
-        for (TeachingClass teachingClass : teachingClasses) {
-            statusList.add(getCourseStatus(teachingClass));
-        }
-
-        // 分页
-        Page<CourseCalculationStatusVO> page = new Page<>(current, size, statusList.size());
-        int start = (int) ((current - 1) * size);
-        int end = Math.min(start + (int) size, statusList.size());
-
-        if (start < statusList.size()) {
-            page.setRecords(statusList.subList(start, end));
-        } else {
-            page.setRecords(new ArrayList<>());
-        }
-
-        return page;
-    }
-
-    @Override
     @Transactional(rollbackFor = Exception.class)
-    public MajorCalculationResultVO calculateMajorAchievement(MajorCalculationRequest request) {
-        MajorCalculationResultVO result = new MajorCalculationResultVO();
+    public Map<String, Object> calculateMajorAchievement(MajorCalculationRequest request) {
+        Map<String, Object> result = new HashMap<>();
 
         try {
             // 参数校验
@@ -189,16 +152,16 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
             Long termId = request.getTermId();
             String grade = request.getGrade();
 
-            result.setMajorId(majorId);
-            result.setTermId(termId);
-            result.setGrade(grade);
+            result.put("majorId", majorId);
+            result.put("termId", termId);
+            result.put("grade", grade);
 
             // 查询专业信息
             SysDictMajor major = sysDictMajorMapper.selectById(majorId);
             if (major == null) {
                 throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "专业不存在");
             }
-            result.setMajorName(major.getMajorName());
+            result.put("majorName", major.getMajorName());
 
             // 查询学年学期信息
             if (termId != null) {
@@ -206,7 +169,7 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
                 if (term == null) {
                     throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "学年学期不存在");
                 }
-                result.setTermName(term.getYearName());
+                result.put("termName", term.getYearName());
             }
 
             // 获取涉及的教学班级
@@ -215,51 +178,46 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
                 throw new BusinessException(ErrorCode.OPERATION_ERROR, "该专业暂无相关教学班级");
             }
 
-            result.setTotalCourses(teachingClasses.size());
+            result.put("totalCourses", teachingClasses.size());
 
-            // 检查是否满足计算条件
-            MajorCalculationSummary existingSummary = getMajorCalculationSummary(majorId, termId, grade);
-            if (existingSummary != null && existingSummary.getCalcStatus() == 1) {
-                throw new BusinessException(ErrorCode.OPERATION_ERROR, "专业级计算正在进行中，请勿重复触发");
+            // 检查所有课程是否都有达成度数据
+            for (TeachingClass teachingClass : teachingClasses) {
+                QueryWrapper<CourseIndicatorAchievement> achievementQuery = new QueryWrapper<>();
+                achievementQuery.eq("teaching_class_id", teachingClass.getId());
+                long achievementCount = courseIndicatorAchievementMapper.selectCount(achievementQuery);
+
+                if (achievementCount == 0) {
+                    Course course = courseMapper.selectById(teachingClass.getCourseId());
+                    String courseName = course != null ? course.getCourseName() : teachingClass.getClassName();
+                    throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                            "课程 " + courseName + " 尚未计算达成度，无法进行专业级计算");
+                }
             }
 
-            // 验证所有课程都已计算并锁定
-            validateAllCoursesCalculatedAndLocked(teachingClasses);
-
-            // 创建或更新计算汇总状态
-            MajorCalculationSummary summary = createOrUpdateCalculationSummary(majorId, termId, grade, getCurrentUserId());
-            result.setCalcStatus(summary.getCalcStatus());
-            result.setCalcStartTime(summary.getCalcStartTime());
-
             // 计算三级达成度
-            MajorCalculationResultVO.LevelThreeAchievementStats achievementStats =
-                    calculateLevelThreeAchievement(majorId, termId, grade, teachingClasses);
-            result.setAchievementStats(achievementStats);
+            Map<String, Object> achievementStats = calculateLevelThreeAchievement(majorId, termId, grade, teachingClasses);
+            result.putAll(achievementStats);
 
-            // 更新计算状态为完成
-            updateCalculationSummary(majorId, termId, grade, 2, null); // 2-计算完成
-
-            result.setSuccess(true);
-            result.setCalcStatus(2);
-            result.setCalcEndTime(new Date());
+            result.put("success", true);
+            result.put("calcStatus", 2);
+            result.put("calcEndTime", new Date());
 
             log.info("专业级达成度计算完成：专业ID={}, 学年学期ID={}, 年级={}, 指标点数={}",
-                    majorId, termId, grade, achievementStats.getTotalIndicators());
+                    majorId, termId, grade, achievementStats.get("totalIndicators"));
 
         } catch (Exception e) {
             log.error("专业级达成度计算失败：专业ID=" + request.getMajorId(), e);
-            updateCalculationSummary(request.getMajorId(), request.getTermId(), request.getGrade(), 3, e.getMessage());
 
-            result.setSuccess(false);
-            result.setCalcStatus(3);
-            result.setErrorMessage("计算失败：" + e.getMessage());
+            result.put("success", false);
+            result.put("calcStatus", 3);
+            result.put("errorMessage", "计算失败：" + e.getMessage());
         }
 
         return result;
     }
 
     @Override
-    public MajorCalculationResultVO getMajorCalculationResult(MajorCalculationRequest request) {
+    public Map<String, Object> getMajorCalculationResult(MajorCalculationRequest request) {
         if (request == null || request.getMajorId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "专业ID不能为空");
         }
@@ -268,44 +226,32 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
         Long termId = request.getTermId();
         String grade = request.getGrade();
 
-        MajorCalculationResultVO result = new MajorCalculationResultVO();
-        result.setMajorId(majorId);
-        result.setTermId(termId);
-        result.setGrade(grade);
+        Map<String, Object> result = new HashMap<>();
+        result.put("majorId", majorId);
+        result.put("termId", termId);
+        result.put("grade", grade);
 
         // 查询专业信息
         SysDictMajor major = sysDictMajorMapper.selectById(majorId);
         if (major != null) {
-            result.setMajorName(major.getMajorName());
+            result.put("majorName", major.getMajorName());
         }
 
         // 查询学年学期信息
         if (termId != null) {
             SysDictSchoolYear term = sysDictSchoolYearMapper.selectById(termId);
             if (term != null) {
-                result.setTermName(term.getYearName());
+                result.put("termName", term.getYearName());
             }
         }
 
-        // 查询计算汇总
-        MajorCalculationSummary summary = getMajorCalculationSummary(majorId, termId, grade);
-        if (summary != null) {
-            result.setCalcStatus(summary.getCalcStatus());
-            result.setTotalCourses(summary.getTotalCourses());
-            result.setCalculatedCourses(summary.getCalculatedCourses());
-            result.setLockedCourses(summary.getLockedCourses());
-            result.setCalcStartTime(summary.getCalcStartTime());
-            result.setCalcEndTime(summary.getCalcEndTime());
-            result.setCalculatedBy(summary.getCalculatedBy());
-            result.setErrorMessage(summary.getErrorMessage());
-        } else {
-            result.setCalcStatus(0); // 未计算
-        }
-
         // 查询三级达成度结果
-        if (summary != null && summary.getCalcStatus() == 2) {
-            List<MajorIndicatorAchievement> achievements = getMajorAchievements(majorId, termId, grade);
-            result.setAchievementStats(buildAchievementStats(achievements));
+        List<MajorIndicatorAchievement> achievements = getMajorAchievements(majorId, termId, grade);
+        if (achievements != null && !achievements.isEmpty()) {
+            result.put("calcStatus", 2); // 已计算
+            result.putAll(buildAchievementStats(achievements));
+        } else {
+            result.put("calcStatus", 0); // 未计算
         }
 
         return result;
@@ -325,12 +271,6 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
         // 删除三级达成度数据
         majorIndicatorAchievementMapper.deleteByMajorTermGradePhysically(majorId, termId, grade);
 
-        // 删除计算汇总
-        MajorCalculationSummary summary = getMajorCalculationSummary(majorId, termId, grade);
-        if (summary != null) {
-            majorCalculationSummaryMapper.deleteById(summary.getId());
-        }
-
         log.info("删除专业级计算结果：专业ID={}, 学年学期ID={}, 年级={}", majorId, termId, grade);
 
         return true;
@@ -340,10 +280,12 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
      * 计算三级达成度（专业级指标点达成度）
      * 公式：专业级指标点达成度 = Σ(课程级指标点达成度 × 宏观总支撑权重Wc) / Σ(宏观总支撑权重Wc)
      */
-    private MajorCalculationResultVO.LevelThreeAchievementStats calculateLevelThreeAchievement(
+    private Map<String, Object> calculateLevelThreeAchievement(
             Long majorId, Long termId, String grade, List<TeachingClass> teachingClasses) {
 
         log.info("开始计算三级达成度：专业ID={}, 学年学期ID={}, 年级={}", majorId, termId, grade);
+
+        Map<String, Object> result = new HashMap<>();
 
         // 获取所有课程ID
         List<Long> courseIds = teachingClasses.stream()
@@ -411,7 +353,7 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
 
         // 计算每个指标点的三级达成度
         List<BigDecimal> allAchievements = new ArrayList<>();
-        List<MajorCalculationResultVO.IndicatorAchievementDetail> details = new ArrayList<>();
+        List<Map<String, Object>> details = new ArrayList<>();
 
         for (Map.Entry<Long, List<MatrixCourseIndicator>> entry : indicatorMatricesMap.entrySet()) {
             Long indicatorId = entry.getKey();
@@ -478,45 +420,43 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
 
             majorAchievement.setAchievement(achievement);
             majorAchievement.setCalculateTime(new Date());
-            majorAchievement.setCalcStatus(2); // 2-计算完成
 
             majorIndicatorAchievementMapper.insert(majorAchievement);
 
             // 添加到详情列表
-            MajorCalculationResultVO.IndicatorAchievementDetail detail =
-                    new MajorCalculationResultVO.IndicatorAchievementDetail();
-            detail.setIndicatorId(indicatorId);
-            detail.setIndicatorCode(indicator.getIndicatorCode());
-            detail.setIndicatorName(indicator.getIndicatorName());
-            detail.setRequirementId(indicator.getRequirementId());
-            detail.setRequirementCode(requirement != null ? requirement.getRequirementCode() : "");
-            detail.setRequirementName(requirement != null ? requirement.getRequirementName() : "");
-            detail.setAchievement(achievement);
-            detail.setMeetsThreshold(achievement.compareTo(THRESHOLD) >= 0);
-            detail.setSupportingCourseCount(indicatorMatrices.size());
+            Map<String, Object> detail = new HashMap<>();
+            detail.put("indicatorId", indicatorId);
+            detail.put("indicatorCode", indicator.getIndicatorCode());
+            detail.put("indicatorName", indicator.getIndicatorName());
+            detail.put("requirementId", indicator.getRequirementId());
+            detail.put("requirementCode", requirement != null ? requirement.getRequirementCode() : "");
+            detail.put("requirementName", requirement != null ? requirement.getRequirementName() : "");
+            detail.put("achievement", achievement);
+            detail.put("meetsThreshold", achievement.compareTo(THRESHOLD) >= 0);
+            detail.put("supportingCourseCount", indicatorMatrices.size());
             details.add(detail);
         }
 
         // 计算统计信息
-        MajorCalculationResultVO.LevelThreeAchievementStats stats = new MajorCalculationResultVO.LevelThreeAchievementStats();
-        stats.setTotalIndicators(indicatorIds.size());
-        stats.setTotalRecords(details.size());
-        stats.setAchievements(details);
-        stats.setThreshold(THRESHOLD);
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalIndicators", indicatorIds.size());
+        stats.put("totalRecords", details.size());
+        stats.put("achievements", details);
+        stats.put("threshold", THRESHOLD);
 
         if (!allAchievements.isEmpty()) {
-            stats.setAverageAchievement(calculateAverage(allAchievements));
-            stats.setMinAchievement(Collections.min(allAchievements));
-            stats.setMaxAchievement(Collections.max(allAchievements));
+            stats.put("averageAchievement", calculateAverage(allAchievements));
+            stats.put("minAchievement", Collections.min(allAchievements));
+            stats.put("maxAchievement", Collections.max(allAchievements));
 
             // 检查是否满足毕业要求
             boolean meetsRequirement = allAchievements.stream()
                     .allMatch(achievement -> achievement.compareTo(THRESHOLD) >= 0);
-            stats.setMeetsGraduationRequirement(meetsRequirement);
+            stats.put("meetsGraduationRequirement", meetsRequirement);
         }
 
         log.info("三级达成度计算完成：专业ID={}, 指标点数={}, 平均达成度={}, 是否满足毕业要求={}",
-                majorId, stats.getTotalIndicators(), stats.getAverageAchievement(), stats.getMeetsGraduationRequirement());
+                majorId, stats.get("totalIndicators"), stats.get("averageAchievement"), stats.get("meetsGraduationRequirement"));
 
         return stats;
     }
@@ -544,162 +484,6 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
     }
 
     /**
-     * 获取课程计算状态
-     */
-    private CourseCalculationStatusVO getCourseStatus(TeachingClass teachingClass) {
-        CourseCalculationStatusVO statusVO = new CourseCalculationStatusVO();
-        statusVO.setClassId(teachingClass.getId());
-        statusVO.setClassName(teachingClass.getClassName());
-        statusVO.setCourseId(teachingClass.getCourseId());
-        statusVO.setTeacherId(teachingClass.getTeacherId());
-
-        // 查询课程信息
-        Course course = courseMapper.selectById(teachingClass.getCourseId());
-        if (course != null) {
-            statusVO.setCourseName(course.getCourseName());
-            statusVO.setCourseCode(course.getCourseCode());
-        }
-
-        // 查询教师信息
-        SysUser teacher = sysUserMapper.selectById(teachingClass.getTeacherId());
-        if (teacher != null) {
-            statusVO.setTeacherName(teacher.getUsername()); // 使用username
-        }
-
-        // 查询计算状态
-        QueryWrapper<GradeCalculationStatus> calcStatusQuery = new QueryWrapper<>();
-        calcStatusQuery.eq("teaching_class_id", teachingClass.getId());
-        GradeCalculationStatus calcStatus = gradeCalculationStatusMapper.selectOne(calcStatusQuery);
-
-        if (calcStatus != null) {
-            statusVO.setCalcStatus(calcStatus.getCalcStatus());
-            statusVO.setIsLocked(calcStatus.getIsLocked() == 1);
-            statusVO.setCalcEndTime(calcStatus.getCalcEndTime());
-            statusVO.setLockTime(calcStatus.getLockTime());
-        } else {
-            statusVO.setCalcStatus(0); // 未计算
-            statusVO.setIsLocked(false);
-        }
-
-        // 查询学生人数
-        QueryWrapper<ClassStudent> studentQuery = new QueryWrapper<>();
-        studentQuery.eq("teaching_class_id", teachingClass.getId());
-        Long studentCount = classStudentMapper.selectCount(studentQuery);
-        statusVO.setStudentCount(studentCount.intValue());
-
-        // 设置状态描述
-        statusVO.setStatusDescription(getStatusDescription(statusVO.getCalcStatus(), statusVO.getIsLocked()));
-
-        return statusVO;
-    }
-
-    /**
-     * 获取状态描述
-     */
-    private String getStatusDescription(Integer calcStatus, Boolean isLocked) {
-        if (calcStatus == null) calcStatus = 0;
-        if (isLocked == null) isLocked = false;
-
-        switch (calcStatus) {
-            case 0:
-                return "未计算";
-            case 1:
-                return "计算中";
-            case 2:
-                return isLocked ? "已完成并锁定" : "已完成未锁定";
-            case 3:
-                return "计算失败";
-            default:
-                return "未知状态";
-        }
-    }
-
-    /**
-     * 验证所有课程都已计算并锁定
-     */
-    private void validateAllCoursesCalculatedAndLocked(List<TeachingClass> teachingClasses) {
-        List<Long> classIds = teachingClasses.stream()
-                .map(TeachingClass::getId)
-                .collect(Collectors.toList());
-
-        QueryWrapper<GradeCalculationStatus> query = new QueryWrapper<>();
-        query.in("teaching_class_id", classIds);
-        List<GradeCalculationStatus> statuses = gradeCalculationStatusMapper.selectList(query);
-
-        for (TeachingClass teachingClass : teachingClasses) {
-            GradeCalculationStatus status = statuses.stream()
-                    .filter(s -> s.getClassId().equals(teachingClass.getId()))
-                    .findFirst()
-                    .orElse(null);
-
-            if (status == null || status.getCalcStatus() != 2 || status.getIsLocked() != 1) {
-                Course course = courseMapper.selectById(teachingClass.getCourseId());
-                String courseName = course != null ? course.getCourseName() : teachingClass.getClassName();
-                throw new BusinessException(ErrorCode.OPERATION_ERROR,
-                        "课程 " + courseName + " 未完成计算或未锁定，无法进行专业级计算");
-            }
-        }
-    }
-
-    /**
-     * 获取专业级计算汇总
-     */
-    private MajorCalculationSummary getMajorCalculationSummary(Long majorId, Long termId, String grade) {
-        QueryWrapper<MajorCalculationSummary> query = new QueryWrapper<>();
-        query.eq("major_id", majorId);
-        if (termId != null) {
-            query.eq("term_id", termId);
-        }
-        if (grade != null) {
-            query.eq("grade", grade);
-        }
-        return majorCalculationSummaryMapper.selectOne(query);
-    }
-
-    /**
-     * 创建或更新计算汇总
-     */
-    private MajorCalculationSummary createOrUpdateCalculationSummary(Long majorId, Long termId, String grade, Long userId) {
-        MajorCalculationSummary summary = getMajorCalculationSummary(majorId, termId, grade);
-
-        if (summary == null) {
-            summary = new MajorCalculationSummary();
-            summary.setMajorId(majorId);
-            summary.setTermId(termId);
-            summary.setGrade(grade);
-            summary.setCalcStatus(1); // 1-计算中
-            summary.setCalcStartTime(new Date());
-            summary.setCalculatedBy(userId);
-            majorCalculationSummaryMapper.insert(summary);
-        } else {
-            summary.setCalcStatus(1); // 1-计算中
-            summary.setCalcStartTime(new Date());
-            summary.setCalculatedBy(userId);
-            summary.setErrorMessage(null);
-            majorCalculationSummaryMapper.updateById(summary);
-        }
-
-        return summary;
-    }
-
-    /**
-     * 更新计算汇总
-     */
-    private void updateCalculationSummary(Long majorId, Long termId, String grade, Integer calcStatus, String errorMessage) {
-        MajorCalculationSummary summary = getMajorCalculationSummary(majorId, termId, grade);
-        if (summary != null) {
-            summary.setCalcStatus(calcStatus);
-            if (calcStatus == 2) { // 计算完成
-                summary.setCalcEndTime(new Date());
-            }
-            if (errorMessage != null) {
-                summary.setErrorMessage(errorMessage);
-            }
-            majorCalculationSummaryMapper.updateById(summary);
-        }
-    }
-
-    /**
      * 获取专业级达成度结果
      */
     private List<MajorIndicatorAchievement> getMajorAchievements(Long majorId, Long termId, String grade) {
@@ -718,51 +502,48 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
     /**
      * 构建达成度统计信息
      */
-    private MajorCalculationResultVO.LevelThreeAchievementStats buildAchievementStats(
-            List<MajorIndicatorAchievement> achievements) {
-
-        MajorCalculationResultVO.LevelThreeAchievementStats stats = new MajorCalculationResultVO.LevelThreeAchievementStats();
-        stats.setTotalIndicators(achievements.size());
-        stats.setThreshold(THRESHOLD);
+    private Map<String, Object> buildAchievementStats(List<MajorIndicatorAchievement> achievements) {
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalIndicators", achievements.size());
+        stats.put("threshold", THRESHOLD);
 
         if (achievements.isEmpty()) {
             return stats;
         }
 
         List<BigDecimal> allAchievements = new ArrayList<>();
-        List<MajorCalculationResultVO.IndicatorAchievementDetail> details = new ArrayList<>();
+        List<Map<String, Object>> details = new ArrayList<>();
 
         for (MajorIndicatorAchievement achievement : achievements) {
             if (achievement.getAchievement() != null) {
                 allAchievements.add(achievement.getAchievement());
             }
 
-            MajorCalculationResultVO.IndicatorAchievementDetail detail =
-                    new MajorCalculationResultVO.IndicatorAchievementDetail();
-            detail.setIndicatorId(achievement.getIndicatorId());
-            detail.setIndicatorCode(achievement.getIndicatorCode());
-            detail.setIndicatorName(achievement.getIndicatorName());
-            detail.setRequirementId(achievement.getRequirementId());
-            detail.setRequirementCode(achievement.getRequirementCode());
-            detail.setRequirementName(achievement.getRequirementName());
-            detail.setAchievement(achievement.getAchievement());
-            detail.setMeetsThreshold(achievement.getAchievement() != null &&
+            Map<String, Object> detail = new HashMap<>();
+            detail.put("indicatorId", achievement.getIndicatorId());
+            detail.put("indicatorCode", achievement.getIndicatorCode());
+            detail.put("indicatorName", achievement.getIndicatorName());
+            detail.put("requirementId", achievement.getRequirementId());
+            detail.put("requirementCode", achievement.getRequirementCode());
+            detail.put("requirementName", achievement.getRequirementName());
+            detail.put("achievement", achievement.getAchievement());
+            detail.put("meetsThreshold", achievement.getAchievement() != null &&
                     achievement.getAchievement().compareTo(THRESHOLD) >= 0);
 
             details.add(detail);
         }
 
-        stats.setAchievements(details);
-        stats.setTotalRecords(details.size());
+        stats.put("achievements", details);
+        stats.put("totalRecords", details.size());
 
         if (!allAchievements.isEmpty()) {
-            stats.setAverageAchievement(calculateAverage(allAchievements));
-            stats.setMinAchievement(Collections.min(allAchievements));
-            stats.setMaxAchievement(Collections.max(allAchievements));
+            stats.put("averageAchievement", calculateAverage(allAchievements));
+            stats.put("minAchievement", Collections.min(allAchievements));
+            stats.put("maxAchievement", Collections.max(allAchievements));
 
             boolean meetsRequirement = allAchievements.stream()
                     .allMatch(achievement -> achievement.compareTo(THRESHOLD) >= 0);
-            stats.setMeetsGraduationRequirement(meetsRequirement);
+            stats.put("meetsGraduationRequirement", meetsRequirement);
         }
 
         return stats;
@@ -780,24 +561,5 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return sum.divide(new BigDecimal(values.size()), SCALE, RoundingMode.HALF_UP);
-    }
-
-    /**
-     * 获取当前登录用户ID
-     */
-    private Long getCurrentUserId() {
-        try {
-            org.springframework.web.context.request.RequestAttributes attributes =
-                    org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
-            if (attributes != null) {
-                Object userObj = attributes.getAttribute("currentUser", 0);
-                if (userObj instanceof SysUser) {
-                    return ((SysUser) userObj).getId();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("获取当前用户ID失败", e);
-        }
-        return null;
     }
 }

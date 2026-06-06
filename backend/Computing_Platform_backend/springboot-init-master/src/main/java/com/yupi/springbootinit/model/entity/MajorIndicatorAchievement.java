@@ -84,12 +84,6 @@ public class MajorIndicatorAchievement {
     private Date calculateTime;
 
     /**
-     * 计算状态：0-未计算，1-计算中，2-计算完成，3-计算失败
-     */
-    @TableField("calc_status")
-    private Integer calcStatus;
-
-    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)

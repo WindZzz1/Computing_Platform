@@ -16,13 +16,13 @@ import com.yupi.springbootinit.model.vo.StudentVO;
 import com.yupi.springbootinit.model.vo.TeachingClassVO;
 import com.yupi.springbootinit.service.TeachingClassService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -155,5 +155,49 @@ public class TeachingClassController {
     public BaseResponse<Map<String, Object>> importStudents(@RequestBody ClassStudentImportRequest classStudentImportRequest) {
         Map<String, Object> result = teachingClassService.importStudents(classStudentImportRequest);
         return ResultUtils.success(result);
+    }
+
+    /**
+     * 通过Excel批量导入学生到教学班级
+     *
+     * @param classId 教学班级ID
+     * @param file Excel文件
+     * @return 导入结果
+     */
+    @PostMapping("/import-students/excel")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    public BaseResponse<Map<String, Object>> importStudentsFromExcel(
+            @RequestParam("classId") Long classId,
+            @RequestParam("file") MultipartFile file) {
+        Map<String, Object> result = teachingClassService.importStudentsFromExcel(classId, file);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 下载教学班学生导入模板
+     *
+     * @return Excel文件
+     */
+    @GetMapping("/import-students/template")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    @com.yupi.springbootinit.annotation.NoLog
+    public ResponseEntity<org.springframework.core.io.Resource> downloadClassStudentTemplate() {
+        org.springframework.core.io.ClassPathResource resource =
+            new org.springframework.core.io.ClassPathResource("templates/class_student_template.xlsx");
+
+        String filename = "教学班学生导入模板.xlsx";
+        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
+                .replaceAll("\\+", "%20");
+
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDispositionFormData("attachment", encodedFilename);
+        headers.setCacheControl("no-cache, no-store, must-revalidate");
+        headers.setPragma("no-cache");
+        headers.set("Expires", "0");
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(resource);
     }
 }

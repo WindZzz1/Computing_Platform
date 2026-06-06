@@ -27,8 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,9 +46,17 @@ public class WeightObjectiveIndicatorServiceImpl
         extends ServiceImpl<WeightObjectiveIndicatorMapper, WeightObjectiveIndicator>
         implements WeightObjectiveIndicatorService {
 
+    /**
+     * 权重校验目标值
+     * 同一课程内，同一指标点下，所有课程目标的内部权重之和必须为1.0
+     */
     private static final BigDecimal ONE = new BigDecimal("1.0000");
 
-    private static final BigDecimal TOLERANCE = new BigDecimal("0.0010");
+    /**
+     * 权重校验容差
+     * 允许0.0001的浮点误差，与宏观支撑矩阵保持一致
+     */
+    private static final BigDecimal TOLERANCE = new BigDecimal("0.0001");
 
     @Resource
     private MatrixCourseIndicatorMapper matrixCourseIndicatorMapper;
@@ -113,15 +123,53 @@ public class WeightObjectiveIndicatorServiceImpl
     @Override
     public WeightCheckVO checkWeights(WeightObjectiveIndicatorCheckRequest request) {
         validateWeightRequest(request);
+
         Map<Long, BigDecimal> sumMap = new LinkedHashMap<>();
         for (WeightObjectiveIndicatorCheckRequest.Item item : request.getWeightList()) {
             BigDecimal current = sumMap.getOrDefault(item.getIndicatorId(), BigDecimal.ZERO);
             sumMap.put(item.getIndicatorId(), current.add(item.getInnerWeight()));
         }
-        boolean valid = !sumMap.isEmpty() && sumMap.values().stream().allMatch(this::isOneWithTolerance);
+
+        // 校验每个指标点的权重总和是否为1.0
+        List<String> errorMessages = new ArrayList<>();
+        Map<Long, String> indicatorNames = new HashMap<>();
+
+        // 获取指标点名称
+        for (WeightObjectiveIndicatorCheckRequest.Item item : request.getWeightList()) {
+            if (!indicatorNames.containsKey(item.getIndicatorId())) {
+                IndicatorPoint indicator = indicatorPointMapper.selectById(item.getIndicatorId());
+                if (indicator != null) {
+                    indicatorNames.put(item.getIndicatorId(),
+                        indicator.getIndicatorCode() + " " + indicator.getIndicatorName());
+                }
+            }
+        }
+
+        for (Map.Entry<Long, BigDecimal> entry : sumMap.entrySet()) {
+            Long indicatorId = entry.getKey();
+            BigDecimal sum = entry.getValue().setScale(4, RoundingMode.HALF_UP);
+            BigDecimal deviation = sum.subtract(ONE).abs();
+
+            if (deviation.compareTo(TOLERANCE) > 0) {
+                String indicatorName = indicatorNames.getOrDefault(indicatorId, "ID=" + indicatorId);
+                errorMessages.add(String.format(
+                    "指标点[%s]的内部权重总和为%.4f，偏差%.4f，要求必须为1.0",
+                    indicatorName, sum, deviation
+                ));
+            }
+        }
+
+        boolean valid = errorMessages.isEmpty();
         WeightCheckVO vo = new WeightCheckVO();
         vo.setValid(valid);
         vo.setIndicatorWeightSumMap(sumMap);
+
+        if (!valid) {
+            vo.setMessage("内部权重校验失败：" + String.join("; ", errorMessages));
+        } else {
+            vo.setMessage("校验通过：所有指标点的内部权重总和均为1.0");
+        }
+
         return vo;
     }
 

@@ -1,6 +1,8 @@
 package com.yupi.springbootinit.util;
 
 import com.alibaba.excel.EasyExcel;
+import com.yupi.springbootinit.model.excel.ClassStudentExcel;
+import com.yupi.springbootinit.model.excel.CourseAchievementReportExcel;
 import com.yupi.springbootinit.model.excel.CourseExcel;
 import com.yupi.springbootinit.model.excel.StudentExcel;
 
@@ -19,6 +21,8 @@ public class TemplateGenerator {
     public static void main(String[] args) {
         generateCourseTemplate();
         generateStudentTemplate();
+        generateClassStudentTemplate();
+        generateCourseAchievementReportTemplate();
     }
 
     /**
@@ -61,5 +65,47 @@ public class TemplateGenerator {
                 .doWrite(new ArrayList<>());
 
         System.out.println("学生模板生成成功: " + templateFile.getAbsolutePath());
+    }
+
+    /**
+     * 生成教学班学生导入模板
+     */
+    public static void generateClassStudentTemplate() {
+        // 模板文件路径
+        File templateDir = new File("src/main/resources/templates");
+        File templateFile = new File(templateDir, "class_student_template.xlsx");
+
+        // 确保目录存在
+        if (!templateDir.exists()) {
+            templateDir.mkdirs();
+        }
+
+        // 生成只包含表头的模板（不含示例数据）
+        EasyExcel.write(templateFile, ClassStudentExcel.class)
+                .sheet("教学班学生导入模板")
+                .doWrite(new ArrayList<>());
+
+        System.out.println("教学班学生模板生成成功: " + templateFile.getAbsolutePath());
+    }
+
+    /**
+     * 生成课程目标达成情况评价报表模板
+     */
+    public static void generateCourseAchievementReportTemplate() {
+        // 模板文件路径
+        File templateDir = new File("src/main/resources/templates");
+        File templateFile = new File(templateDir, "course_achievement_report_template.xlsx");
+
+        // 确保目录存在
+        if (!templateDir.exists()) {
+            templateDir.mkdirs();
+        }
+
+        // 生成只包含表头的模板（不含示例数据）
+        EasyExcel.write(templateFile, CourseAchievementReportExcel.class)
+                .sheet("课程目标达成情况评价报表")
+                .doWrite(new ArrayList<>());
+
+        System.out.println("课程达成度报表模板生成成功: " + templateFile.getAbsolutePath());
     }
 }

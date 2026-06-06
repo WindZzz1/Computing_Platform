@@ -74,7 +74,7 @@
         "studentId": 456,
         "studentNo": "2021001",
         "name": "张三",
-        "assessmentPointId": 789,
+        "pointId": 789,
         "pointCode": "A01",
         "pointName": "期末考试",
         "score": 85.5,
@@ -106,12 +106,12 @@
     {
       "id": 1,
       "studentId": 456,
-      "assessmentPointId": 789,
+      "pointId": 789,
       "score": 88.0
     },
     {
       "studentId": 457,
-      "assessmentPointId": 789,
+      "pointId": 789,
       "score": 90.5
     }
   ]
@@ -123,7 +123,7 @@
 - `scores`: 成绩列表（必填）
   - `id`: 成绩记录ID（可选，存在则更新，不存在则新增）
   - `studentId`: 学生ID（必填）
-  - `assessmentPointId`: 考核点ID（必填）
+  - `pointId`: 考核点ID（必填）
   - `score`: 得分（必填）
 
 **返回示例**:
@@ -199,7 +199,7 @@ public class StudentScoreVO {
     private Long studentId;            // 学生ID
     private String studentNo;          // 学号
     private String name;               // 姓名
-    private Long assessmentPointId;    // 考核点ID
+    private Long pointId;    // 考核点ID
     private String pointCode;          // 考核点编号
     private String pointName;          // 考核点名称
     private BigDecimal score;          // 得分
@@ -219,7 +219,7 @@ public class StudentScoreUpdateRequest {
     public static class ScoreItem {
         private Long id;               // 成绩ID（可选）
         private Long studentId;        // 学生ID
-        private Long assessmentPointId;// 考核点ID
+        private Long pointId;// 考核点ID
         private BigDecimal score;      // 得分
     }
 }
@@ -285,8 +285,9 @@ CREATE TABLE student_score (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     teaching_class_id BIGINT NOT NULL COMMENT '教学班级ID',
     student_id BIGINT NOT NULL COMMENT '学生ID',
-    assessment_point_id BIGINT NOT NULL COMMENT '考核点ID',
-    score DECIMAL(10,2) COMMENT '得分',
+    point_id BIGINT NOT NULL COMMENT '考核点ID',
+    actual_score DECIMAL(5,1) COMMENT '实际得分',
+    full_score DECIMAL(5,1) COMMENT '满分',
     is_locked TINYINT DEFAULT 0 COMMENT '是否锁定：0-未锁定，1-已锁定',
     entered_by BIGINT COMMENT '录入人ID',
     enter_time DATETIME COMMENT '录入时间',
@@ -294,7 +295,7 @@ CREATE TABLE student_score (
     is_deleted TINYINT DEFAULT 0 COMMENT '是否删除',
     INDEX idx_class_id (teaching_class_id),
     INDEX idx_student_id (student_id),
-    INDEX idx_assessment_point_id (assessment_point_id)
+    INDEX idx_point_id (point_id)
 );
 ```
 

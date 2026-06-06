@@ -1,7 +1,8 @@
 package com.yupi.springbootinit.service;
 
 import com.yupi.springbootinit.model.dto.gradeEntry.AchievementCalculationRequest;
-import com.yupi.springbootinit.model.vo.gradeEntry.AchievementCalculationResultVO;
+
+import java.util.Map;
 
 /**
  * 达成度计算服务
@@ -16,22 +17,13 @@ public interface AchievementCalculationService {
      * @param request 计算请求
      * @return 计算结果
      */
-    AchievementCalculationResultVO calculateAchievement(AchievementCalculationRequest request);
+    Map<String, Object> calculateAchievement(AchievementCalculationRequest request);
 
     /**
      * 查询计算状态
      *
      * @param classId 教学班级ID
-     * @return 计算状态
+     * @return 计算状态和统计信息
      */
-    AchievementCalculationResultVO getCalculationStatus(Long classId);
-
-    /**
-     * 解锁成绩（仅管理员或强制情况）
-     *
-     * @param classId 教学班级ID
-     * @param reason 解锁原因
-     * @return 是否成功
-     */
-    Boolean unlockGrades(Long classId, String reason);
+    Map<String, Object> getCalculationStatus(Long classId);
 }

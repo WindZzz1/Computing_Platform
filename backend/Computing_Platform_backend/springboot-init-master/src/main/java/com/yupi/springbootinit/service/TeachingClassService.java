@@ -105,4 +105,13 @@ public interface TeachingClassService extends IService<TeachingClass> {
      * @return 导入结果
      */
     java.util.Map<String, Object> importStudents(com.yupi.springbootinit.model.dto.teachingClass.ClassStudentImportRequest classStudentImportRequest);
+
+    /**
+     * 通过Excel批量导入学生到教学班级
+     *
+     * @param classId 教学班级ID
+     * @param file Excel文件
+     * @return 导入结果
+     */
+    java.util.Map<String, Object> importStudentsFromExcel(Long classId, org.springframework.web.multipart.MultipartFile file);
 }

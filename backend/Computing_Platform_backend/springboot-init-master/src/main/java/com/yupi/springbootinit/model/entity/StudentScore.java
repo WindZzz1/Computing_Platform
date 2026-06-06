@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 学生成绩表
+ * 学生考核点成绩表
  * @TableName student_score
  */
 @TableName(value = "student_score")
@@ -33,29 +33,26 @@ public class StudentScore {
     /**
      * 考核点ID
      */
-    private Long assessmentPointId;
+    @TableField("point_id")
+    private Long pointId;
 
     /**
-     * 得分
+     * 实际得分
      */
-    private BigDecimal score;
+    @TableField("actual_score")
+    private BigDecimal actualScore;
 
     /**
-     * 是否锁定：0-未锁定，1-已锁定
+     * 满分
      */
-    private Integer isLocked;
+    @TableField("full_score")
+    private BigDecimal fullScore;
 
     /**
-     * 录入人ID
-     */
-    @TableField("entered_by")
-    private Long enteredBy;
-
-    /**
-     * 录入时间
+     * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)
-    private Date enterTime;
+    private Date createTime;
 
     /**
      * 更新时间

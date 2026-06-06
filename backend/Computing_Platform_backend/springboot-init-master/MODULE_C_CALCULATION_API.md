@@ -274,56 +274,56 @@ public class GradeCalculationStatus {
 ```sql
 CREATE TABLE student_objective_achievement (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    teaching_class_id BIGINT NOT NULL,
-    student_id BIGINT NOT NULL,
-    objective_id BIGINT NOT NULL,
-    objective_code VARCHAR(50),
-    objective_name VARCHAR(255),
-    achievement DECIMAL(10,4),
-    calculate_time DATETIME,
-    create_time DATETIME,
-    update_time DATETIME,
-    is_deleted TINYINT DEFAULT 0,
+    teaching_class_id BIGINT NOT NULL COMMENT '教学班级ID',
+    student_id BIGINT NOT NULL COMMENT '学生ID',
+    objective_id BIGINT NOT NULL COMMENT '课程目标ID',
+    objective_code VARCHAR(50) COMMENT '课程目标编号',
+    objective_name VARCHAR(255) COMMENT '课程目标名称',
+    achievement DECIMAL(10,4) COMMENT '一级达成度值',
+    calculate_time DATETIME COMMENT '计算时间',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    is_deleted TINYINT DEFAULT 0 COMMENT '是否删除',
     INDEX idx_class_student_objective (teaching_class_id, student_id, objective_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '学生课程目标达成度表（一级达成度）';
 ```
 
 ### course_indicator_achievement表
 ```sql
 CREATE TABLE course_indicator_achievement (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    teaching_class_id BIGINT NOT NULL,
-    course_id BIGINT NOT NULL,
-    indicator_id BIGINT NOT NULL,
-    indicator_code VARCHAR(50),
-    indicator_name VARCHAR(255),
-    achievement DECIMAL(10,4),
-    calculate_time DATETIME,
-    create_time DATETIME,
-    update_time DATETIME,
-    is_deleted TINYINT DEFAULT 0,
+    teaching_class_id BIGINT NOT NULL COMMENT '教学班级ID',
+    course_id BIGINT NOT NULL COMMENT '课程ID',
+    indicator_id BIGINT NOT NULL COMMENT '指标点ID',
+    indicator_code VARCHAR(50) COMMENT '指标点编号',
+    indicator_name VARCHAR(255) COMMENT '指标点名称',
+    achievement DECIMAL(10,4) COMMENT '二级达成度值',
+    calculate_time DATETIME COMMENT '计算时间',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    is_deleted TINYINT DEFAULT 0 COMMENT '是否删除',
     INDEX idx_class_indicator (teaching_class_id, indicator_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '课程指标点达成度表（二级达成度）';
 ```
 
 ### grade_calculation_status表
 ```sql
 CREATE TABLE grade_calculation_status (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    teaching_class_id BIGINT NOT NULL,
-    is_locked TINYINT DEFAULT 0,
-    calc_status TINYINT DEFAULT 0,
-    calc_start_time DATETIME,
-    calc_end_time DATETIME,
-    lock_time DATETIME,
-    locked_by BIGINT,
-    lock_reason VARCHAR(500),
-    error_message TEXT,
-    create_time DATETIME,
-    update_time DATETIME,
-    is_deleted TINYINT DEFAULT 0,
+    teaching_class_id BIGINT NOT NULL COMMENT '教学班级ID',
+    is_locked TINYINT DEFAULT 0 COMMENT '是否已锁定：0-未锁定，1-已锁定',
+    calc_status TINYINT DEFAULT 0 COMMENT '计算状态：0-未计算，1-计算中，2-计算完成，3-计算失败',
+    calc_start_time DATETIME COMMENT '计算开始时间',
+    calc_end_time DATETIME COMMENT '计算完成时间',
+    lock_time DATETIME COMMENT '锁定时间',
+    locked_by BIGINT COMMENT '锁定人ID',
+    lock_reason VARCHAR(500) COMMENT '锁定原因',
+    error_message TEXT COMMENT '错误信息',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    is_deleted TINYINT DEFAULT 0 COMMENT '是否删除',
     UNIQUE INDEX uk_teaching_class_id (teaching_class_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '成绩计算状态表';
 ```
 
 ## 使用流程

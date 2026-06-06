@@ -6,7 +6,6 @@ import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.mapper.*;
 import com.yupi.springbootinit.model.dto.gradeEntry.AchievementCalculationRequest;
 import com.yupi.springbootinit.model.entity.*;
-import com.yupi.springbootinit.model.vo.gradeEntry.AchievementCalculationResultVO;
 import com.yupi.springbootinit.service.AchievementCalculationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,12 +19,13 @@ import java.util.stream.Collectors;
 
 /**
  * 达成度计算服务实现
- *
- * @author YU
  */
 @Service
 @Slf4j
 public class AchievementCalculationServiceImpl implements AchievementCalculationService {
+
+    private static final int SCALE = 4;
+    private static final RoundingMode ROUNDING_MODE = RoundingMode.HALF_UP;
 
     @Resource
     private TeachingClassMapper teachingClassMapper;
@@ -34,19 +34,19 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
     private ClassStudentMapper classStudentMapper;
 
     @Resource
-    private StudentMapper studentMapper;
-
-    @Resource
     private StudentScoreMapper studentScoreMapper;
-
-    @Resource
-    private AssessmentPointMapper assessmentPointMapper;
 
     @Resource
     private CourseObjectiveMapper courseObjectiveMapper;
 
     @Resource
+    private AssessmentPointMapper assessmentPointMapper;
+
+    @Resource
     private RelPointObjectiveMapper relPointObjectiveMapper;
+
+    @Resource
+    private StudentObjectiveAchievementMapper studentObjectiveAchievementMapper;
 
     @Resource
     private WeightObjectiveIndicatorMapper weightObjectiveIndicatorMapper;
@@ -55,20 +55,12 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
     private IndicatorPointMapper indicatorPointMapper;
 
     @Resource
-    private StudentObjectiveAchievementMapper studentObjectiveAchievementMapper;
-
-    @Resource
     private CourseIndicatorAchievementMapper courseIndicatorAchievementMapper;
-
-    @Resource
-    private GradeCalculationStatusMapper gradeCalculationStatusMapper;
-
-    private static final int SCALE = 4; // 计算精度：4位小数
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public AchievementCalculationResultVO calculateAchievement(AchievementCalculationRequest request) {
-        AchievementCalculationResultVO result = new AchievementCalculationResultVO();
+    public Map<String, Object> calculateAchievement(AchievementCalculationRequest request) {
+        Map<String, Object> result = new HashMap<>();
 
         try {
             // 参数校验
@@ -84,59 +76,28 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
                 throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "教学班级不存在");
             }
 
-            // 检查计算状态
-            GradeCalculationStatus existingStatus = getCalculationStatusEntity(classId);
-            if (existingStatus != null && existingStatus.getCalcStatus() == 1) {
-                throw new BusinessException(ErrorCode.OPERATION_ERROR, "计算正在进行中，请勿重复触发");
-            }
-
-            // 检查是否已锁定
-            if (existingStatus != null && existingStatus.getIsLocked() == 1 && !Boolean.TRUE.equals(request.getForceRecalculate())) {
-                result.setSuccess(false);
-                result.setCalcStatus(existingStatus.getCalcStatus());
-                result.setIsLocked(true);
-                result.setLockTime(existingStatus.getLockTime());
-                result.setErrorMessage("成绩已锁定，无法重新计算。如需重新计算，请联系管理员或使用强制重新计算功能。");
-                return result;
-            }
-
-            // 创建或更新计算状态
-            GradeCalculationStatus status = createOrUpdateCalculationStatus(classId, getCurrentUserId());
-
-            result.setCalcStatus(status.getCalcStatus());
-            result.setCalcStartTime(status.getCalcStartTime());
+            log.info("开始计算达成度：班级ID={}", classId);
+            Date calcStartTime = new Date();
 
             // 1. 计算一级达成度（学生课程目标达成度）
-            AchievementCalculationResultVO.LevelOneAchievementStats levelOneStats = calculateLevelOneAchievement(classId, teachingClass.getCourseId());
-            result.setLevelOneStats(levelOneStats);
+            Map<String, Object> levelOneStats = calculateLevelOneAchievement(classId, teachingClass.getCourseId());
 
             // 2. 计算二级达成度（课程级指标点达成度）
-            AchievementCalculationResultVO.LevelTwoAchievementStats levelTwoStats = calculateLevelTwoAchievement(classId, teachingClass.getCourseId(), levelOneStats);
-            result.setLevelTwoStats(levelTwoStats);
+            Map<String, Object> levelTwoStats = calculateLevelTwoAchievement(classId, teachingClass.getCourseId());
 
-            // 3. 锁定成绩
-            lockGrades(classId, getCurrentUserId());
+            result.put("success", true);
+            result.put("classId", classId);
+            result.put("calcStartTime", calcStartTime);
+            result.put("calcEndTime", new Date());
+            result.put("levelOneStats", levelOneStats);
+            result.put("levelTwoStats", levelTwoStats);
 
-            // 4. 更新计算状态为完成
-            updateCalculationStatus(classId, 2, null); // 2-计算完成
-
-            // 设置返回结果
-            result.setSuccess(true);
-            result.setCalcStatus(2);
-            result.setIsLocked(true);
-            result.setLockTime(new Date());
-            result.setCalcEndTime(new Date());
-
-            log.info("达成度计算完成：班级ID={}, 一级达成度记录数={}, 二级达成度记录数={}",
-                    classId, levelOneStats.getTotalRecords(), levelTwoStats.getTotalRecords());
+            log.info("达成度计算完成：班级ID={}", classId);
 
         } catch (Exception e) {
             log.error("达成度计算失败：班级ID=" + request.getClassId(), e);
-            updateCalculationStatus(request.getClassId(), 3, e.getMessage()); // 3-计算失败
-
-            result.setSuccess(false);
-            result.setCalcStatus(3);
-            result.setErrorMessage("计算失败：" + e.getMessage());
+            result.put("success", false);
+            result.put("errorMessage", "计算失败：" + e.getMessage());
         }
 
         return result;
@@ -144,9 +105,8 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
 
     /**
      * 计算一级达成度（学生课程目标达成度）
-     * 公式：学生课程目标达成度 = Σ(考核点得分/考核点满分 × 支撑权重) / Σ(支撑权重)
      */
-    private AchievementCalculationResultVO.LevelOneAchievementStats calculateLevelOneAchievement(Long classId, Long courseId) {
+    private Map<String, Object> calculateLevelOneAchievement(Long classId, Long courseId) {
         log.info("开始计算一级达成度：班级ID={}, 课程ID={}", classId, courseId);
 
         // 查询班级学生
@@ -177,116 +137,110 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
         }
 
         // 查询考核点-课程目标关联关系
-        List<Long> objectiveIds = objectives.stream().map(CourseObjective::getId).collect(Collectors.toList());
         QueryWrapper<RelPointObjective> relQuery = new QueryWrapper<>();
-        relQuery.in("objective_id", objectiveIds);
+        relQuery.in("objective_id", objectives.stream().map(CourseObjective::getId).collect(Collectors.toList()));
         List<RelPointObjective> relations = relPointObjectiveMapper.selectList(relQuery);
 
+        if (relations.isEmpty()) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "该课程暂未配置考核点-课程目标关联关系");
+        }
+
         // 查询考核点信息
-        List<Long> pointIds = relations.stream().map(RelPointObjective::getPointId).distinct().collect(Collectors.toList());
-        Map<Long, AssessmentPoint> pointMap = assessmentPointMapper.selectBatchIds(pointIds).stream()
+        Set<Long> pointIds = relations.stream().map(RelPointObjective::getPointId).collect(Collectors.toSet());
+        Map<Long, AssessmentPoint> assessmentPointMap = assessmentPointMapper.selectBatchIds(pointIds).stream()
                 .collect(Collectors.toMap(AssessmentPoint::getId, p -> p));
 
-        // 按课程目标分组关联关系
-        Map<Long, List<RelPointObjective>> objectiveRelationsMap = relations.stream()
-                .collect(Collectors.groupingBy(RelPointObjective::getObjectiveId));
+        // 构建成绩映射
+        Map<Long, Map<Long, StudentScore>> scoreMap = new HashMap<>();
+        for (StudentScore score : studentScores) {
+            scoreMap.computeIfAbsent(score.getStudentId(), k -> new HashMap<>()).put(score.getPointId(), score);
+        }
 
-        // 按学生分组成绩
-        Map<Long, List<StudentScore>> studentScoresMap = studentScores.stream()
-                .collect(Collectors.groupingBy(StudentScore::getStudentId));
-
-        // 删除已有的一级达成度数据
-        studentObjectiveAchievementMapper.deleteByClassIdPhysically(classId);
-
-        // 计算每个学生在每个课程目标上的达成度
-        List<BigDecimal> allAchievements = new ArrayList<>();
+        // 计算每个学生每个课程目标的达成度
+        List<StudentObjectiveAchievement> achievements = new ArrayList<>();
 
         for (ClassStudent classStudent : classStudents) {
             Long studentId = classStudent.getStudentId();
-            List<StudentScore> scores = studentScoresMap.get(studentId);
-
-            if (scores == null || scores.isEmpty()) {
-                continue; // 该学生没有成绩
-            }
-
-            // 按考核点ID分组成绩
-            Map<Long, StudentScore> scoreMap = scores.stream()
-                    .collect(Collectors.toMap(StudentScore::getAssessmentPointId, s -> s));
 
             for (CourseObjective objective : objectives) {
-                List<RelPointObjective> objRelations = objectiveRelationsMap.get(objective.getId());
+                // 找到支撑该课程目标的所有考核点
+                List<RelPointObjective> objectiveRelations = relations.stream()
+                        .filter(r -> r.getObjectiveId().equals(objective.getId()))
+                        .collect(Collectors.toList());
 
-                if (objRelations == null || objRelations.isEmpty()) {
-                    continue; // 该课程目标没有关联考核点
-                }
+                if (!objectiveRelations.isEmpty()) {
+                    // 计算达成度：Σ(考核点得分/考核点满分 × 支撑权重) / Σ(支撑权重)
+                    BigDecimal numerator = BigDecimal.ZERO;
+                    BigDecimal denominator = BigDecimal.ZERO;
 
-                BigDecimal numerator = BigDecimal.ZERO; // 分子
-                BigDecimal denominator = BigDecimal.ZERO; // 分母
-
-                for (RelPointObjective relation : objRelations) {
-                    AssessmentPoint point = pointMap.get(relation.getPointId());
-                    if (point == null) {
-                        continue;
+                    for (RelPointObjective relation : objectiveRelations) {
+                        AssessmentPoint point = assessmentPointMap.get(relation.getPointId());
+                        if (point != null && scoreMap.containsKey(studentId)) {
+                            StudentScore score = scoreMap.get(studentId).get(point.getId());
+                            if (score != null && score.getActualScore() != null) {
+                                // 考核点得分/考核点满分 × 支撑权重
+                                BigDecimal scoreRatio = score.getActualScore().divide(point.getFullScore(), SCALE, ROUNDING_MODE);
+                                BigDecimal contribution = scoreRatio.multiply(relation.getWeight());
+                                numerator = numerator.add(contribution);
+                            }
+                        }
+                        denominator = denominator.add(relation.getWeight());
                     }
 
-                    StudentScore score = scoreMap.get(point.getId());
-                    if (score != null && score.getScore() != null) {
-                        // 考核点得分/考核点满分 × 支撑权重
-                        BigDecimal scoreRatio = score.getScore().divide(point.getFullScore(), SCALE, RoundingMode.HALF_UP);
-                        BigDecimal contribution = scoreRatio.multiply(relation.getWeight());
-                        numerator = numerator.add(contribution);
+                    if (denominator.compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal achievement = numerator.divide(denominator, SCALE, ROUNDING_MODE);
+
+                        StudentObjectiveAchievement studentAchievement = new StudentObjectiveAchievement();
+                        studentAchievement.setClassId(classId);
+                        studentAchievement.setStudentId(studentId);
+                        studentAchievement.setObjectiveId(objective.getId());
+                        studentAchievement.setObjectiveCode(objective.getObjCode());
+                        studentAchievement.setObjectiveName(objective.getObjName());
+                        studentAchievement.setAchievement(achievement);
+                        studentAchievement.setCalculateTime(new Date());
+
+                        achievements.add(studentAchievement);
                     }
-
-                    denominator = denominator.add(relation.getWeight());
                 }
-
-                // 计算达成度
-                BigDecimal achievement = BigDecimal.ZERO;
-                if (denominator.compareTo(BigDecimal.ZERO) > 0) {
-                    achievement = numerator.divide(denominator, SCALE, RoundingMode.HALF_UP);
-                    allAchievements.add(achievement);
-                }
-
-                // 保存一级达成度
-                StudentObjectiveAchievement studentAchievement = new StudentObjectiveAchievement();
-                studentAchievement.setClassId(classId);
-                studentAchievement.setStudentId(studentId);
-                studentAchievement.setObjectiveId(objective.getId());
-                studentAchievement.setObjectiveCode(objective.getObjCode());
-                studentAchievement.setObjectiveName(objective.getObjName());
-                studentAchievement.setAchievement(achievement);
-                studentAchievement.setCalculateTime(new Date());
-
-                studentObjectiveAchievementMapper.insert(studentAchievement);
             }
         }
 
-        // 计算统计信息
-        AchievementCalculationResultVO.LevelOneAchievementStats stats = new AchievementCalculationResultVO.LevelOneAchievementStats();
-        stats.setTotalStudents(classStudents.size());
-        stats.setTotalObjectives(objectives.size());
-        stats.setTotalRecords(studentObjectiveAchievementMapper.selectCount(
-                new QueryWrapper<StudentObjectiveAchievement>().eq("teaching_class_id", classId)).intValue());
+        // 删除旧数据并插入新数据
+        QueryWrapper<StudentObjectiveAchievement> deleteQuery = new QueryWrapper<>();
+        deleteQuery.eq("teaching_class_id", classId);
+        studentObjectiveAchievementMapper.delete(deleteQuery);
 
-        if (!allAchievements.isEmpty()) {
-            stats.setAverageAchievement(calculateAverage(allAchievements));
-            stats.setMinAchievement(Collections.min(allAchievements));
-            stats.setMaxAchievement(Collections.max(allAchievements));
+        if (!achievements.isEmpty()) {
+            for (StudentObjectiveAchievement achievement : achievements) {
+                studentObjectiveAchievementMapper.insert(achievement);
+            }
         }
 
-        log.info("一级达成度计算完成：学生数={}, 课程目标数={}, 记录数={}, 平均达成度={}",
-                stats.getTotalStudents(), stats.getTotalObjectives(), stats.getTotalRecords(), stats.getAverageAchievement());
+        // 统计信息
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalStudents", classStudents.size());
+        stats.put("totalObjectives", objectives.size());
+        stats.put("totalRecords", achievements.size());
+
+        if (!achievements.isEmpty()) {
+            List<BigDecimal> achievementValues = achievements.stream()
+                    .map(StudentObjectiveAchievement::getAchievement)
+                    .collect(Collectors.toList());
+            stats.put("averageAchievement", calculateAverage(achievementValues));
+            stats.put("minAchievement", Collections.min(achievementValues));
+            stats.put("maxAchievement", Collections.max(achievementValues));
+        }
+
+        log.info("一级达成度计算完成：学生数={}, 课程目标数={}, 达成度记录数={}",
+                classStudents.size(), objectives.size(), achievements.size());
 
         return stats;
     }
 
     /**
      * 计算二级达成度（课程级指标点达成度）
-     * 公式：课程指标点达成度 = Σ(平均一级达成度 × 内部贡献权重) / Σ(内部贡献权重)
      */
-    private AchievementCalculationResultVO.LevelTwoAchievementStats calculateLevelTwoAchievement(
-            Long classId, Long courseId, AchievementCalculationResultVO.LevelOneAchievementStats levelOneStats) {
-
+    private Map<String, Object> calculateLevelTwoAchievement(Long classId, Long courseId) {
         log.info("开始计算二级达成度：班级ID={}, 课程ID={}", classId, courseId);
 
         // 查询课程目标
@@ -295,189 +249,108 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
         List<CourseObjective> objectives = courseObjectiveMapper.selectList(objectiveQuery);
 
         // 查询课程目标-指标点权重关系
-        List<Long> objectiveIds = objectives.stream().map(CourseObjective::getId).collect(Collectors.toList());
         QueryWrapper<WeightObjectiveIndicator> weightQuery = new QueryWrapper<>();
-        weightQuery.in("objective_id", objectiveIds);
+        weightQuery.in("objective_id", objectives.stream().map(CourseObjective::getId).collect(Collectors.toList()));
         List<WeightObjectiveIndicator> weights = weightObjectiveIndicatorMapper.selectList(weightQuery);
 
         if (weights.isEmpty()) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "该课程暂无指标点权重配置");
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "该课程暂未配置课程目标-指标点权重关系");
         }
 
         // 查询指标点信息
-        List<Long> indicatorIds = weights.stream().map(WeightObjectiveIndicator::getIndicatorId).distinct().collect(Collectors.toList());
+        Set<Long> indicatorIds = weights.stream().map(WeightObjectiveIndicator::getIndicatorId).collect(Collectors.toSet());
         Map<Long, IndicatorPoint> indicatorMap = indicatorPointMapper.selectBatchIds(indicatorIds).stream()
                 .collect(Collectors.toMap(IndicatorPoint::getId, i -> i));
-
-        // 按指标点分组权重
-        Map<Long, List<WeightObjectiveIndicator>> indicatorWeightsMap = weights.stream()
-                .collect(Collectors.groupingBy(WeightObjectiveIndicator::getIndicatorId));
 
         // 查询一级达成度数据
         QueryWrapper<StudentObjectiveAchievement> achievementQuery = new QueryWrapper<>();
         achievementQuery.eq("teaching_class_id", classId);
-        List<StudentObjectiveAchievement> achievements = studentObjectiveAchievementMapper.selectList(achievementQuery);
+        List<StudentObjectiveAchievement> studentAchievements = studentObjectiveAchievementMapper.selectList(achievementQuery);
 
-        if (achievements.isEmpty()) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "一级达成度数据为空");
+        if (studentAchievements.isEmpty()) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "请先计算一级达成度");
         }
 
-        // 按课程目标分组一级达成度
-        Map<Long, List<StudentObjectiveAchievement>> objectiveAchievementsMap = achievements.stream()
-                .collect(Collectors.groupingBy(StudentObjectiveAchievement::getObjectiveId));
+        // 按课程目标分组统计平均达成度
+        Map<Long, List<BigDecimal>> objectiveAchievementMap = new HashMap<>();
+        for (StudentObjectiveAchievement achievement : studentAchievements) {
+            objectiveAchievementMap.computeIfAbsent(achievement.getObjectiveId(), k -> new ArrayList<>())
+                    .add(achievement.getAchievement());
+        }
 
-        // 删除已有的二级达成度数据
-        courseIndicatorAchievementMapper.deleteByClassIdPhysically(classId);
+        Map<Long, BigDecimal> objectiveAverageMap = new HashMap<>();
+        for (Map.Entry<Long, List<BigDecimal>> entry : objectiveAchievementMap.entrySet()) {
+            objectiveAverageMap.put(entry.getKey(), calculateAverage(entry.getValue()));
+        }
 
         // 计算每个指标点的达成度
-        List<BigDecimal> allAchievements = new ArrayList<>();
-        List<AchievementCalculationResultVO.IndicatorAchievementDetail> details = new ArrayList<>();
+        List<CourseIndicatorAchievement> indicatorAchievements = new ArrayList<>();
 
-        for (Map.Entry<Long, List<WeightObjectiveIndicator>> entry : indicatorWeightsMap.entrySet()) {
-            Long indicatorId = entry.getKey();
-            List<WeightObjectiveIndicator> indicatorWeights = entry.getValue();
-            IndicatorPoint indicator = indicatorMap.get(indicatorId);
+        for (IndicatorPoint indicator : indicatorMap.values()) {
+            // 找到支撑该指标点的所有课程目标
+            List<WeightObjectiveIndicator> indicatorWeights = weights.stream()
+                    .filter(w -> w.getIndicatorId().equals(indicator.getId()))
+                    .collect(Collectors.toList());
 
-            if (indicator == null) {
-                continue;
-            }
+            if (!indicatorWeights.isEmpty()) {
+                // 计算加权平均：Σ(平均一级达成度 × 内部权重) / Σ(内部权重)
+                BigDecimal numerator = BigDecimal.ZERO;
+                BigDecimal denominator = BigDecimal.ZERO;
 
-            BigDecimal numerator = BigDecimal.ZERO; // 分子
-            BigDecimal denominator = BigDecimal.ZERO; // 分母
-
-            for (WeightObjectiveIndicator weight : indicatorWeights) {
-                List<StudentObjectiveAchievement> objAchievements = objectiveAchievementsMap.get(weight.getObjectiveId());
-
-                if (objAchievements == null || objAchievements.isEmpty()) {
-                    continue;
+                for (WeightObjectiveIndicator weight : indicatorWeights) {
+                    BigDecimal avgAchievement = objectiveAverageMap.get(weight.getObjectiveId());
+                    if (avgAchievement != null) {
+                        BigDecimal contribution = avgAchievement.multiply(weight.getInnerWeight());
+                        numerator = numerator.add(contribution);
+                        denominator = denominator.add(weight.getInnerWeight());
+                    }
                 }
 
-                // 计算该课程目标的平均一级达成度
-                BigDecimal sumAchievement = objAchievements.stream()
-                        .map(StudentObjectiveAchievement::getAchievement)
-                        .filter(Objects::nonNull)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                if (denominator.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal achievement = numerator.divide(denominator, SCALE, ROUNDING_MODE);
 
-                BigDecimal avgAchievement = sumAchievement.divide(
-                        new BigDecimal(objAchievements.size()), SCALE, RoundingMode.HALF_UP);
+                    CourseIndicatorAchievement courseAchievement = new CourseIndicatorAchievement();
+                    courseAchievement.setClassId(classId);
+                    courseAchievement.setCourseId(courseId);
+                    courseAchievement.setIndicatorId(indicator.getId());
+                    courseAchievement.setIndicatorCode(indicator.getIndicatorCode());
+                    courseAchievement.setIndicatorName(indicator.getIndicatorName());
+                    courseAchievement.setAchievement(achievement);
+                    courseAchievement.setCalculateTime(new Date());
 
-                // 平均一级达成度 × 内部贡献权重
-                numerator = numerator.add(avgAchievement.multiply(weight.getInnerWeight()));
-                denominator = denominator.add(weight.getInnerWeight());
+                    indicatorAchievements.add(courseAchievement);
+                }
             }
-
-            // 计算指标点达成度
-            BigDecimal achievement = BigDecimal.ZERO;
-            if (denominator.compareTo(BigDecimal.ZERO) > 0) {
-                achievement = numerator.divide(denominator, SCALE, RoundingMode.HALF_UP);
-                allAchievements.add(achievement);
-            }
-
-            // 保存二级达成度
-            CourseIndicatorAchievement courseAchievement = new CourseIndicatorAchievement();
-            courseAchievement.setClassId(classId);
-            courseAchievement.setCourseId(courseId);
-            courseAchievement.setIndicatorId(indicatorId);
-            courseAchievement.setIndicatorCode(indicator.getIndicatorCode());
-            courseAchievement.setIndicatorName(indicator.getIndicatorName());
-            courseAchievement.setAchievement(achievement);
-            courseAchievement.setCalculateTime(new Date());
-
-            courseIndicatorAchievementMapper.insert(courseAchievement);
-
-            // 添加到详情列表
-            AchievementCalculationResultVO.IndicatorAchievementDetail detail =
-                    new AchievementCalculationResultVO.IndicatorAchievementDetail();
-            detail.setIndicatorId(indicatorId);
-            detail.setIndicatorCode(indicator.getIndicatorCode());
-            detail.setIndicatorName(indicator.getIndicatorName());
-            detail.setAchievement(achievement);
-            details.add(detail);
         }
 
-        // 计算统计信息
-        AchievementCalculationResultVO.LevelTwoAchievementStats stats = new AchievementCalculationResultVO.LevelTwoAchievementStats();
-        stats.setTotalIndicators(indicatorIds.size());
-        stats.setTotalRecords(courseIndicatorAchievementMapper.selectCount(
-                new QueryWrapper<CourseIndicatorAchievement>().eq("teaching_class_id", classId)).intValue());
-        stats.setAchievements(details);
+        // 删除旧数据并插入新数据
+        QueryWrapper<CourseIndicatorAchievement> deleteQuery = new QueryWrapper<>();
+        deleteQuery.eq("teaching_class_id", classId);
+        courseIndicatorAchievementMapper.delete(deleteQuery);
 
-        if (!allAchievements.isEmpty()) {
-            stats.setAverageAchievement(calculateAverage(allAchievements));
-            stats.setMinAchievement(Collections.min(allAchievements));
-            stats.setMaxAchievement(Collections.max(allAchievements));
+        if (!indicatorAchievements.isEmpty()) {
+            for (CourseIndicatorAchievement achievement : indicatorAchievements) {
+                courseIndicatorAchievementMapper.insert(achievement);
+            }
         }
 
-        log.info("二级达成度计算完成：指标点数={}, 记录数={}, 平均达成度={}",
-                stats.getTotalIndicators(), stats.getTotalRecords(), stats.getAverageAchievement());
+        // 统计信息
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalIndicators", indicatorMap.size());
+        stats.put("totalRecords", indicatorAchievements.size());
+
+        if (!indicatorAchievements.isEmpty()) {
+            List<BigDecimal> achievementValues = indicatorAchievements.stream()
+                    .map(CourseIndicatorAchievement::getAchievement)
+                    .collect(Collectors.toList());
+            stats.put("averageAchievement", calculateAverage(achievementValues));
+            stats.put("minAchievement", Collections.min(achievementValues));
+            stats.put("maxAchievement", Collections.max(achievementValues));
+        }
+
+        log.info("二级达成度计算完成：指标点数={}, 记录数={}", indicatorMap.size(), indicatorAchievements.size());
 
         return stats;
-    }
-
-    /**
-     * 锁定成绩
-     */
-    private void lockGrades(Long classId, Long userId) {
-        // 锁定所有成绩记录
-        QueryWrapper<StudentScore> scoreQuery = new QueryWrapper<>();
-        scoreQuery.eq("teaching_class_id", classId);
-        List<StudentScore> scores = studentScoreMapper.selectList(scoreQuery);
-
-        for (StudentScore score : scores) {
-            score.setIsLocked(1);
-            studentScoreMapper.updateById(score);
-        }
-
-        log.info("成绩锁定完成：班级ID={}, 锁定记录数={}", classId, scores.size());
-    }
-
-    /**
-     * 创建或更新计算状态
-     */
-    private GradeCalculationStatus createOrUpdateCalculationStatus(Long classId, Long userId) {
-        GradeCalculationStatus status = getCalculationStatusEntity(classId);
-
-        if (status == null) {
-            status = new GradeCalculationStatus();
-            status.setClassId(classId);
-            status.setIsLocked(0);
-            status.setCalcStatus(1); // 1-计算中
-            status.setCalcStartTime(new Date());
-            gradeCalculationStatusMapper.insert(status);
-        } else {
-            status.setCalcStatus(1); // 1-计算中
-            status.setCalcStartTime(new Date());
-            status.setErrorMessage(null);
-            gradeCalculationStatusMapper.updateById(status);
-        }
-
-        return status;
-    }
-
-    /**
-     * 更新计算状态
-     */
-    private void updateCalculationStatus(Long classId, Integer calcStatus, String errorMessage) {
-        GradeCalculationStatus status = getCalculationStatusEntity(classId);
-        if (status != null) {
-            status.setCalcStatus(calcStatus);
-            if (calcStatus == 2) { // 计算完成
-                status.setCalcEndTime(new Date());
-            }
-            if (errorMessage != null) {
-                status.setErrorMessage(errorMessage);
-            }
-            gradeCalculationStatusMapper.updateById(status);
-        }
-    }
-
-    /**
-     * 获取计算状态实体
-     */
-    private GradeCalculationStatus getCalculationStatusEntity(Long classId) {
-        QueryWrapper<GradeCalculationStatus> query = new QueryWrapper<>();
-        query.eq("teaching_class_id", classId);
-        return gradeCalculationStatusMapper.selectOne(query);
     }
 
     /**
@@ -491,79 +364,44 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
         BigDecimal sum = values.stream()
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        return sum.divide(new BigDecimal(values.size()), SCALE, RoundingMode.HALF_UP);
-    }
-
-    /**
-     * 获取当前登录用户ID
-     */
-    private Long getCurrentUserId() {
-        try {
-            org.springframework.web.context.request.RequestAttributes attributes =
-                    org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
-            if (attributes != null) {
-                Object userObj = attributes.getAttribute("currentUser", 0);
-                if (userObj instanceof SysUser) {
-                    return ((SysUser) userObj).getId();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("获取当前用户ID失败", e);
-        }
-        return null;
+        return sum.divide(new BigDecimal(values.size()), SCALE, ROUNDING_MODE);
     }
 
     @Override
-    public AchievementCalculationResultVO getCalculationStatus(Long classId) {
+    public Map<String, Object> getCalculationStatus(Long classId) {
+        Map<String, Object> result = new HashMap<>();
+
+        // 参数校验
         if (classId == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "教学班级ID不能为空");
         }
 
-        GradeCalculationStatus status = getCalculationStatusEntity(classId);
-        AchievementCalculationResultVO result = new AchievementCalculationResultVO();
-
-        if (status != null) {
-            result.setCalcStatus(status.getCalcStatus());
-            result.setIsLocked(status.getIsLocked() == 1);
-            result.setCalcStartTime(status.getCalcStartTime());
-            result.setCalcEndTime(status.getCalcEndTime());
-            result.setLockTime(status.getLockTime());
-            result.setErrorMessage(status.getErrorMessage());
-        } else {
-            result.setCalcStatus(0); // 0-未计算
-            result.setIsLocked(false);
+        // 查询教学班级信息
+        TeachingClass teachingClass = teachingClassMapper.selectById(classId);
+        if (teachingClass == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "教学班级不存在");
         }
+
+        result.put("classId", classId);
+        result.put("className", teachingClass.getClassName());
+        result.put("courseId", teachingClass.getCourseId());
+        result.put("termId", teachingClass.getTermId());
+
+        // 查询一级达成度统计
+        QueryWrapper<StudentObjectiveAchievement> levelOneQuery = new QueryWrapper<>();
+        levelOneQuery.eq("teaching_class_id", classId);
+        long levelOneCount = studentObjectiveAchievementMapper.selectCount(levelOneQuery);
+        result.put("levelOneRecordCount", levelOneCount);
+
+        // 查询二级达成度统计
+        QueryWrapper<CourseIndicatorAchievement> levelTwoQuery = new QueryWrapper<>();
+        levelTwoQuery.eq("teaching_class_id", classId);
+        long levelTwoCount = courseIndicatorAchievementMapper.selectCount(levelTwoQuery);
+        result.put("levelTwoRecordCount", levelTwoCount);
+
+        // 判断是否有计算结果
+        result.put("hasCalculationResult", levelOneCount > 0 || levelTwoCount > 0);
 
         return result;
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public Boolean unlockGrades(Long classId, String reason) {
-        if (classId == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "教学班级ID不能为空");
-        }
-
-        // 解锁所有成绩记录
-        QueryWrapper<StudentScore> scoreQuery = new QueryWrapper<>();
-        scoreQuery.eq("teaching_class_id", classId);
-        List<StudentScore> scores = studentScoreMapper.selectList(scoreQuery);
-
-        for (StudentScore score : scores) {
-            score.setIsLocked(0);
-            studentScoreMapper.updateById(score);
-        }
-
-        // 更新计算状态
-        GradeCalculationStatus status = getCalculationStatusEntity(classId);
-        if (status != null) {
-            status.setIsLocked(0);
-            status.setLockReason(reason);
-            gradeCalculationStatusMapper.updateById(status);
-        }
-
-        log.info("成绩解锁完成：班级ID={}, 解锁记录数={}, 原因={}", classId, scores.size(), reason);
-
-        return true;
     }
 }

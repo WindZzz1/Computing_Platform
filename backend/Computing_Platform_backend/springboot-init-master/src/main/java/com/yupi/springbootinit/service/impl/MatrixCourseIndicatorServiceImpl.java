@@ -181,6 +181,12 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
         return true;
     }
 
+    /**
+     * 权重校验容差
+     * 所有支撑同一指标点的课程，其总支撑权重之和必须为1.0（允许0.0001的浮点误差）
+     */
+    private static final BigDecimal WEIGHT_TOLERANCE = new BigDecimal("0.0001");
+
     @Override
     public WeightCheckResult checkMatrixWeights(MatrixCourseIndicatorSaveRequest saveRequest) {
         if (saveRequest == null || saveRequest.getMatrixItems() == null) {
@@ -189,20 +195,53 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
 
         // 按指标点分组计算权重总和
         Map<Long, BigDecimal> columnSums = new HashMap<>();
+        // 指标点ID -> 指标点名称的映射（用于错误提示）
+        Map<Long, String> indicatorNames = new HashMap<>();
 
         for (MatrixCourseIndicatorSaveRequest.MatrixItem item : saveRequest.getMatrixItems()) {
             if (item.getTotalWeight() != null && item.getTotalWeight().compareTo(BigDecimal.ZERO) > 0) {
                 columnSums.merge(item.getIndicatorId(), item.getTotalWeight(), BigDecimal::add);
+
+                // 获取指标点名称
+                if (!indicatorNames.containsKey(item.getIndicatorId())) {
+                    IndicatorPoint indicator = indicatorPointMapper.selectById(item.getIndicatorId());
+                    if (indicator != null) {
+                        indicatorNames.put(item.getIndicatorId(),
+                            indicator.getIndicatorCode() + " " + indicator.getIndicatorName());
+                    }
+                }
             }
         }
 
         // 检查每个指标点的权重总和是否为1.0
         List<String> errorMessages = new ArrayList<>();
         for (Map.Entry<Long, BigDecimal> entry : columnSums.entrySet()) {
-            BigDecimal sum = entry.getValue();
-            // 允许0.0001的误差
-            if (sum.subtract(BigDecimal.ONE).abs().compareTo(new BigDecimal("0.0001")) > 0) {
-                errorMessages.add("指标点ID " + entry.getKey() + " 的权重总和为 " + sum + "，不等于1.0");
+            Long indicatorId = entry.getKey();
+            BigDecimal sum = entry.getValue().setScale(4, RoundingMode.HALF_UP);
+            BigDecimal deviation = sum.subtract(BigDecimal.ONE).abs();
+
+            if (deviation.compareTo(WEIGHT_TOLERANCE) > 0) {
+                String indicatorName = indicatorNames.getOrDefault(indicatorId, "ID=" + indicatorId);
+                errorMessages.add(String.format(
+                    "指标点[%s]的支撑权重总和为%.4f，偏差%.4f，要求必须为1.0",
+                    indicatorName, sum, deviation
+                ));
+            }
+        }
+
+        // 检查是否所有指标点都配置了权重
+        if (saveRequest.getMajorId() != null) {
+            QueryWrapper<IndicatorPoint> indicatorQueryWrapper = new QueryWrapper<>();
+            indicatorQueryWrapper.orderByAsc("indicator_code");
+            List<IndicatorPoint> allIndicators = indicatorPointMapper.selectList(indicatorQueryWrapper);
+
+            for (IndicatorPoint indicator : allIndicators) {
+                if (!columnSums.containsKey(indicator.getId())) {
+                    errorMessages.add(String.format(
+                        "指标点[%s %s]未配置任何支撑课程，权重总和为0，要求必须为1.0",
+                        indicator.getIndicatorCode(), indicator.getIndicatorName()
+                    ));
+                }
             }
         }
 
@@ -210,7 +249,7 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
             return new WeightCheckResult(false, String.join("; ", errorMessages), columnSums);
         }
 
-        return new WeightCheckResult(true, "校验通过", columnSums);
+        return new WeightCheckResult(true, "校验通过：所有指标点的支撑权重总和均为1.0", columnSums);
     }
 
     /**

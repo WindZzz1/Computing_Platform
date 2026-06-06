@@ -41,7 +41,7 @@ public class StudentScoreUpdateRequest implements Serializable {
         /**
          * 考核点ID
          */
-        private Long assessmentPointId;
+        private Long pointId;
 
         /**
          * 得分
