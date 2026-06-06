@@ -130,8 +130,40 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "课程ID不能为空");
         }
+        Course course = this.getById(id);
+        if (course == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "课程不存在");
+        }
+        validateCourseNotReferenced(id);
         boolean result = this.removeById(id);
         return result;
+    }
+
+    private void validateCourseNotReferenced(Long courseId) {
+        Long teachingClassCount = courseMapper.countTeachingClassByCourseId(courseId);
+        if (teachingClassCount != null && teachingClassCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "课程已被教学班级引用，不能删除");
+        }
+        Long objectiveCount = courseMapper.countObjectiveByCourseId(courseId);
+        if (objectiveCount != null && objectiveCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "课程已被课程目标引用，不能删除");
+        }
+        Long assessmentPointCount = courseMapper.countAssessmentPointByCourseId(courseId);
+        if (assessmentPointCount != null && assessmentPointCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "课程已被考核点引用，不能删除");
+        }
+        Long matrixCount = courseMapper.countMatrixByCourseId(courseId);
+        if (matrixCount != null && matrixCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "课程已被矩阵配置引用，不能删除");
+        }
+        Long weightCount = courseMapper.countWeightByCourseId(courseId);
+        if (weightCount != null && weightCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "课程已被内部权重配置引用，不能删除");
+        }
+        Long courseResultCount = courseMapper.countCourseResultByCourseId(courseId);
+        if (courseResultCount != null && courseResultCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "课程已被达成度结果引用，不能删除");
+        }
     }
 
     @Override

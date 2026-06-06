@@ -105,8 +105,36 @@ public class SysDictMajorServiceImpl extends ServiceImpl<SysDictMajorMapper, Sys
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "专业ID不能为空");
         }
+        SysDictMajor major = this.getById(id);
+        if (major == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "专业不存在");
+        }
+        validateMajorNotReferenced(id);
         boolean result = this.removeById(id);
         return result;
+    }
+
+    private void validateMajorNotReferenced(Long majorId) {
+        Long courseCount = sysDictMajorMapper.countCourseByMajorId(majorId);
+        if (courseCount != null && courseCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "专业已被课程引用，不能删除");
+        }
+        Long studentCount = sysDictMajorMapper.countStudentByMajorId(majorId);
+        if (studentCount != null && studentCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "专业已被学生引用，不能删除");
+        }
+        Long requirementCount = sysDictMajorMapper.countRequirementByMajorId(majorId);
+        if (requirementCount != null && requirementCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "专业已被毕业要求引用，不能删除");
+        }
+        Long matrixCount = sysDictMajorMapper.countMatrixByMajorId(majorId);
+        if (matrixCount != null && matrixCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "专业已被矩阵配置引用，不能删除");
+        }
+        Long majorResultCount = sysDictMajorMapper.countMajorResultByMajorId(majorId);
+        if (majorResultCount != null && majorResultCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "专业已被达成度结果引用，不能删除");
+        }
     }
 
     @Override
