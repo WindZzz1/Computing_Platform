@@ -1,0 +1,43 @@
+# PR 自动标签配置
+labels:
+  # 后端相关
+  backend:
+    - changed-files:
+      - '**/*.java'
+      - '**/pom.xml'
+      - '**/application.yml'
+
+  # 配置文件
+  configuration:
+    - changed-files:
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '**/*.properties'
+      - '**/.xml'
+
+  # 文档
+  documentation:
+    - changed-files:
+      - '**/*.md'
+      - '**/doc/**'
+      - '**/docs/**'
+
+  # 数据库
+  database:
+    - changed-files:
+      - '**/sql/**'
+      - '**/db/**'
+      - '**/migration/**'
+
+  # 测试
+  testing:
+    - changed-files:
+      - '**/test/**'
+      - '**/*Test*.java'
+
+  # 部署相关
+  deployment:
+    - changed-files:
+      - '**/deploy/**'
+      - '**/Dockerfile'
+      - '**/.github/workflows/**'

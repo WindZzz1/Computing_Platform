@@ -4,6 +4,11 @@
 
 > 本项目基于 [SpringBoot 项目初始模板](https://github.com/liyupi) 开发
 
+![CI/CD Pipeline](https://github.com/WindZzz1/Computing_Platform/workflows/CI/CD%20Pipeline/badge.svg)
+![CodeQL Analysis](https://github.com/WindZzz1/Computing_Platform/workflows/CodeQL%20Analysis/badge.svg)
+![Project Health](https://github.com/WindZzz1/Computing_Platform/workflows/Project%20Health%20Check/badge.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
 ## 环境要求
 
 - **JDK 17** - 本系统采用 Java 17 开发

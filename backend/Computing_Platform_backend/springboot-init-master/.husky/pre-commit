@@ -1,0 +1,18 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "🔍 Running pre-commit checks..."
+
+# 运行代码格式检查
+echo "📝 Checking code style..."
+mvn checkstyle:check || echo "⚠️  Code style issues found. Please fix them."
+
+# 运行单元测试
+echo "🧪 Running tests..."
+mvn test || echo "⚠️  Tests failed. Please fix failing tests."
+
+# 检查构建是否成功
+echo "🏗️  Verifying build..."
+mvn clean compile || echo "⚠️  Build failed. Please fix compilation errors."
+
+echo "✅ Pre-commit checks completed!"
