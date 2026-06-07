@@ -1,135 +1,123 @@
-# 模块D-1：课程级评价报表（主讲教师）API文档
+# 模块D-1：课程级评价报表 API 文档
 
 ## 功能概述
 
-该模块实现了课程目标达成情况评价报表的生成和导出功能，主讲教师可以导出所授课程的达成度评价报表，用于课程教学效果分析和认证材料归档。
+当前控制器已经开放课程级报表相关入口，但服务层仍是占位实现。
 
-## 核心功能
+也就是说:
+
+- 接口地址、权限拦截、导出响应头等已经具备
+- 真实报表数据生成、Excel 导出、PDF 导出暂未完成
+
+前端或联调时请把它视为“接口框架已接通，业务内容待补完”。
+
+## 当前已开放接口
 
 ### 1. 获取报表数据
 
-**接口地址**: `POST /course-achievement-report/data`
+- 接口地址: `POST /course-achievement-report/data`
+- 权限要求: 主讲教师 `ROLE_TEACHER`
 
-**权限要求**: 主讲教师 (`ROLE_TEACHER`)
+请求参数:
 
-**请求参数**:
 ```json
 {
-  "classId": 123,
-  "exportFormat": "EXCEL",
-  "includeStudentDetails": true,
-  "includeIndicatorAchievement": true
+  "classId": 123
 }
 ```
 
-**参数说明**:
-- `classId`: 教学班级ID（必填）
-- `exportFormat`: 导出格式（可选，默认"EXCEL"）
-- `includeStudentDetails`: 是否包含学生明细（可选，默认true）
-- `includeIndicatorAchievement`: 是否包含指标点达成度（可选，默认true）
+当前行为:
+- 会先校验 `classId`
+- 会先做教师角色校验
+- 会再调用 `validateReportPermission(classId, userId)`
+- 然后进入服务层 `generateReportData(classId)`
 
-**返回示例**:
+当前真实状态:
+- 控制器已实现
+- 服务层方法当前直接抛出 `报表生成功能待完整实现`
+
+### 2. 导出 Excel 报表
+
+- 接口地址: `POST /course-achievement-report/export/excel`
+- 权限要求: 主讲教师 `ROLE_TEACHER`
+
+请求参数:
+
 ```json
 {
-  "code": 0,
-  "data": {
-    "classId": 123,
-    "className": "软件工程2021-1班",
-    "courseCode": "CS3001",
-    "courseName": "软件工程",
-    "teacherName": "张老师",
-    "yearName": "2023-2024",
-    "semesterName": "第一学期",
-    "studentCount": 35,
-    "objectiveSummaries": [
-      {
-        "objectiveId": 1,
-        "objectiveCode": "CO1",
-        "objectiveName": "掌握软件工程基本概念",
-        "classAverage": 0.8250,
-        "maxScore": 0.9500,
-        "minScore": 0.6500,
-        "passRate": 0.9143,
-        "studentCount": 35
-      }
-    ],
-    "studentDetails": [
-      {
-        "studentId": 1001,
-        "studentNo": "2021001",
-        "studentName": "张三",
-        "objectiveAchievements": {
-          "CO1": 0.8700,
-          "CO2": 0.8500
-        },
-        "averageAchievement": 0.8600
-      }
-    ],
-    "indicatorAchievements": [
-      {
-        "indicatorId": 1,
-        "indicatorCode": "1.1",
-        "indicatorName": "工程知识",
-        "achievement": 0.8500,
-        "calculationTime": "2024-06-04 10:00:15"
-      }
-    ],
-    "reportGeneratedTime": "2024-06-05 14:30:00",
-    "calculationTime": "2024-06-04 10:00:15"
-  },
-  "message": "ok"
+  "classId": 123
 }
 ```
 
-### 2. 导出Excel格式报表
+当前真实状态:
+- 控制器已实现
+- 文件名规则已实现
+- 服务层方法当前直接抛出 `Excel导出功能待完整实现`
 
-**接口地址**: `POST /course-achievement-report/export/excel`
+### 3. 导出 PDF 报表
 
-**权限要求**: 主讲教师 (`ROLE_TEACHER`)
+- 接口地址: `POST /course-achievement-report/export/pdf`
+- 权限要求: 主讲教师 `ROLE_TEACHER`
 
-**请求参数**: 与获取报表数据相同
+请求参数:
 
-**返回类型**: Excel文件流 (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`)
+```json
+{
+  "classId": 123
+}
+```
 
-**文件命名**: `课程目标达成情况评价表_123.xlsx`
+当前真实状态:
+- 控制器已实现
+- 文件名规则已实现
+- 服务层方法当前直接抛出 `PDF导出功能待完整实现`
 
-### 3. 导出PDF格式报表
+### 4. 下载报表模板
 
-**接口地址**: `POST /course-achievement-report/export/pdf`
+- 接口地址: `GET /course-achievement-report/template`
+- 权限要求: 主讲教师 `ROLE_TEACHER`
 
-**权限要求**: 主讲教师 (`ROLE_TEACHER`)
+当前真实状态:
+- 控制器已实现
+- 会从类路径 `templates/course_achievement_report_template.xlsx` 读取模板并输出
 
-**请求参数**: 与获取报表数据相同
+## 当前权限行为
 
-**返回类型**: PDF文件流 (`application/pdf`)
+### 认证来源
 
-**文件命名**: `课程目标达成情况评价表_123.pdf`
+当前控制器已兼容两种登录态来源:
 
-## 权限控制
+- JWT 拦截器写入的 `request.attribute("currentUser")`
+- 会话中的 `session.userId`
 
-### 访问权限验证
+这意味着:
+- Token 登录可以走通控制器
+- 老的 session 登录方式也仍可兼容
 
-该模块使用双重权限验证机制：
+### 当前业务权限校验现状
 
-1. **角色级验证**: 使用`@AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)`注解，确保只有教师角色的用户可以访问
-
-2. **业务级验证**: 在服务层执行`validateReportPermission()`方法，验证当前用户是否为该教学班级的主讲教师
-
-### 权限验证逻辑
+控制器会调用:
 
 ```java
-@Override
+courseAchievementReportService.validateReportPermission(classId, userId)
+```
+
+但当前服务实现中:
+
+```java
 public boolean validateReportPermission(Long classId, Long userId) {
-    TeachingClass teachingClass = teachingClassMapper.selectById(classId);
-    return teachingClass != null && teachingClass.getTeacherId().equals(userId);
+    return true;
 }
 ```
 
-## 错误处理
+说明:
+- 当前并没有真正校验“该教师是否是该教学班主讲教师”
+- 旧文档中的严格业务权限校验逻辑并未落地
 
-### 常见错误情况
+## 当前错误返回
 
-#### 1. 参数错误
+### 参数缺失
+
 ```json
 {
   "code": 400,
@@ -137,7 +125,8 @@ public boolean validateReportPermission(Long classId, Long userId) {
 }
 ```
 
-#### 2. 权限不足
+### 权限不足
+
 ```json
 {
   "code": 403,
@@ -145,181 +134,39 @@ public boolean validateReportPermission(Long classId, Long userId) {
 }
 ```
 
-#### 3. 数据不存在
+说明:
+- 这条错误分支在控制器中存在
+- 但由于当前 `validateReportPermission()` 恒为 `true`，正常情况下不会因为业务归属校验触发
+
+### 功能未完成
+
 ```json
 {
-  "code": 404,
-  "message": "教学班级不存在"
+  "code": 500,
+  "message": "获取报表数据失败: 报表生成功能待完整实现"
 }
 ```
 
-#### 4. 操作失败
+或
+
 ```json
 {
-  "code": 50001,
-  "message": "该班级尚未计算达成度，请先进行成绩计算"
+  "code": 500,
+  "message": "Excel导出失败: Excel导出功能待完整实现"
 }
 ```
 
-## 使用流程
+## 联调建议
 
-### 标准使用流程
+当前阶段前端如果要对接本模块，建议按下面理解处理:
 
-1. **确认达成度计算完成**
-   - 确保教学班级已完成成绩录入
-   - 确认已进行达成度计算
+- 可以先把页面入口、按钮、参数结构接好
+- 可以先走教师权限和 token 登录流程
+- 数据展示页、Excel/PDF 成果页要预留“开发中 / 暂未开放”提示
 
-2. **获取报表数据**
-   - 调用`/course-achievement-report/data`接口
-   - 验证报表数据正确性
-
-3. **导出报表文件**
-   - 根据需求选择Excel或PDF格式
-   - 调用对应的导出接口
-
-4. **文件归档和分析**
-   - Excel格式用于数据编辑和后续分析
-   - PDF格式用于打印归档
-
-### 示例代码
-
-#### JavaScript/TypeScript示例
-
-```typescript
-// 获取报表数据
-async function getReportData(classId: number) {
-  const response = await fetch('/course-achievement-report/data', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      classId: classId,
-      exportFormat: 'EXCEL',
-      includeStudentDetails: true,
-      includeIndicatorAchievement: true
-    })
-  });
-  
-  const result = await response.json();
-  if (result.code === 0) {
-    console.log('报表数据：', result.data);
-    return result.data;
-  } else {
-    console.error('获取报表失败：', result.message);
-  }
-}
-
-// 导出Excel报表
-async function exportExcelReport(classId: number) {
-  const response = await fetch('/course-achievement-report/export/excel', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ classId: classId })
-  });
-  
-  if (response.ok) {
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `课程目标达成情况评价表_${classId}.xlsx`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  }
-}
-
-// 导出PDF报表
-async function exportPdfReport(classId: number) {
-  const response = await fetch('/course-achievement-report/export/pdf', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ classId: classId })
-  });
-  
-  if (response.ok) {
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `课程目标达成情况评价表_${classId}.pdf`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  }
-}
-```
-
-## 报表内容说明
-
-### 1. 教学班级基本信息
-
-- 课程名称和编号
-- 教学班级名称
-- 主讲教师姓名
-- 学年学期
-- 学生人数
-- 报表生成时间
-
-### 2. 课程目标达成度汇总
-
-- 课程目标编号和名称
-- 班级平均达成度
-- 最高分和最低分
-- 及格率（达成度≥0.7的学生比例）
-
-### 3. 学生达成度明细
-
-- 学生学号和姓名
-- 各课程目标达成度
-- 平均达成度
-
-### 4. 课程指标点达成度
-
-- 指标点编号和名称
-- 二级达成度值
-- 计算时间
-
-## 技术特性
-
-### 1. 性能优化
-
-- **批量查询**: 使用批量查询减少数据库访问次数
-- **内存管理**: 采用分页处理避免内存溢出
-- **缓存策略**: 对相同查询条件的数据进行短期缓存
-
-### 2. 数据精度
-
-- **高精度计算**: 使用BigDecimal确保计算精度
-- **标准舍入**: 采用HALF_UP舍入模式
-- **四位小数**: 计算结果保留4位小数
-
-### 3. 导出格式特性
-
-#### Excel格式
-- **动态表头**: 根据课程目标数量自动调整列数
-- **数据完整**: 包含所有学生详细数据
-- **便于编辑**: 支持后续数据分析
-
-#### PDF格式
-- **专业排版**: 标准A4页面格式
-- **中文支持**: 使用系统中文字体
-- **表格清晰**: 自动分页和格式化
-- **适合归档**: 便于打印和长期保存
-
-## 后续扩展
-
-该模块为后续功能提供基础：
-- **专业级评价报表**: 扩展专业层面的达成度分析
-- **多维度统计**: 增加更多统计维度和图表
-- **历史对比**: 支持不同学期的数据对比
-- **质量评估**: 提供课程教学质量评估报告
+不建议当前就依赖这些接口完成正式业务联调，因为核心服务还未实现。
 
 ---
 
-**开发日期**: 2026-06-05  
-**开发者**: Claude AI  
-**版本**: 1.0
+**文档更新时间**: 2026-06-07
+**说明**: 本文档已按当前控制器与服务实现状态校正
