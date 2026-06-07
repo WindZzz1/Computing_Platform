@@ -6,6 +6,7 @@ import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.ResultUtils;
 import com.yupi.springbootinit.constant.SysUserConstant;
 import com.yupi.springbootinit.model.dto.report.CourseAchievementReportRequest;
+import com.yupi.springbootinit.model.entity.SysUser;
 import com.yupi.springbootinit.model.vo.report.CourseAchievementReportVO;
 import com.yupi.springbootinit.service.CourseAchievementReportService;
 import lombok.extern.slf4j.Slf4j;
@@ -46,7 +47,7 @@ public class CourseAchievementReportController {
             HttpServletRequest httpRequest) {
 
         // 获取当前用户ID
-        Long userId = (Long) httpRequest.getSession().getAttribute("userId");
+        Long userId = getCurrentUserId(httpRequest);
 
         // 参数验证
         if (request == null || request.getClassId() == null) {
@@ -83,7 +84,7 @@ public class CourseAchievementReportController {
             HttpServletRequest httpRequest) {
 
         // 获取当前用户ID
-        Long userId = (Long) httpRequest.getSession().getAttribute("userId");
+        Long userId = getCurrentUserId(httpRequest);
 
         // 参数验证
         if (request == null || request.getClassId() == null) {
@@ -183,7 +184,7 @@ public class CourseAchievementReportController {
             HttpServletRequest httpRequest) {
 
         // 获取当前用户ID
-        Long userId = (Long) httpRequest.getSession().getAttribute("userId");
+        Long userId = getCurrentUserId(httpRequest);
 
         // 参数验证
         if (request == null || request.getClassId() == null) {
@@ -239,5 +240,13 @@ public class CourseAchievementReportController {
         } catch (IOException e) {
             log.error("错误处理失败", e);
         }
+    }
+
+    private Long getCurrentUserId(HttpServletRequest request) {
+        Object currentUser = request.getAttribute("currentUser");
+        if (currentUser instanceof SysUser) {
+            return ((SysUser) currentUser).getId();
+        }
+        return (Long) request.getSession().getAttribute("userId");
     }
 }

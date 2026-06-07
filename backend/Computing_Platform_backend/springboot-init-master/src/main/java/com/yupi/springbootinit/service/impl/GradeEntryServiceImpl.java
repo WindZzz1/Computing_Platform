@@ -386,6 +386,16 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
                 }
             })).sheet().doRead();
 
+            // 有错误时直接返回，避免清空旧成绩后只写入部分新数据
+            if (!errorMessages.isEmpty()) {
+                result.setSuccess(false);
+                result.setStudentCount(processedStudents.size());
+                result.setScoreCount(scoresToSave.size());
+                result.setErrorMessages(errorMessages);
+                result.setWarningMessages(warningMessages);
+                return result;
+            }
+
             // 删除该班级原有的成绩数据
             studentScoreMapper.deleteByClassIdPhysically(classId);
 
@@ -484,6 +494,7 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
             for (StudentScore score : page.getRecords()) {
                 StudentScoreVO vo = new StudentScoreVO();
                 BeanUtils.copyProperties(score, vo);
+                vo.setScore(score.getActualScore());
 
                 Student student = studentMap.get(score.getStudentId());
                 if (student != null) {

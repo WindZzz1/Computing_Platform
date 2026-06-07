@@ -5,6 +5,7 @@ import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.ResultUtils;
 import com.yupi.springbootinit.constant.SysUserConstant;
 import com.yupi.springbootinit.model.dto.report.MajorReportRequest;
+import com.yupi.springbootinit.model.entity.SysUser;
 import com.yupi.springbootinit.model.vo.report.MajorAchievementRadarVO;
 import com.yupi.springbootinit.model.vo.report.PenetrationAccountVO;
 import com.yupi.springbootinit.service.MajorReportService;
@@ -179,6 +180,10 @@ public class MajorReportController {
      * 获取当前用户ID
      */
     private Long getCurrentUserId(HttpServletRequest request) {
+        SysUser currentUser = getCurrentUser(request);
+        if (currentUser != null) {
+            return currentUser.getId();
+        }
         return (Long) request.getSession().getAttribute("userId");
     }
 
@@ -186,6 +191,18 @@ public class MajorReportController {
      * 获取当前用户角色
      */
     private String getCurrentUserRole(HttpServletRequest request) {
+        SysUser currentUser = getCurrentUser(request);
+        if (currentUser != null) {
+            return currentUser.getRoleCode();
+        }
         return (String) request.getSession().getAttribute("userRole");
+    }
+
+    private SysUser getCurrentUser(HttpServletRequest request) {
+        Object currentUser = request.getAttribute("currentUser");
+        if (currentUser instanceof SysUser) {
+            return (SysUser) currentUser;
+        }
+        return null;
     }
 }
