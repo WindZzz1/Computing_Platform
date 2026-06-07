@@ -263,6 +263,53 @@ export interface StudentImportResult {
   failDetails?: Array<Record<string, string>>
 }
 
+export interface GradeEntryTemplateRequest {
+  classId: number
+}
+
+export interface GradeEntryImportRequest {
+  classId: number
+  excelFile: string
+}
+
+export interface GradeEntryQueryRequest extends PageQuery {
+  classId?: number
+  studentId?: number
+  pointId?: number
+}
+
+export interface GradeImportResultVO {
+  success?: boolean
+  studentCount?: number
+  scoreCount?: number
+  errorMessages?: string[]
+  warningMessages?: string[]
+}
+
+export interface StudentScoreVO {
+  id: number
+  studentId: number
+  studentNo: string
+  name: string
+  pointId: number
+  pointCode?: string
+  pointName?: string
+  score?: number
+  fullScore?: number
+}
+
+export interface StudentScoreUpdateItem {
+  id?: number
+  studentId: number
+  pointId: number
+  score: number
+}
+
+export interface StudentScoreUpdateRequest {
+  classId: number
+  scores: StudentScoreUpdateItem[]
+}
+
 export interface IndicatorPointVO {
   id: number
   indicatorCode: string

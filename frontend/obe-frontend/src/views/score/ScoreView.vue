@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <h1 class="page-title">教学班与成绩准备</h1>
-    <p class="page-desc">这一页先把后端现有的教学班、学生绑定、课程目标和指标点接口全部接通，方便继续做成绩与计算链路。</p>
+    <p class="page-desc">这一页把教学班、学生导入、成绩模板下载、成绩导入和成绩查询都接通，方便继续联调课程计算链路。</p>
 
     <section class="page-grid">
       <div class="panel span-12">
@@ -50,35 +50,89 @@
       </div>
 
       <div class="panel span-4">
-        <h3 class="panel-title">学生导入</h3>
-        <el-upload
-          v-model:file-list="studentFileList"
-          drag
-          action="#"
-          :auto-upload="false"
-          :limit="1"
-          accept=".xlsx,.xls"
-          :on-change="handleStudentFileChange"
-          :on-remove="handleStudentFileRemove"
-        >
-          <el-icon class="upload-icon"><UploadFilled /></el-icon>
-          <div class="upload-title">拖拽学生 Excel 到这里，或点击选择文件</div>
-          <template #tip>
-            <div class="muted">先导入学生到系统库，再把导入成功的学号批量绑定到当前教学班。</div>
-          </template>
-        </el-upload>
-        <div class="import-actions">
-          <el-button type="primary" :loading="importingStudents" @click="submitStudentImport">导入学生</el-button>
-          <el-button :loading="downloadingTemplate" @click="handleDownloadTemplate">下载模板</el-button>
+        <h3 class="panel-title">学生与成绩导入</h3>
+
+        <div class="import-block">
+          <div class="section-title">学生导入</div>
+          <el-upload
+            v-model:file-list="studentFileList"
+            drag
+            action="#"
+            :auto-upload="false"
+            :limit="1"
+            accept=".xlsx,.xls"
+            :on-change="handleStudentFileChange"
+            :on-remove="handleStudentFileRemove"
+          >
+            <el-icon class="upload-icon"><UploadFilled /></el-icon>
+            <div class="upload-title">拖拽学生 Excel 到这里，或点击选择文件</div>
+            <template #tip>
+              <div class="muted">先导入学生到系统库，再把导入成功的学号批量绑定到当前教学班。</div>
+            </template>
+          </el-upload>
+          <div class="import-actions">
+            <el-button type="primary" :loading="importingStudents" @click="submitStudentImport">导入学生</el-button>
+            <el-button :loading="downloadingTemplate" @click="handleDownloadTemplate">下载模板</el-button>
+          </div>
+          <el-alert
+            v-if="lastImportSummary"
+            type="success"
+            show-icon
+            :closable="false"
+            :title="lastImportSummary"
+            style="margin-top: 12px"
+          />
         </div>
-        <el-alert
-          v-if="lastImportSummary"
-          type="success"
-          show-icon
-          :closable="false"
-          :title="lastImportSummary"
-          style="margin-top: 12px"
-        />
+
+        <el-divider content-position="left">成绩导入</el-divider>
+
+        <div class="import-block">
+          <div class="section-title">当前教学班成绩模板</div>
+          <div class="muted">先选择教学班，再下载专属成绩模板并回传成绩 Excel。</div>
+          <el-upload
+            v-model:file-list="gradeFileList"
+            drag
+            action="#"
+            :auto-upload="false"
+            :limit="1"
+            accept=".xlsx,.xls"
+            :on-change="handleGradeFileChange"
+            :on-remove="handleGradeFileRemove"
+            style="margin-top: 12px"
+          >
+            <el-icon class="upload-icon"><UploadFilled /></el-icon>
+            <div class="upload-title">拖拽成绩 Excel 到这里，或点击选择文件</div>
+            <template #tip>
+              <div class="muted">模板会按当前教学班生成，导入后会自动刷新成绩预览。</div>
+            </template>
+          </el-upload>
+          <div class="import-actions">
+            <el-button
+              type="primary"
+              :disabled="!selectedClassId"
+              :loading="gradeTemplateLoading"
+              @click="handleDownloadGradeTemplate"
+            >
+              下载成绩模板
+            </el-button>
+            <el-button
+              type="success"
+              :disabled="!selectedClassId"
+              :loading="gradeImporting"
+              @click="submitGradeImport"
+            >
+              导入成绩
+            </el-button>
+          </div>
+          <el-alert
+            v-if="lastGradeImportSummary"
+            type="success"
+            show-icon
+            :closable="false"
+            :title="lastGradeImportSummary"
+            style="margin-top: 12px"
+          />
+        </div>
       </div>
 
       <div class="panel span-8">
@@ -86,7 +140,7 @@
           <h3 class="panel-title">班级学生预览</h3>
           <div class="toolbar-actions">
             <el-button type="primary" plain :disabled="!selectedClassId" @click="openBindDialog">按学号批量绑定</el-button>
-            <el-button type="primary" :disabled="!previewRows.length" @click="locked = true">保留计算入口</el-button>
+            <el-button type="primary" plain :disabled="!selectedClassId" @click="loadGradeEntries()">刷新成绩</el-button>
           </div>
         </div>
 
@@ -108,14 +162,57 @@
             </template>
           </el-table-column>
         </el-table>
+      </div>
 
-        <el-alert
-          v-if="locked"
-          title="成绩明细导入与正式计算接口还没补齐，当前先保留班级与学生准备链路。"
-          type="success"
-          show-icon
-          style="margin-top: 12px"
-        />
+      <div class="panel span-12">
+        <div class="toolbar">
+          <div>
+            <h3 class="panel-title">成绩录入预览</h3>
+            <span class="muted">按教学班查看已导入的成绩记录，可按考核点筛选并清空当前班级成绩。</span>
+          </div>
+          <div class="toolbar-actions">
+            <el-select v-model="gradeQuery.pointId" clearable placeholder="全部考核点" style="width: 220px">
+              <el-option
+                v-for="point in assessments"
+                :key="point.id"
+                :label="`${point.pointCode} ${point.pointName}`"
+                :value="point.id"
+              />
+            </el-select>
+            <el-button :disabled="!selectedClassId" :loading="gradeLoading" @click="loadGradeEntries(1)">查询成绩</el-button>
+            <el-button
+              type="danger"
+              plain
+              :disabled="!selectedClassId || !gradeRows.length"
+              :loading="deletingGrades"
+              @click="handleDeleteGrades"
+            >
+              清空当前班成绩
+            </el-button>
+          </div>
+        </div>
+
+        <el-table v-loading="gradeLoading" :data="gradeRows" border>
+          <el-table-column prop="studentNo" label="学号" width="140" />
+          <el-table-column prop="name" label="姓名" width="120" />
+          <el-table-column prop="pointCode" label="考核点编号" min-width="140" />
+          <el-table-column prop="pointName" label="考核点名称" min-width="220" />
+          <el-table-column prop="score" label="得分" width="100" />
+          <el-table-column prop="fullScore" label="满分" width="100" />
+        </el-table>
+
+        <div class="table-footer">
+          <span class="muted">{{ gradeTableSummary }}</span>
+          <el-pagination
+            :current-page="gradeQuery.current || 1"
+            :page-size="gradeQuery.pageSize || 20"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next"
+            :total="gradeTotal"
+            @current-change="handleGradeCurrentChange"
+            @size-change="handleGradeSizeChange"
+          />
+        </div>
       </div>
 
       <div class="panel span-12">
@@ -191,6 +288,7 @@ import type { FormInstance, FormRules, UploadProps, UploadUserFile } from 'eleme
 import { UploadFilled } from '@element-plus/icons-vue'
 import { listUsersByRole } from '@/api/auth'
 import { listCourses } from '@/api/course'
+import { deleteClassGrades, downloadGradeTemplate, importGrades, queryGrades } from '@/api/grade-entry'
 import { listSchoolYears } from '@/api/schoolyear'
 import {
   createTeachingClass,
@@ -208,8 +306,11 @@ import type {
   AssessmentPointVO,
   CourseObjectiveVO,
   CourseSimpleVO,
+  GradeEntryQueryRequest,
+  GradeImportResultVO,
   IndicatorPointVO,
   StudentImportResult,
+  StudentScoreVO,
   StudentVO,
   SysDictSchoolYearVO,
   SysUserVO,
@@ -222,10 +323,13 @@ type ClassFormState = TeachingClassCreateRequest
 
 const loading = ref(false)
 const classLoading = ref(false)
-const locked = ref(false)
 const importingStudents = ref(false)
 const bindingStudents = ref(false)
 const downloadingTemplate = ref(false)
+const gradeImporting = ref(false)
+const gradeTemplateLoading = ref(false)
+const gradeLoading = ref(false)
+const deletingGrades = ref(false)
 const savingClass = ref(false)
 const unbindingStudentNo = ref<string>()
 const bindDialogVisible = ref(false)
@@ -242,9 +346,17 @@ const courses = ref<CourseSimpleVO[]>([])
 const teachers = ref<SysUserVO[]>([])
 const schoolYears = ref<SysDictSchoolYearVO[]>([])
 const studentFileList = ref<UploadUserFile[]>([])
+const gradeFileList = ref<UploadUserFile[]>([])
 const lastImportResult = ref<StudentImportResult>()
+const lastGradeImportResult = ref<GradeImportResultVO>()
 const bindStudentText = ref('')
+const gradeRows = ref<StudentScoreVO[]>([])
+const gradeTotal = ref(0)
 const classFormRef = ref<FormInstance>()
+const gradeQuery = reactive<GradeEntryQueryRequest>({
+  current: 1,
+  pageSize: 20
+})
 
 const classForm = reactive<ClassFormState>({
   className: '',
@@ -267,6 +379,20 @@ const lastImportSummary = computed(() => {
   if (!result) return ''
   const total = result.total ?? result.totalCount ?? result.successCount + result.failCount
   return `最近一次学生导入：总计 ${total} 条，成功 ${result.successCount} 条，失败 ${result.failCount} 条。`
+})
+
+const lastGradeImportSummary = computed(() => {
+  const result = lastGradeImportResult.value
+  if (!result) return ''
+
+  const summary = [`最近一次成绩导入：学生 ${result.studentCount ?? 0} 名，成绩 ${result.scoreCount ?? 0} 条。`]
+  if (result.warningMessages?.length) {
+    summary.push(`警告 ${result.warningMessages.length} 条`)
+  }
+  if (result.errorMessages?.length) {
+    summary.push(`错误 ${result.errorMessages.length} 条`)
+  }
+  return summary.join(' ')
 })
 
 const previewRows = computed(() =>
@@ -305,10 +431,24 @@ const results = computed(() => {
         item.objectiveIds?.includes(objective.id) || item.objectiveId === objective.id
       ).length,
       studentCount: students.value.length,
-      status: assessments.value.length ? '待成绩数据' : '待配置考核点',
-      hint: assessments.value.length ? '课程目标和考核点已接通，等待成绩明细接口。' : '先补课程考核点，再进入成绩计算。'
+      status: assessments.value.length ? (gradeRows.value.length ? '已有成绩数据' : '待录入成绩') : '待配置考核点',
+      hint: assessments.value.length
+        ? gradeRows.value.length
+          ? '成绩录入与查询已接通，可继续联调课程计算和报表。'
+          : '成绩录入与查询已接通，等待教师导入当前教学班成绩。'
+        : '先补课程考核点，再进入成绩计算。'
     }
   })
+})
+
+const gradeTableSummary = computed(() => {
+  if (!selectedClassId.value) {
+    return '请先选择教学班后再查看成绩。'
+  }
+  if (!gradeTotal.value) {
+    return '当前教学班还没有已导入的成绩记录。'
+  }
+  return `当前共 ${gradeTotal.value} 条成绩记录，本页展示 ${gradeRows.value.length} 条。`
 })
 
 const formatTerm = (row: Pick<TeachingClassVO, 'yearName' | 'semesterName'>) =>
@@ -344,6 +484,7 @@ const ensureClassFormOptions = async () => {
     label: string
     promise: Promise<void>
   }> = []
+
   if (!courses.value.length) {
     taskEntries.push({
       label: '课程列表',
@@ -373,14 +514,13 @@ const ensureClassFormOptions = async () => {
     return
   }
 
-  const results = await Promise.allSettled(taskEntries.map((item) => item.promise))
+  const loadResults = await Promise.allSettled(taskEntries.map((item) => item.promise))
   const failedLabels: string[] = []
 
-  results.forEach((result, index) => {
-    if (result.status === 'fulfilled') {
-      return
+  loadResults.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      failedLabels.push(taskEntries[index].label)
     }
-    failedLabels.push(taskEntries[index].label)
   })
 
   if (failedLabels.length) {
@@ -412,6 +552,20 @@ const handleStudentFileRemove: UploadProps['onRemove'] = () => {
   studentFileList.value = []
 }
 
+const handleGradeFileChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.error('请上传 Excel 文件')
+    gradeFileList.value = []
+    return
+  }
+  gradeFileList.value = uploadFiles.slice(-1)
+}
+
+const handleGradeFileRemove: UploadProps['onRemove'] = () => {
+  gradeFileList.value = []
+}
+
 const showImportResult = async (result: StudentImportResult, title: string) => {
   if (result.failCount > 0) {
     const preview = (result.failDetails ?? [])
@@ -428,6 +582,46 @@ const showImportResult = async (result: StudentImportResult, title: string) => {
   } else {
     ElMessage.success(`${title}，成功 ${result.successCount} 条`)
   }
+}
+
+const showGradeImportResult = async (result: GradeImportResultVO) => {
+  const details: string[] = [`导入学生数：${result.studentCount ?? 0}`, `成绩记录数：${result.scoreCount ?? 0}`]
+
+  if (result.warningMessages?.length) {
+    details.push('', '警告信息：', ...result.warningMessages.slice(0, 8))
+  }
+  if (result.errorMessages?.length) {
+    details.push('', '错误信息：', ...result.errorMessages.slice(0, 8))
+  }
+
+  if (result.warningMessages?.length || result.errorMessages?.length || result.success === false) {
+    await ElMessageBox.alert(details.join('\n'), '成绩导入结果', {
+      confirmButtonText: '知道了'
+    })
+    return
+  }
+
+  ElMessage.success(`成绩导入完成，已写入 ${result.scoreCount ?? 0} 条成绩记录`)
+}
+
+const readFileAsBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const content = typeof reader.result === 'string' ? reader.result : ''
+      resolve(content.includes(',') ? content.split(',')[1] : content)
+    }
+    reader.onerror = () => reject(new Error('读取 Excel 文件失败'))
+    reader.readAsDataURL(file)
+  })
+
+const downloadBlob = (blob: Blob, fileName: string) => {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  window.URL.revokeObjectURL(url)
 }
 
 const loadCourseDetails = async (courseId?: number) => {
@@ -470,6 +664,8 @@ const loadTeachingClasses = async () => {
       objectives.value = []
       assessments.value = []
       indicators.value = []
+      gradeRows.value = []
+      gradeTotal.value = 0
     }
 
     if (!selectedClassId.value && teachingClasses.value.length) {
@@ -536,6 +732,8 @@ const handleDeleteClass = async (row: TeachingClassVO) => {
       objectives.value = []
       assessments.value = []
       indicators.value = []
+      gradeRows.value = []
+      gradeTotal.value = 0
     }
     ElMessage.success('教学班已删除')
     await loadTeachingClasses()
@@ -550,18 +748,33 @@ const handleDownloadTemplate = async () => {
   downloadingTemplate.value = true
   try {
     const blob = await downloadStudentTemplate()
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = '学生导入模板.xlsx'
-    link.click()
-    window.URL.revokeObjectURL(url)
+    downloadBlob(blob, '学生导入模板.xlsx')
     ElMessage.success('学生模板已开始下载')
   } catch (error) {
     const message = error instanceof Error ? error.message : '模板下载失败'
     ElMessage.error(message)
   } finally {
     downloadingTemplate.value = false
+  }
+}
+
+const handleDownloadGradeTemplate = async () => {
+  if (!selectedClassId.value) {
+    ElMessage.warning('请先选择教学班')
+    return
+  }
+
+  gradeTemplateLoading.value = true
+  try {
+    const blob = await downloadGradeTemplate(selectedClassId.value)
+    const fileName = `${selectedClass.value?.className || '成绩录入'}-模板.xlsx`
+    downloadBlob(blob, fileName)
+    ElMessage.success('成绩模板已开始下载')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '成绩模板下载失败'
+    ElMessage.error(message)
+  } finally {
+    gradeTemplateLoading.value = false
   }
 }
 
@@ -584,6 +797,37 @@ const submitStudentImport = async () => {
     ElMessage.error(message)
   } finally {
     importingStudents.value = false
+  }
+}
+
+const submitGradeImport = async () => {
+  if (!selectedClassId.value) {
+    ElMessage.warning('请先选择教学班')
+    return
+  }
+
+  const file = gradeFileList.value[0]?.raw
+  if (!file) {
+    ElMessage.warning('请先选择成绩 Excel 文件')
+    return
+  }
+
+  gradeImporting.value = true
+  try {
+    const excelFile = await readFileAsBase64(file)
+    const result = await importGrades({
+      classId: selectedClassId.value,
+      excelFile
+    })
+    lastGradeImportResult.value = result
+    gradeFileList.value = []
+    await loadGradeEntries(1)
+    await showGradeImportResult(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '成绩导入失败'
+    ElMessage.error(message)
+  } finally {
+    gradeImporting.value = false
   }
 }
 
@@ -673,14 +917,88 @@ const handleUnbindStudent = async (row: { sid: string; name: string }) => {
   }
 }
 
+const loadGradeEntries = async (page = gradeQuery.current || 1) => {
+  if (!selectedClassId.value) {
+    gradeRows.value = []
+    gradeTotal.value = 0
+    return
+  }
+
+  gradeLoading.value = true
+  try {
+    const result = await queryGrades({
+      classId: selectedClassId.value,
+      pointId: gradeQuery.pointId,
+      current: page,
+      pageSize: gradeQuery.pageSize
+    })
+    gradeRows.value = result.records
+    gradeTotal.value = result.total
+    gradeQuery.current = result.current
+    gradeQuery.pageSize = result.size
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '成绩数据加载失败'
+    ElMessage.error(message)
+  } finally {
+    gradeLoading.value = false
+  }
+}
+
+const handleGradeCurrentChange = async (page: number) => {
+  gradeQuery.current = page
+  await loadGradeEntries(page)
+}
+
+const handleGradeSizeChange = async (size: number) => {
+  gradeQuery.pageSize = size
+  gradeQuery.current = 1
+  await loadGradeEntries(1)
+}
+
+const handleDeleteGrades = async () => {
+  if (!selectedClassId.value || !selectedClass.value) {
+    ElMessage.warning('请先选择教学班')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(`确认清空教学班 ${selectedClass.value.className} 的全部成绩吗？`, '清空确认', {
+      type: 'warning'
+    })
+
+    deletingGrades.value = true
+    await deleteClassGrades(selectedClassId.value)
+    gradeRows.value = []
+    gradeTotal.value = 0
+    lastGradeImportResult.value = undefined
+    ElMessage.success('当前教学班成绩已清空')
+    await loadGradeEntries(1)
+  } catch (error) {
+    if (error === 'cancel') return
+    const message = error instanceof Error ? error.message : '清空成绩失败'
+    ElMessage.error(message)
+  } finally {
+    deletingGrades.value = false
+  }
+}
+
 const reloadPreview = async () => {
   const current = selectedClass.value
-  if (!current?.id) return
+  if (!current?.id) {
+    gradeRows.value = []
+    gradeTotal.value = 0
+    return
+  }
 
   loading.value = true
   try {
     students.value = await getTeachingClassStudents(current.id)
     await loadCourseDetails(current.courseId)
+    if (gradeQuery.pointId && !assessments.value.some((item) => item.id === gradeQuery.pointId)) {
+      gradeQuery.pointId = undefined
+    }
+    gradeQuery.current = 1
+    await loadGradeEntries(1)
   } catch (error) {
     const message = error instanceof Error ? error.message : '班级预览数据加载失败'
     ElMessage.error(message)
@@ -711,6 +1029,7 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .upload-icon {
@@ -725,14 +1044,26 @@ onMounted(async () => {
   font-weight: 700;
 }
 
+.import-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .import-actions {
   display: flex;
   gap: 10px;
   margin-top: 14px;
+  flex-wrap: wrap;
 }
 
 .dialog-tip {
   margin: 0 0 12px;
+}
+
+.section-title {
+  color: #1e3555;
+  font-weight: 700;
 }
 
 .selected-class-bar {
@@ -741,5 +1072,14 @@ onMounted(async () => {
   gap: 16px;
   margin-top: 14px;
   color: #4c5f79;
+}
+
+.table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+  flex-wrap: wrap;
 }
 </style>
