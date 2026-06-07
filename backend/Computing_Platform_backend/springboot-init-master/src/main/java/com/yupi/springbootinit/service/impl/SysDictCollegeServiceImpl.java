@@ -89,8 +89,24 @@ public class SysDictCollegeServiceImpl extends ServiceImpl<SysDictCollegeMapper,
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "学院ID不能为空");
         }
+        SysDictCollege college = this.getById(id);
+        if (college == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "学院不存在");
+        }
+        validateCollegeNotReferenced(id);
         boolean result = this.removeById(id);
         return result;
+    }
+
+    private void validateCollegeNotReferenced(Long collegeId) {
+        Long majorCount = sysDictCollegeMapper.countMajorByCollegeId(collegeId);
+        if (majorCount != null && majorCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "学院已被专业引用，不能删除");
+        }
+        Long userCount = sysDictCollegeMapper.countUserByCollegeId(collegeId);
+        if (userCount != null && userCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "学院已被用户引用，不能删除");
+        }
     }
 
     @Override

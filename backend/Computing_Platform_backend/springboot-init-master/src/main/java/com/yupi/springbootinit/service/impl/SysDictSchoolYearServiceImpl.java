@@ -69,8 +69,24 @@ public class SysDictSchoolYearServiceImpl extends ServiceImpl<SysDictSchoolYearM
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "学年学期ID不能为空");
         }
+        SysDictSchoolYear schoolYear = this.getById(id);
+        if (schoolYear == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "学年学期不存在");
+        }
+        validateSchoolYearNotReferenced(id);
         boolean result = this.removeById(id);
         return result;
+    }
+
+    private void validateSchoolYearNotReferenced(Long termId) {
+        Long teachingClassCount = sysDictSchoolYearMapper.countTeachingClassByTermId(termId);
+        if (teachingClassCount != null && teachingClassCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "学年学期已被教学班级引用，不能删除");
+        }
+        Long majorResultCount = sysDictSchoolYearMapper.countMajorResultByTermId(termId);
+        if (majorResultCount != null && majorResultCount > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "学年学期已被专业达成度结果引用，不能删除");
+        }
     }
 
     @Override

@@ -290,19 +290,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
             }
 
             // 检查是否已绑定
-            QueryWrapper<ClassStudent> queryWrapper = new QueryWrapper<>();
-            queryWrapper.eq("teaching_class_id", classId);
-            queryWrapper.eq("student_id", studentId);
-            Long count = classStudentMapper.selectCount(queryWrapper);
-            if (count > 0) {
-                continue;
-            }
-
-            // 绑定学生
-            ClassStudent classStudent = new ClassStudent();
-            classStudent.setClassId(classId);
-            classStudent.setStudentId(studentId);
-            if (classStudentMapper.insert(classStudent) > 0) {
+            if (bindOrRestoreStudent(classId, studentId)) {
                 bindCount++;
             }
         }
@@ -431,11 +419,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
                 }
 
                 // 检查是否已绑定
-                QueryWrapper<ClassStudent> queryWrapper = new QueryWrapper<>();
-                queryWrapper.eq("teaching_class_id", classId);
-                queryWrapper.eq("student_id", student.getId());
-                long count = classStudentMapper.selectCount(queryWrapper);
-                if (count > 0) {
+                if (!bindOrRestoreStudent(classId, student.getId())) {
                     failCount++;
                     java.util.Map<String, String> detail = new java.util.HashMap<>();
                     detail.put("row", String.valueOf(i + 1));
@@ -444,21 +428,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
                     failDetails.add(detail);
                     continue;
                 }
-
-                // 绑定学生
-                ClassStudent classStudent = new ClassStudent();
-                classStudent.setClassId(classId);
-                classStudent.setStudentId(student.getId());
-                if (classStudentMapper.insert(classStudent) > 0) {
-                    successCount++;
-                } else {
-                    failCount++;
-                    java.util.Map<String, String> detail = new java.util.HashMap<>();
-                    detail.put("row", String.valueOf(i + 1));
-                    detail.put("studentNo", item.getStudentNo());
-                    detail.put("reason", "绑定失败");
-                    failDetails.add(detail);
-                }
+                successCount++;
             } catch (Exception e) {
                 failCount++;
                 java.util.Map<String, String> detail = new java.util.HashMap<>();
@@ -555,11 +525,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
                     }
 
                     // 检查是否已绑定
-                    QueryWrapper<ClassStudent> queryWrapper = new QueryWrapper<>();
-                    queryWrapper.eq("teaching_class_id", classId);
-                    queryWrapper.eq("student_id", student.getId());
-                    long count = classStudentMapper.selectCount(queryWrapper);
-                    if (count > 0) {
+                    if (!bindOrRestoreStudent(classId, student.getId())) {
                         failCount++;
                         Map<String, String> detail = new HashMap<>();
                         detail.put("row", String.valueOf(i + 2));
@@ -568,21 +534,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
                         failDetails.add(detail);
                         continue;
                     }
-
-                    // 绑定学生
-                    ClassStudent classStudent = new ClassStudent();
-                    classStudent.setClassId(classId);
-                    classStudent.setStudentId(student.getId());
-                    if (classStudentMapper.insert(classStudent) > 0) {
-                        successCount++;
-                    } else {
-                        failCount++;
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("row", String.valueOf(i + 2));
-                        detail.put("studentNo", excel.getStudentNo());
-                        detail.put("reason", "绑定失败");
-                        failDetails.add(detail);
-                    }
+                    successCount++;
                 } catch (Exception e) {
                     failCount++;
                     Map<String, String> detail = new HashMap<>();
@@ -603,5 +555,20 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件读取失败: " + e.getMessage());
         }
+    }
+
+    private boolean bindOrRestoreStudent(Long classId, Long studentId) {
+        ClassStudent existingRelation = classStudentMapper.selectAnyByClassIdAndStudentId(classId, studentId);
+        if (existingRelation != null) {
+            if (existingRelation.getIsDeleted() != null && existingRelation.getIsDeleted() == 0) {
+                return false;
+            }
+            return classStudentMapper.restoreById(existingRelation.getId()) > 0;
+        }
+
+        ClassStudent classStudent = new ClassStudent();
+        classStudent.setClassId(classId);
+        classStudent.setStudentId(studentId);
+        return classStudentMapper.insert(classStudent) > 0;
     }
 }
