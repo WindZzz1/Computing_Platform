@@ -2,17 +2,38 @@
 
 ## 功能概述
 
-该功能实现了模块C的第二个核心功能：**主讲教师上传填写完成的Excel成绩模板，系统自动解析、校验并存储成绩数据，同时提供在线预览和补录功能**。
+当前已提供成绩模板下载、Excel 成绩导入、成绩分页查询、在线补录更新、按教学班清空成绩等接口。
 
-## 核心功能
+当前文档以代码实现为准，重点说明已经可用的字段和现阶段的导入行为。
 
-### 1. 成绩导入功能
+## 已实现接口
 
-**接口地址**: `POST /grade-entry/import`
+### 1. 下载成绩模板
 
-**权限要求**: 主讲教师 (`ROLE_TEACHER`)
+- 接口地址: `POST /grade-entry/template/download`
+- 权限要求: 主讲教师 `ROLE_TEACHER`
 
-**请求参数**:
+请求参数:
+
+```json
+{
+  "classId": 123
+}
+```
+
+说明:
+- `classId`: 教学班 ID，必填
+
+返回:
+- Excel 文件流
+
+### 2. 导入成绩
+
+- 接口地址: `POST /grade-entry/import`
+- 权限要求: 主讲教师 `ROLE_TEACHER`
+
+请求参数:
+
 ```json
 {
   "classId": 123,
@@ -20,11 +41,12 @@
 }
 ```
 
-**参数说明**:
-- `classId`: 教学班级ID（必填）
-- `excelFile`: 填写完成的Excel文件的Base64编码字符串（必填）
+说明:
+- `classId`: 教学班 ID，必填
+- `excelFile`: Excel 文件的 Base64 字符串，必填
 
-**返回示例**:
+返回示例:
+
 ```json
 {
   "code": 0,
@@ -33,37 +55,46 @@
     "studentCount": 35,
     "scoreCount": 175,
     "errorMessages": [],
-    "warningMessages": ["以下学生未导入成绩：张三"]
+    "warningMessages": [
+      "以下学生未导入成绩：张三"
+    ]
   },
   "message": "ok"
 }
 ```
 
-### 2. 成绩查询功能
+当前导入行为:
+- 导入前会先解析并校验整份 Excel
+- 只要出现任意错误，接口会直接返回错误信息
+- 有错误时不会删除该教学班原有成绩
+- 只有整份数据校验通过后，才会先清空旧成绩再写入新成绩
 
-**接口地址**: `POST /grade-entry/query`
+### 3. 成绩分页查询
 
-**权限要求**: 主讲教师 (`ROLE_TEACHER`)
+- 接口地址: `POST /grade-entry/query`
+- 权限要求: 主讲教师 `ROLE_TEACHER`
 
-**请求参数**:
+请求参数:
+
 ```json
 {
   "classId": 123,
   "studentId": 456,
-  "assessmentPointId": 789,
+  "pointId": 789,
   "current": 1,
   "pageSize": 10
 }
 ```
 
-**参数说明**:
-- `classId`: 教学班级ID（必填）
-- `studentId`: 学生ID（可选，用于筛选特定学生）
-- `assessmentPointId`: 考核点ID（可选，用于筛选特定考核点）
-- `current`: 当前页码（默认1）
-- `pageSize`: 每页大小（默认10）
+说明:
+- `classId`: 教学班 ID，必填
+- `studentId`: 学生 ID，可选
+- `pointId`: 考核点 ID，可选
+- `current`: 页码，可选，默认 `1`
+- `pageSize`: 每页条数，可选，默认 `10`
 
-**返回示例**:
+返回示例:
+
 ```json
 {
   "code": 0,
@@ -78,10 +109,7 @@
         "pointCode": "A01",
         "pointName": "期末考试",
         "score": 85.5,
-        "fullScore": 100.0,
-        "isLocked": 0,
-        "enteredBy": 123,
-        "enterTime": "2024-06-04T10:30:00"
+        "fullScore": 100.0
       }
     ],
     "total": 175,
@@ -92,13 +120,17 @@
 }
 ```
 
-### 3. 成绩更新功能
+说明:
+- 查询条件字段实际为 `pointId`，不是 `assessmentPointId`
+- 返回中的 `score` 来自数据库实体字段 `actualScore`
 
-**接口地址**: `POST /grade-entry/update`
+### 4. 在线补录 / 更新成绩
 
-**权限要求**: 主讲教师 (`ROLE_TEACHER`)
+- 接口地址: `POST /grade-entry/update`
+- 权限要求: 主讲教师 `ROLE_TEACHER`
 
-**请求参数**:
+请求参数:
+
 ```json
 {
   "classId": 123,
@@ -118,15 +150,16 @@
 }
 ```
 
-**参数说明**:
-- `classId`: 教学班级ID（必填）
-- `scores`: 成绩列表（必填）
-  - `id`: 成绩记录ID（可选，存在则更新，不存在则新增）
-  - `studentId`: 学生ID（必填）
-  - `pointId`: 考核点ID（必填）
-  - `score`: 得分（必填）
+说明:
+- `classId`: 教学班 ID，必填
+- `scores`: 成绩列表，必填
+- `id`: 成绩记录 ID，可选
+- `studentId`: 学生 ID，必填
+- `pointId`: 考核点 ID，必填
+- `score`: 得分，必填
 
-**返回示例**:
+返回示例:
+
 ```json
 {
   "code": 0,
@@ -135,23 +168,24 @@
 }
 ```
 
-### 4. 删除班级成绩功能
+### 5. 清空教学班成绩
 
-**接口地址**: `POST /grade-entry/delete`
+- 接口地址: `POST /grade-entry/delete`
+- 权限要求: 主讲教师 `ROLE_TEACHER`
 
-**权限要求**: 主讲教师 (`ROLE_TEACHER`)
+请求参数:
 
-**请求参数**:
 ```json
 {
   "id": 123
 }
 ```
 
-**参数说明**:
-- `id`: 教学班级ID（必填）
+说明:
+- `id`: 教学班 ID，必填
 
-**返回示例**:
+返回示例:
+
 ```json
 {
   "code": 0,
@@ -160,177 +194,86 @@
 }
 ```
 
-## 数据校验规则
+## 当前校验规则
 
-### 1. 基础校验
-- 教学班级必须存在
-- 教学班级必须有学生
-- 课程必须有考核点
+### 基础校验
 
-### 2. Excel数据校验
-- **学号校验**: 学号必须存在于该教学班级中
-- **姓名校验**: 姓名应与学生信息匹配（不匹配会发出警告）
-- **分数校验**: 
-  - 分数不能超过考核点满分
-  - 分数不能为负数
-  - 分数格式必须正确
+- 教学班必须存在
+- 教学班必须已经分配学生
+- 教学班所属课程必须已经配置考核点
 
-### 3. 数据完整性校验
-- 自动检测未导入成绩的学生并发出警告
-- 统计导入的学生数量和成绩记录数量
+### Excel 数据校验
 
-## 数据结构
+- 学号必须属于该教学班
+- 姓名不一致会记为警告，不会直接阻断导入
+- 分数不能大于考核点满分
+- 分数不能小于 0
+- 分数字段必须能解析为数值
+
+### 导入结果校验
+
+- 会统计已处理学生数
+- 会统计待保存成绩记录数
+- 会提示未出现在导入文件中的学生
+
+## 当前数据结构
 
 ### GradeImportResultVO
+
 ```java
 public class GradeImportResultVO {
-    private Boolean success;           // 是否成功
-    private Integer studentCount;       // 导入的学生数量
-    private Integer scoreCount;         // 导入的成绩记录数量
-    private List<String> errorMessages; // 错误信息列表
-    private List<String> warningMessages; // 警告信息列表
+    private Boolean success;
+    private Integer studentCount;
+    private Integer scoreCount;
+    private List<String> errorMessages;
+    private List<String> warningMessages;
 }
 ```
 
 ### StudentScoreVO
+
+当前代码实际返回字段如下:
+
 ```java
 public class StudentScoreVO {
-    private Long id;                    // 成绩ID
-    private Long studentId;            // 学生ID
-    private String studentNo;          // 学号
-    private String name;               // 姓名
-    private Long pointId;    // 考核点ID
-    private String pointCode;          // 考核点编号
-    private String pointName;          // 考核点名称
-    private BigDecimal score;          // 得分
-    private BigDecimal fullScore;      // 满分
-    private Integer isLocked;          // 是否锁定
-    private Long enteredBy;            // 录入人ID
-    private Date enterTime;            // 录入时间
+    private Long id;
+    private Long studentId;
+    private String studentNo;
+    private String name;
+    private Long pointId;
+    private String pointCode;
+    private String pointName;
+    private BigDecimal score;
+    private BigDecimal fullScore;
 }
 ```
 
+说明:
+- 当前 `StudentScoreVO` 不包含 `isLocked`、`enteredBy`、`enterTime`
+
 ### StudentScoreUpdateRequest
+
 ```java
 public class StudentScoreUpdateRequest {
-    private Long classId;              // 教学班级ID
-    private List<ScoreItem> scores;   // 成绩列表
-    
+    private Long classId;
+    private List<ScoreItem> scores;
+
     public static class ScoreItem {
-        private Long id;               // 成绩ID（可选）
-        private Long studentId;        // 学生ID
-        private Long pointId;// 考核点ID
-        private BigDecimal score;      // 得分
+        private Long id;
+        private Long studentId;
+        private Long pointId;
+        private BigDecimal score;
     }
 }
 ```
 
-## 使用流程
+## 当前限制
 
-### 1. 成绩导入流程
-1. 主讲教师下载Excel成绩录入模板
-2. 填写学生成绩数据
-3. 将Excel文件转换为Base64编码
-4. 调用导入接口上传数据
-5. 系统自动解析、校验并存储数据
-6. 查看导入结果，处理错误和警告
-
-### 2. 在线预览与补录流程
-1. 调用查询接口获取班级成绩数据
-2. 在Web界面展示成绩表格
-3. 检查数据的完整性和准确性
-4. 对缺失或错误的数据进行在线修改
-5. 调用更新接口保存修改后的数据
-
-## 错误处理
-
-### 常见错误情况
-
-1. **参数错误**
-   - 教学班级ID为空
-   - Excel文件为空
-   - 成绩数据格式错误
-
-2. **权限错误**
-   - 用户不是主讲教师
-   - 教学班级不属于当前教师
-
-3. **数据验证错误**
-   - 学号不存在
-   - 分数超过满分
-   - 分数为负数
-   - Excel格式错误
-
-### 错误信息示例
-```json
-{
-  "success": false,
-  "errorMessages": [
-    "学号2021999不存在于该班级",
-    "学号2021001在考核点A01的得分105超过满分100",
-    "学号2021002在考核点A02的得分格式错误：abc"
-  ],
-  "warningMessages": [
-    "学号2021003的姓名不匹配，期望：李四，实际：李四四",
-    "以下学生未导入成绩：王五、赵六"
-  ]
-}
-```
-
-## 数据库表结构
-
-### student_score表
-```sql
-CREATE TABLE student_score (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    teaching_class_id BIGINT NOT NULL COMMENT '教学班级ID',
-    student_id BIGINT NOT NULL COMMENT '学生ID',
-    point_id BIGINT NOT NULL COMMENT '考核点ID',
-    actual_score DECIMAL(5,1) COMMENT '实际得分',
-    full_score DECIMAL(5,1) COMMENT '满分',
-    is_locked TINYINT DEFAULT 0 COMMENT '是否锁定：0-未锁定，1-已锁定',
-    entered_by BIGINT COMMENT '录入人ID',
-    enter_time DATETIME COMMENT '录入时间',
-    update_time DATETIME COMMENT '更新时间',
-    is_deleted TINYINT DEFAULT 0 COMMENT '是否删除',
-    INDEX idx_class_id (teaching_class_id),
-    INDEX idx_student_id (student_id),
-    INDEX idx_point_id (point_id)
-);
-```
-
-## 技术特性
-
-### 1. 数据处理
-- **Base64编码**: 支持Excel文件的Base64编码传输
-- **批量导入**: 使用EasyExcel高效解析大量数据
-- **事务处理**: 确保数据一致性，导入失败自动回滚
-
-### 2. 数据验证
-- **多层级验证**: 参数校验 → 业务校验 → 数据校验
-- **智能匹配**: 自动关联学生、考核点信息
-- **友好提示**: 详细的错误和警告信息
-
-### 3. 性能优化
-- **批量操作**: 使用批量插入提高性能
-- **索引优化**: 数据库表索引优化查询性能
-- **分页查询**: 支持大数据量的分页展示
-
-### 4. 安全特性
-- **权限控制**: 仅主讲教师可操作
-- **数据隔离**: 不同教学班级数据完全隔离
-- **操作记录**: 记录录入人和录入时间
-
-## 后续扩展
-
-该功能为后续功能提供数据基础：
-- **成绩锁定**: 支持成绩锁定功能，防止误修改
-- **达成度计算**: 基于成绩数据自动计算课程达成度
-- **成绩审核**: 专业负责人和教务管理员审核流程
-- **统计分析**: 成绩统计分析和报表生成
+- 当前接口主要面向教师侧成绩录入
+- 锁定成绩、审核流程等扩展能力未在本模块中实现
+- 删除接口是按教学班整体清空，不是按单条成绩删除
 
 ---
 
-**开发日期**: 2026-06-04  
-**开发者**: Claude AI  
-**版本**: 1.0
+**文档更新时间**: 2026-06-07
+**说明**: 本文档已按当前代码实现状态校正
