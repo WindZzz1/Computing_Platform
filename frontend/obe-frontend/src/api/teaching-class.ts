@@ -84,3 +84,28 @@ export async function downloadStudentTemplate() {
   })
   return response.data as Blob
 }
+
+export async function importStudentsToClassFromExcel(classId: number, file: File) {
+  const formData = new FormData()
+  formData.append('classId', String(classId))
+  formData.append('file', file)
+
+  const response = await request.post<ApiResponse<StudentImportResult>>('/teaching-class/import-students/excel', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+
+  if (response.data.code !== 0) {
+    throw new Error(response.data.message || '教学班学生导入失败')
+  }
+
+  return response.data.data
+}
+
+export async function downloadClassStudentTemplate() {
+  const response = await request.get('/teaching-class/import-students/template', {
+    responseType: 'blob'
+  })
+  return response.data as Blob
+}
