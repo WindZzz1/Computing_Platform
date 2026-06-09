@@ -1,8 +1,11 @@
 package com.yupi.springbootinit.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yupi.springbootinit.model.dto.student.StudentImportRequest;
+import com.yupi.springbootinit.model.dto.student.StudentQueryRequest;
 import com.yupi.springbootinit.model.entity.Student;
+import com.yupi.springbootinit.model.vo.StudentVO;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
@@ -13,6 +16,14 @@ import java.util.Map;
  * @author YU
  */
 public interface StudentService extends IService<Student> {
+
+    /**
+     * 分页查询学生
+     *
+     * @param studentQueryRequest 查询条件
+     * @return 学生分页结果
+     */
+    Page<StudentVO> pageStudents(StudentQueryRequest studentQueryRequest);
 
     /**
      * 批量导入学生

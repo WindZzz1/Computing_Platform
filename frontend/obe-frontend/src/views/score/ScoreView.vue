@@ -67,7 +67,7 @@
             type="info"
             show-icon
             :closable="false"
-            title="当前支持三种方式：先导入系统库、直接导入当前教学班、按学号批量绑定。系统学生库列表暂未开放查询，所以当前还不能在页面中直接选人。"
+            title="当前支持四种方式：先导入系统库、直接导入当前教学班、按学号批量绑定、从系统学生库直接选人绑定。"
             style="margin-bottom: 12px"
           />
           <el-upload
@@ -183,6 +183,7 @@
               去课程大纲
             </el-button>
             <el-button type="primary" plain :disabled="!selectedClassId" @click="openBindDialog">按学号批量绑定</el-button>
+            <el-button type="success" plain :disabled="!selectedClassId" @click="openStudentPickerDialog">从系统学生库选择</el-button>
           </div>
         </div>
 
@@ -334,6 +335,73 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="studentPickerVisible" title="从系统学生库选择学生" width="980px" destroy-on-close>
+      <el-alert
+        type="info"
+        show-icon
+        :closable="false"
+        title="这里会查询系统学生库。已经在当前教学班中的学生会直接禁选，确认后会自动绑定并刷新班级学生列表。"
+        style="margin-bottom: 16px"
+      />
+      <div class="student-picker-toolbar">
+        <el-input
+          v-model="studentQuery.studentNo"
+          placeholder="按学号搜索"
+          clearable
+          style="width: 220px"
+          @keyup.enter="loadStudentPool(1)"
+        />
+        <el-input
+          v-model="studentQuery.studentName"
+          placeholder="按姓名搜索"
+          clearable
+          style="width: 220px"
+          @keyup.enter="loadStudentPool(1)"
+        />
+        <el-button :loading="studentPickerLoading" @click="loadStudentPool(1)">查询</el-button>
+        <el-button @click="resetStudentQuery">重置</el-button>
+      </div>
+      <el-table
+        ref="studentPickerTableRef"
+        v-loading="studentPickerLoading"
+        :data="studentPickerRows"
+        border
+        row-key="id"
+        @selection-change="handleStudentPickerSelectionChange"
+      >
+        <el-table-column type="selection" width="56" :selectable="isStudentSelectable" reserve-selection />
+        <el-table-column prop="studentNo" label="学号" width="140" />
+        <el-table-column prop="name" label="姓名" width="120" />
+        <el-table-column prop="collegeName" label="学院" min-width="180" />
+        <el-table-column prop="majorName" label="专业" min-width="180" />
+        <el-table-column prop="className" label="班级" min-width="140" />
+        <el-table-column label="状态" width="120">
+          <template #default="{ row }">
+            <el-tag v-if="boundStudentIdSet.has(row.id)" type="info">已在当前班</el-tag>
+            <el-tag v-else type="success">可绑定</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="table-footer">
+        <span class="muted">{{ studentPickerSummary }}</span>
+        <el-pagination
+          :current-page="studentQuery.current || 1"
+          :page-size="studentQuery.pageSize || 10"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next"
+          :total="studentPickerTotal"
+          @current-change="handleStudentPickerCurrentChange"
+          @size-change="handleStudentPickerSizeChange"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="studentPickerVisible = false">取消</el-button>
+        <el-button type="primary" :loading="bindingSelectedStudents" @click="submitSelectedStudents">
+          绑定已选学生
+        </el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="gradeEditDialogVisible" title="手动修改成绩" width="520px" destroy-on-close>
       <el-alert
         type="info"
@@ -384,7 +452,9 @@ import { listUsersByRole } from '@/api/auth'
 import { listCourses } from '@/api/course'
 import { deleteClassGrades, downloadGradeTemplate, importGrades, queryGrades, updateGrades } from '@/api/grade-entry'
 import { listSchoolYears } from '@/api/schoolyear'
+import { pageStudents } from '@/api/student'
 import {
+  bindStudentsToClass,
   createTeachingClass,
   deleteTeachingClass,
   downloadClassStudentTemplate,
@@ -407,6 +477,7 @@ import type {
   GradeImportResultVO,
   IndicatorPointVO,
   StudentImportResult,
+  StudentPageQuery,
   StudentScoreVO,
   StudentVO,
   SysDictSchoolYearVO,
@@ -437,6 +508,7 @@ const savingClass = ref(false)
 const savingGradeEdit = ref(false)
 const unbindingStudentNo = ref<string>()
 const bindDialogVisible = ref(false)
+const studentPickerVisible = ref(false)
 const classDialogVisible = ref(false)
 const gradeEditDialogVisible = ref(false)
 const classEditing = ref<TeachingClassVO>()
@@ -456,12 +528,24 @@ const gradeFileList = ref<UploadUserFile[]>([])
 const lastImportResult = ref<StudentImportResult>()
 const lastGradeImportResult = ref<GradeImportResultVO>()
 const bindStudentText = ref('')
+const studentPickerLoading = ref(false)
+const bindingSelectedStudents = ref(false)
+const studentPickerRows = ref<StudentVO[]>([])
+const studentPickerTotal = ref(0)
+const studentPickerSelection = ref<StudentVO[]>([])
+const studentPickerTableRef = ref()
 const gradeRows = ref<StudentScoreVO[]>([])
 const gradeTotal = ref(0)
 const classFormRef = ref<FormInstance>()
 const gradeQuery = reactive<GradeEntryQueryRequest>({
   current: 1,
   pageSize: 20
+})
+const studentQuery = reactive<StudentPageQuery>({
+  current: 1,
+  pageSize: 10,
+  studentNo: '',
+  studentName: ''
 })
 
 const gradeEditForm = reactive<{
@@ -505,6 +589,7 @@ const canNavigateToSyllabus = computed(() => userStore.role === 'admin' || userS
 const canViewPreparationStatus = computed(() => userStore.role === 'admin' || userStore.role === 'teacher')
 
 const selectedClass = computed(() => selectedClassDetail.value ?? teachingClasses.value.find((item) => item.id === selectedClassId.value))
+const boundStudentIdSet = computed(() => new Set(students.value.map((student) => student.id)))
 
 const lastImportSummary = computed(() => {
   const result = lastImportResult.value
@@ -542,6 +627,20 @@ const bindStudentPreviewCount = computed(() =>
     .map((line) => line.trim())
     .filter(Boolean).length
 )
+
+const selectedStudentCount = computed(() =>
+  studentPickerSelection.value.filter((student) => !boundStudentIdSet.value.has(student.id)).length
+)
+
+const studentPickerSummary = computed(() => {
+  if (!selectedClassId.value) {
+    return '请先选择教学班后再从系统学生库中选人。'
+  }
+  if (!studentPickerTotal.value) {
+    return '当前查询结果为空。'
+  }
+  return `当前查到 ${studentPickerTotal.value} 名学生，已勾选 ${selectedStudentCount.value} 名可绑定学生。`
+})
 
 const results = computed(() => {
   if (!canViewPreparationStatus.value) {
@@ -1067,6 +1166,97 @@ const openBindDialog = () => {
   bindDialogVisible.value = true
 }
 
+const resetStudentQuery = async () => {
+  studentQuery.studentNo = ''
+  studentQuery.studentName = ''
+  studentQuery.current = 1
+  studentQuery.pageSize = 10
+  await loadStudentPool(1)
+}
+
+const handleStudentPickerSelectionChange = (selection: StudentVO[]) => {
+  studentPickerSelection.value = selection
+}
+
+const isStudentSelectable = (row: StudentVO) => !boundStudentIdSet.value.has(row.id)
+
+const loadStudentPool = async (page = studentQuery.current || 1) => {
+  studentPickerLoading.value = true
+  try {
+    const result = await pageStudents({
+      current: page,
+      pageSize: studentQuery.pageSize,
+      studentNo: studentQuery.studentNo?.trim() || undefined,
+      studentName: studentQuery.studentName?.trim() || undefined
+    })
+    studentPickerRows.value = result.records
+    studentPickerTotal.value = result.total
+    studentQuery.current = result.current
+    studentQuery.pageSize = result.size
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '系统学生库加载失败'
+    ElMessage.error(message)
+  } finally {
+    studentPickerLoading.value = false
+  }
+}
+
+const openStudentPickerDialog = async () => {
+  if (!selectedClassId.value) {
+    ElMessage.warning('请先选择教学班')
+    return
+  }
+  studentPickerSelection.value = []
+  studentQuery.current = 1
+  studentPickerVisible.value = true
+  await loadStudentPool(1)
+}
+
+const handleStudentPickerCurrentChange = async (page: number) => {
+  studentQuery.current = page
+  await loadStudentPool(page)
+}
+
+const handleStudentPickerSizeChange = async (size: number) => {
+  studentQuery.pageSize = size
+  studentQuery.current = 1
+  await loadStudentPool(1)
+}
+
+const submitSelectedStudents = async () => {
+  if (!selectedClassId.value) {
+    ElMessage.warning('请先选择教学班')
+    return
+  }
+
+  const selectedIds = Array.from(
+    new Set(
+      studentPickerSelection.value
+        .filter((student) => !boundStudentIdSet.value.has(student.id))
+        .map((student) => student.id)
+    )
+  )
+
+  if (!selectedIds.length) {
+    ElMessage.warning('请先勾选要绑定的学生')
+    return
+  }
+
+  bindingSelectedStudents.value = true
+  try {
+    const count = await bindStudentsToClass(selectedClassId.value, selectedIds)
+    studentPickerVisible.value = false
+    studentPickerSelection.value = []
+    await reloadPreview()
+    ElMessage.success(`已为当前教学班绑定 ${count} 名学生`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '学生绑定失败'
+    ElMessage.error(message)
+  } finally {
+    bindingSelectedStudents.value = false
+  }
+}
+
 const submitBindStudents = async () => {
   if (!selectedClassId.value) {
     ElMessage.warning('请先选择教学班')
@@ -1360,6 +1550,14 @@ onMounted(async () => {
 .bind-preview {
   margin-top: 10px;
   line-height: 1.5;
+}
+
+.student-picker-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
 .section-title {

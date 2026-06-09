@@ -227,6 +227,13 @@ export interface StudentVO {
   updateTime?: string
 }
 
+export interface StudentPageQuery extends PageQuery {
+  studentNo?: string
+  studentName?: string
+  majorId?: number | null
+  className?: string
+}
+
 export interface CoursePageQuery extends PageQuery {
   courseCode?: string
   courseName?: string

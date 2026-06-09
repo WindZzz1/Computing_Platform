@@ -5,7 +5,11 @@ import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.ResultUtils;
 import com.yupi.springbootinit.constant.SysUserConstant;
 import com.yupi.springbootinit.model.dto.student.StudentImportRequest;
+import com.yupi.springbootinit.model.dto.student.StudentQueryRequest;
+import com.yupi.springbootinit.model.vo.PageResultVO;
+import com.yupi.springbootinit.model.vo.StudentVO;
 import com.yupi.springbootinit.service.StudentService;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -30,6 +34,19 @@ public class StudentController {
 
     @Resource
     private StudentService studentService;
+
+    /**
+     * 分页查询系统学生库
+     *
+     * @param studentQueryRequest 查询条件
+     * @return 学生分页结果
+     */
+    @PostMapping("/page")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    public BaseResponse<PageResultVO<StudentVO>> pageStudents(@RequestBody StudentQueryRequest studentQueryRequest) {
+        Page<StudentVO> studentPage = studentService.pageStudents(studentQueryRequest);
+        return ResultUtils.success(PageResultVO.from(studentPage));
+    }
 
     /**
      * 通过Excel批量导入学生

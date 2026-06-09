@@ -2,15 +2,20 @@ package com.yupi.springbootinit.service.impl;
 
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.mapper.StudentMapper;
+import com.yupi.springbootinit.mapper.SysDictCollegeMapper;
 import com.yupi.springbootinit.mapper.SysDictMajorMapper;
 import com.yupi.springbootinit.model.dto.student.StudentImportRequest;
+import com.yupi.springbootinit.model.dto.student.StudentQueryRequest;
 import com.yupi.springbootinit.model.entity.Student;
+import com.yupi.springbootinit.model.entity.SysDictCollege;
 import com.yupi.springbootinit.model.entity.SysDictMajor;
 import com.yupi.springbootinit.model.excel.StudentExcel;
+import com.yupi.springbootinit.model.vo.StudentVO;
 import com.yupi.springbootinit.service.StudentService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -42,6 +47,29 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
 
     @Resource
     private SysDictMajorMapper sysDictMajorMapper;
+
+    @Resource
+    private SysDictCollegeMapper sysDictCollegeMapper;
+
+    @Override
+    public Page<StudentVO> pageStudents(StudentQueryRequest studentQueryRequest) {
+        long current = studentQueryRequest == null ? 1 : studentQueryRequest.getCurrent();
+        long size = studentQueryRequest == null ? 10 : studentQueryRequest.getPageSize();
+
+        QueryWrapper<Student> queryWrapper = new QueryWrapper<>();
+        if (studentQueryRequest != null) {
+            queryWrapper.like(StringUtils.isNotBlank(studentQueryRequest.getStudentNo()), "student_no", studentQueryRequest.getStudentNo());
+            queryWrapper.like(StringUtils.isNotBlank(studentQueryRequest.getStudentName()), "student_name", studentQueryRequest.getStudentName());
+            queryWrapper.eq(studentQueryRequest.getMajorId() != null, "major_id", studentQueryRequest.getMajorId());
+            queryWrapper.like(StringUtils.isNotBlank(studentQueryRequest.getClassName()), "class_name", studentQueryRequest.getClassName());
+        }
+        queryWrapper.orderByDesc("id");
+
+        Page<Student> studentPage = this.page(new Page<>(current, size), queryWrapper);
+        Page<StudentVO> studentVOPage = new Page<>(current, size, studentPage.getTotal());
+        studentVOPage.setRecords(studentPage.getRecords().stream().map(this::getStudentVO).collect(java.util.stream.Collectors.toList()));
+        return studentVOPage;
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -310,5 +338,32 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
             log.error("动态生成模板失败", e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成模板失败");
         }
+    }
+
+    private StudentVO getStudentVO(Student student) {
+        if (student == null) {
+            return null;
+        }
+
+        StudentVO studentVO = new StudentVO();
+        BeanUtils.copyProperties(student, studentVO);
+
+        if (student.getMajorId() != null) {
+            SysDictMajor major = sysDictMajorMapper.selectById(student.getMajorId());
+            if (major != null) {
+                studentVO.setMajorName(major.getMajorName());
+                studentVO.setMajorId(major.getId());
+
+                if (major.getCollegeId() != null) {
+                    SysDictCollege college = sysDictCollegeMapper.selectById(major.getCollegeId());
+                    if (college != null) {
+                        studentVO.setCollegeId(college.getId());
+                        studentVO.setCollegeName(college.getCollegeName());
+                    }
+                }
+            }
+        }
+
+        return studentVO;
     }
 }
