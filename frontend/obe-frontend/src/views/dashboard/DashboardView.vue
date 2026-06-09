@@ -157,6 +157,57 @@
       </div>
 
       <div class="panel span-4">
+        <div class="toolbar">
+          <div>
+            <h3 class="panel-title">专业级结果概览卡片</h3>
+            <span class="muted">围绕当前筛选条件，单独看专业级结果是否已经生成。</span>
+          </div>
+          <el-tag :type="majorResultCardType">{{ majorResultCardTag }}</el-tag>
+        </div>
+
+        <div class="course-card-grid">
+          <div class="course-card-metric">
+            <div class="course-card-label">当前结果状态</div>
+            <div class="course-card-value">{{ majorResultStatusText }}</div>
+            <div class="muted">按当前专业、学期、年级读取</div>
+          </div>
+          <div class="course-card-metric">
+            <div class="course-card-label">平均达成度</div>
+            <div class="course-card-value">{{ majorAverageAchievementText }}</div>
+            <div class="muted">当前专业级结果摘要</div>
+          </div>
+          <div class="course-card-metric">
+            <div class="course-card-label">达标状态</div>
+            <div class="course-card-value">{{ majorThresholdStatusText }}</div>
+            <div class="muted">{{ majorThresholdHint }}</div>
+          </div>
+        </div>
+
+        <el-alert
+          :title="majorResultCardMessage"
+          :type="majorResultCardType"
+          show-icon
+          style="margin-top: 14px"
+        />
+
+        <div v-if="majorResultIndicatorPreview.length" class="pending-class-list">
+          <div class="pending-class-title">当前结果中的指标点预览</div>
+          <div
+            v-for="item in majorResultIndicatorPreview"
+            :key="item.indicatorCode || item.indicatorId"
+            class="pending-class-item"
+          >
+            <span>{{ item.indicatorCode || item.indicatorName || '未命名指标点' }}</span>
+            <small>{{ formatNumber(item.achievement) }}</small>
+          </div>
+        </div>
+
+        <el-button style="margin-top: 14px" type="primary" plain @click="$router.push('/calculation')">
+          去计算中心查看专业级结果
+        </el-button>
+      </div>
+
+      <div class="panel span-4">
         <h3 class="panel-title">最近数据变更</h3>
         <p class="muted" style="margin-bottom: 12px">{{ recentCalculationFocus }}</p>
         <div v-if="recentRecords.length" class="record-list">
@@ -270,6 +321,7 @@ import type {
   CourseVO,
   GraduationRequirementVO,
   IndicatorPointVO,
+  MajorCalculationAchievementItem,
   MajorCalculationDashboardVO,
   MajorCalculationResultVO,
   MatrixConfigVO,
@@ -395,6 +447,54 @@ const courseCalculationCardMessage = computed(() => {
   return `当前全局还有 ${classesWithoutCalculationCount.value} 个教学班未完成课程级计算，建议先处理这些班级。`
 })
 const currentMajorHasCalculationResult = computed(() => (majorCalculationResult.value?.totalRecords ?? 0) > 0)
+const majorAverageAchievementText = computed(() =>
+  currentMajorHasCalculationResult.value ? formatNumber(majorCalculationResult.value?.averageAchievement) : '-'
+)
+const majorResultStatusText = computed(() => {
+  if (!selectedMajorId.value) return '待选择专业'
+  if (!selectedTermId.value || !selectedGrade.value.trim()) return '待补筛选条件'
+  return currentMajorHasCalculationResult.value ? '已生成' : '未生成'
+})
+const majorThresholdStatusText = computed(() => {
+  if (!currentMajorHasCalculationResult.value) return '-'
+  return majorCalculationResult.value?.meetsGraduationRequirement ? '已达标' : '未达标'
+})
+const majorThresholdHint = computed(() => {
+  if (!currentMajorHasCalculationResult.value) return '生成结果后显示'
+  return `阈值 ${formatNumber(majorCalculationResult.value?.threshold)}`
+})
+const majorResultCardTag = computed(() => {
+  if (!selectedMajorId.value) return '待选择'
+  if (!selectedTermId.value || !selectedGrade.value.trim()) return '待补条件'
+  if (currentMajorHasCalculationResult.value) return '结果可用'
+  if (majorCalculationDashboard.value?.canCalculate) return '可计算'
+  return '待补前置'
+})
+const majorResultCardType = computed<'success' | 'warning' | 'info'>(() => {
+  if (!selectedMajorId.value) return 'info'
+  if (!selectedTermId.value || !selectedGrade.value.trim()) return 'info'
+  if (currentMajorHasCalculationResult.value) return 'success'
+  if (majorCalculationDashboard.value?.canCalculate) return 'info'
+  return 'warning'
+})
+const majorResultCardMessage = computed(() => {
+  if (!selectedMajorId.value) {
+    return '先选择专业，首页才能开始读取当前专业的专业级结果状态。'
+  }
+  if (!selectedTermId.value || !selectedGrade.value.trim()) {
+    return '补齐学年学期和年级后，这张卡片才能显示当前专业的真实专业级结果。'
+  }
+  if (currentMajorHasCalculationResult.value) {
+    return `当前专业级结果已生成，共 ${majorCalculationResult.value?.totalRecords ?? 0} 条记录，可继续查看细节。`
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return '当前专业已经具备专业级计算条件，但还没有生成最终结果，可以直接去计算中心执行。'
+  }
+  return majorCalculationDashboard.value?.errorMessage || '当前专业级结果还没有生成，通常是课程级结果或前置条件还不完整。'
+})
+const majorResultIndicatorPreview = computed<MajorCalculationAchievementItem[]>(() =>
+  (majorCalculationResult.value?.achievements ?? []).slice(0, 3)
+)
 const readyMajorCourseStatusCount = computed(
   () => majorCalculationDashboard.value?.courseStatusList?.filter((item) => item.hasAchievementData).length ?? 0
 )
