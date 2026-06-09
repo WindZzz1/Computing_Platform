@@ -105,7 +105,58 @@
         </div>
       </div>
 
-      <div class="panel span-5">
+      <div class="panel span-4">
+        <div class="toolbar">
+          <div>
+            <h3 class="panel-title">课程级结果概览卡片</h3>
+            <span class="muted">单独看当前全局教学班的课程级计算覆盖情况。</span>
+          </div>
+          <el-tag :type="courseCalculationCardType">{{ courseCalculationCardTag }}</el-tag>
+        </div>
+
+        <div class="course-card-grid">
+          <div class="course-card-metric">
+            <div class="course-card-label">已完成教学班</div>
+            <div class="course-card-value">{{ classesWithCalculationCount }}</div>
+            <div class="muted">已经形成课程级结果</div>
+          </div>
+          <div class="course-card-metric">
+            <div class="course-card-label">待补教学班</div>
+            <div class="course-card-value">{{ classesWithoutCalculationCount }}</div>
+            <div class="muted">仍需补课程级结果</div>
+          </div>
+          <div class="course-card-metric">
+            <div class="course-card-label">覆盖率</div>
+            <div class="course-card-value">{{ courseCalculationCoverageText }}</div>
+            <div class="muted">{{ courseCalculationCardHint }}</div>
+          </div>
+        </div>
+
+        <el-alert
+          :title="courseCalculationCardMessage"
+          :type="courseCalculationCardType"
+          show-icon
+          style="margin-top: 14px"
+        />
+
+        <div v-if="pendingCourseCalculationClasses.length" class="pending-class-list">
+          <div class="pending-class-title">优先处理的教学班</div>
+          <div
+            v-for="item in pendingCourseCalculationClasses.slice(0, 3)"
+            :key="item.id"
+            class="pending-class-item"
+          >
+            <span>{{ item.className }}</span>
+            <small>{{ item.courseName || '未绑定课程' }}</small>
+          </div>
+        </div>
+
+        <el-button style="margin-top: 14px" type="primary" plain @click="$router.push('/calculation')">
+          去计算中心补课程级结果
+        </el-button>
+      </div>
+
+      <div class="panel span-4">
         <h3 class="panel-title">最近数据变更</h3>
         <p class="muted" style="margin-bottom: 12px">{{ recentCalculationFocus }}</p>
         <div v-if="recentRecords.length" class="record-list">
@@ -119,7 +170,7 @@
         <el-empty v-else description="暂时没有可展示的最近记录" />
       </div>
 
-      <div class="panel span-7">
+      <div class="panel span-4">
         <h3 class="panel-title">联调提示</h3>
         <div class="notice-list">
           <div v-for="notice in notices" :key="notice.title" class="notice-item">
@@ -308,6 +359,41 @@ const classesWithCalculationCount = computed(
 const classesWithoutCalculationCount = computed(() =>
   Math.max(allTeachingClasses.value.length - classesWithCalculationCount.value, 0)
 )
+const pendingCourseCalculationClasses = computed(() => {
+  const calculatedClassIds = new Set(
+    allCalculationStatuses.value.filter((item) => item.hasCalculationResult).map((item) => item.classId)
+  )
+  return allTeachingClasses.value.filter((item) => !calculatedClassIds.has(item.id))
+})
+const courseCalculationCoverageRate = computed(() => {
+  if (!allTeachingClasses.value.length) return 0
+  return classesWithCalculationCount.value / allTeachingClasses.value.length
+})
+const courseCalculationCoverageText = computed(() => `${Math.round(courseCalculationCoverageRate.value * 100)}%`)
+const courseCalculationCardTag = computed(() => {
+  if (!allTeachingClasses.value.length) return '待建班'
+  if (!classesWithoutCalculationCount.value) return '已覆盖'
+  return '待补结果'
+})
+const courseCalculationCardType = computed<'success' | 'warning' | 'info'>(() => {
+  if (!allTeachingClasses.value.length) return 'info'
+  if (!classesWithoutCalculationCount.value) return 'success'
+  return 'warning'
+})
+const courseCalculationCardHint = computed(() => {
+  if (!allTeachingClasses.value.length) return '先准备教学班'
+  if (!classesWithoutCalculationCount.value) return '全部班级已覆盖'
+  return `还差 ${classesWithoutCalculationCount.value} 个班级`
+})
+const courseCalculationCardMessage = computed(() => {
+  if (!allTeachingClasses.value.length) {
+    return '当前还没有教学班数据，建议先去成绩页补教学班、学生和成绩。'
+  }
+  if (!classesWithoutCalculationCount.value) {
+    return '当前所有教学班都已有课程级结果，这一层已经全部覆盖。'
+  }
+  return `当前全局还有 ${classesWithoutCalculationCount.value} 个教学班未完成课程级计算，建议先处理这些班级。`
+})
 const currentMajorHasCalculationResult = computed(() => (majorCalculationResult.value?.totalRecords ?? 0) > 0)
 const readyMajorCourseStatusCount = computed(
   () => majorCalculationDashboard.value?.courseStatusList?.filter((item) => item.hasAchievementData).length ?? 0
@@ -961,5 +1047,57 @@ onBeforeUnmount(() => {
   color: #20324d;
   font-size: 18px;
   font-weight: 600;
+}
+
+.course-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.course-card-metric {
+  padding: 14px;
+  border-radius: 14px;
+  background: #f7faff;
+  border: 1px solid #e8edf5;
+}
+
+.course-card-label {
+  color: #6c7b90;
+  font-size: 13px;
+}
+
+.course-card-value {
+  margin: 8px 0 6px;
+  color: #20324d;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.pending-class-list {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.pending-class-title {
+  color: #20324d;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pending-class-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff8ef;
+  color: #7a5a1f;
+}
+
+.pending-class-item small {
+  color: #9a7d47;
 }
 </style>
