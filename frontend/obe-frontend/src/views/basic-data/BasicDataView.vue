@@ -292,6 +292,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, UploadProps, UploadUserFile } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
+import { createSysUser } from '@/api/auth'
 import { createCollege, deleteCollege, listColleges, pageColleges, updateCollege } from '@/api/college'
 import { createCourse, deleteCourse, downloadCourseTemplate, importCoursesFromExcel, pageCourses, updateCourse } from '@/api/course'
 import {
@@ -313,6 +314,7 @@ import type {
   CourseImportResult,
   CourseUpdateRequest,
   CourseVO,
+  CreateUserRequest,
   GraduationRequirementCreateRequest,
   GraduationRequirementUpdateRequest,
   GraduationRequirementVO,
@@ -330,6 +332,7 @@ import type {
   SysDictSchoolYearCreateRequest,
   SysDictSchoolYearUpdateRequest,
   SysDictSchoolYearVO,
+  SysUserVO,
   TeachingClassVO
 } from '@/api/backend'
 
@@ -342,6 +345,10 @@ const colleges = ref<SysDictCollegeSimpleVO[]>([])
 const collegeRecords = ref<SysDictCollegeVO[]>([])
 const schoolYearRecords = ref<SysDictSchoolYearVO[]>([])
 const teachingClasses = ref<TeachingClassVO[]>([])
+const userDialogVisible = ref(false)
+const submittingUser = ref(false)
+const userFormRef = ref<FormInstance>()
+const createdUsers = ref<SysUserVO[]>([])
 
 const loadingCourses = ref(false)
 const loadingRequirements = ref(false)
@@ -447,10 +454,24 @@ const indicatorForm = reactive<IndicatorPointCreateRequest>({
   requirementId: 0
 })
 
+const userForm = reactive<CreateUserRequest>({
+  username: '',
+  password: '',
+  roleCode: 'teacher',
+  collegeId: undefined,
+  status: 1
+})
+
 const indicatorRules: FormRules<IndicatorPointCreateRequest> = {
   indicatorCode: [{ required: true, message: '请输入指标点编号', trigger: 'blur' }],
   indicatorName: [{ required: true, message: '请输入指标点名称', trigger: 'blur' }],
   requirementId: [{ required: true, message: '请选择所属毕业要求', trigger: 'change' }]
+}
+
+const userRules: FormRules<CreateUserRequest> = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入初始密码', trigger: 'blur' }],
+  roleCode: [{ required: true, message: '请选择角色', trigger: 'change' }]
 }
 
 const getCourseStudentCount = (courseId: number) => {
@@ -568,6 +589,15 @@ const resetIndicatorForm = () => {
   indicatorForm.description = ''
   indicatorForm.requirementId = requirements.value[0]?.id || 0
   indicatorFormRef.value?.clearValidate()
+}
+
+const resetUserForm = () => {
+  userForm.username = ''
+  userForm.password = ''
+  userForm.roleCode = 'teacher'
+  userForm.collegeId = colleges.value[0]?.id
+  userForm.status = 1
+  userFormRef.value?.clearValidate()
 }
 
 const openCreateDialog = () => {
