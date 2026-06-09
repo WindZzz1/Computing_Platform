@@ -408,7 +408,7 @@ const userDialogVisible = ref(false)
 const submittingUser = ref(false)
 const userFormRef = ref<FormInstance>()
 const recentCreatedUser = ref<SysUserVO>()
-const selectedUserRole = ref<'teacher' | 'leader' | 'edu'>('teacher')
+const selectedUserRole = ref<'teacher' | 'leader' | 'edu' | 'admin'>('teacher')
 const roleUsers = ref<SysUserVO[]>([])
 const loadingUsers = ref(false)
 
@@ -539,7 +539,8 @@ const userRules: FormRules<CreateUserRequest> = {
 const userRoleOptions = [
   { label: '课程教师', value: 'teacher' },
   { label: '专业负责人', value: 'leader' },
-  { label: '教务管理员', value: 'edu' }
+  { label: '教务管理员', value: 'edu' },
+  { label: '系统管理员', value: 'admin' }
 ] as const
 
 const roleLabelMap: Record<string, string> = {
@@ -1194,7 +1195,7 @@ const submitUser = async () => {
 
     userDialogVisible.value = false
     if (selectedUserRole.value !== userForm.roleCode) {
-      selectedUserRole.value = userForm.roleCode as 'teacher' | 'leader' | 'edu'
+      selectedUserRole.value = userForm.roleCode as 'teacher' | 'leader' | 'edu' | 'admin'
     }
     await loadUsersByRole()
     ElMessage.success('用户已创建')
