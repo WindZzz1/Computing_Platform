@@ -224,7 +224,13 @@
       </div>
 
       <div class="panel span-4">
-        <h3 class="panel-title">联调提示</h3>
+        <div class="toolbar">
+          <div>
+            <h3 class="panel-title">联调提示</h3>
+            <span class="muted">根据当前首页状态，把最值得优先处理的问题拆得更细一点。</span>
+          </div>
+          <el-tag :type="noticeSummaryType">{{ noticeSummaryTag }}</el-tag>
+        </div>
         <div class="notice-list">
           <div v-for="notice in notices" :key="notice.title" class="notice-item">
             <div>
@@ -355,6 +361,7 @@ type NoticeItem = {
   desc: string
   tag: string
   type: 'success' | 'warning' | 'info'
+  level: 'base' | 'course' | 'major' | 'matrix'
 }
 
 type CalculationEntryAction = {
@@ -502,6 +509,24 @@ const majorResultCardMessage = computed(() => {
 const majorResultIndicatorPreview = computed<MajorCalculationAchievementItem[]>(() =>
   (majorCalculationResult.value?.achievements ?? []).slice(0, 3)
 )
+const noticeSummaryTag = computed(() => {
+  if (!selectedMajorId.value) return '待选专业'
+  if (!selectedTermId.value || !selectedGrade.value.trim()) return '待补筛选条件'
+  if (classesWithoutCalculationCount.value) return '优先补课程级'
+  if (majorCalculationDashboard.value?.canCalculate && !currentMajorHasCalculationResult.value) return '可推进专业级'
+  if (currentMajorHasCalculationResult.value) return '可复核结果'
+  if (!matrixCheckValid.value) return '矩阵待完善'
+  return '继续联调'
+})
+const noticeSummaryType = computed<'success' | 'warning' | 'info'>(() => {
+  if (!selectedMajorId.value) return 'info'
+  if (!selectedTermId.value || !selectedGrade.value.trim()) return 'info'
+  if (classesWithoutCalculationCount.value) return 'warning'
+  if (majorCalculationDashboard.value?.canCalculate && !currentMajorHasCalculationResult.value) return 'info'
+  if (currentMajorHasCalculationResult.value) return 'success'
+  if (!matrixCheckValid.value) return 'warning'
+  return 'info'
+})
 const courseCalculationAction = computed<CalculationEntryAction>(() => {
   if (!allTeachingClasses.value.length) {
     return {
@@ -786,7 +811,8 @@ const notices = computed(() => {
       title: '首页已切换为真实数据看板',
       desc: '不再使用演示用达成度和假通知，全部来自当前已经接通的后端接口。',
       tag: '已完成',
-      type: 'success' as const
+      type: 'success' as const,
+      level: 'base'
     }
   ]
 
@@ -795,7 +821,8 @@ const notices = computed(() => {
       title: '下一步先选择专业',
       desc: '选定专业后，首页才能联动课程级状态、矩阵校验和专业级结果提示。',
       tag: '待处理',
-      type: 'info' as const
+      type: 'info' as const,
+      level: 'base'
     })
     return dynamicNotices
   }
@@ -805,28 +832,32 @@ const notices = computed(() => {
       title: '专业级结果还缺查询条件',
       desc: '补齐学年学期和年级后，首页才能继续读取当前专业的专业级结果和可计算状态。',
       tag: '待补条件',
-      type: 'warning' as const
+      type: 'warning' as const,
+      level: 'major'
     })
   } else if (currentMajorHasCalculationResult.value) {
     dynamicNotices.push({
       title: '当前专业已生成专业级结果',
       desc: `当前条件下已生成 ${majorCalculationResult.value?.totalRecords ?? 0} 条结果，适合继续看细节或准备报表。`,
       tag: '结果可用',
-      type: 'success' as const
+      type: 'success' as const,
+      level: 'major'
     })
   } else if (majorCalculationDashboard.value?.canCalculate) {
     dynamicNotices.push({
       title: '当前专业可以继续专业级计算',
       desc: '课程级结果已经具备，下一步最直接的是去计算中心执行专业级计算并写入结果。',
       tag: '可推进',
-      type: 'info' as const
+      type: 'info' as const,
+      level: 'major'
     })
   } else {
     dynamicNotices.push({
       title: '当前专业还在补前置数据',
       desc: majorCalculationDashboard.value?.errorMessage || '课程级结果、矩阵权重或教学班条件还没完全齐备。',
       tag: '待补齐',
-      type: 'warning' as const
+      type: 'warning' as const,
+      level: 'major'
     })
   }
 
@@ -835,14 +866,16 @@ const notices = computed(() => {
       title: '仍有教学班缺少课程级结果',
       desc: `全局还有 ${classesWithoutCalculationCount.value} 个教学班未形成课程级结果，首页建议继续优先补这一层。`,
       tag: '课程级待补',
-      type: 'warning' as const
+      type: 'warning' as const,
+      level: 'course'
     })
   } else {
     dynamicNotices.push({
       title: '课程级计算已全部覆盖',
       desc: '所有教学班都已有课程级结果，可以把重心更多放到专业级结果复核与首页展示。',
       tag: '已覆盖',
-      type: 'success' as const
+      type: 'success' as const,
+      level: 'course'
     })
   }
 
@@ -851,18 +884,30 @@ const notices = computed(() => {
       title: '当前专业矩阵还需要再检查',
       desc: matrixCheckMessage.value || '矩阵权重还没有完全通过校验，会影响后续专业级计算稳定性。',
       tag: '矩阵待完善',
-      type: 'warning' as const
+      type: 'warning' as const,
+      level: 'matrix'
     })
   } else if (selectedMajorId.value) {
     dynamicNotices.push({
       title: '当前专业矩阵校验通过',
       desc: `当前专业已有 ${readyIndicatorCount.value} 个指标点达到可用状态，适合继续推进真实结果展示。`,
       tag: '矩阵就绪',
-      type: 'success' as const
+      type: 'success' as const,
+      level: 'matrix'
     })
   }
 
-  return dynamicNotices.slice(0, 4)
+  return dynamicNotices
+    .sort((a, b) => {
+      const priorityMap: Record<NoticeItem['level'], number> = {
+        course: 0,
+        major: 1,
+        matrix: 2,
+        base: 3
+      }
+      return priorityMap[a.level] - priorityMap[b.level]
+    })
+    .slice(0, 4)
 })
 
 const quickEntries = [
