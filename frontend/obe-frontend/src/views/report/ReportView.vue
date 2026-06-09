@@ -12,6 +12,24 @@
       class="summary-alert"
     />
 
+    <section class="summary-metrics">
+      <el-card shadow="never" class="metric-card">
+        <span class="metric-label">可继续联调的能力</span>
+        <strong class="metric-value">{{ availableReportCount }}</strong>
+        <span class="metric-tip">当前角色可直接继续接的接口或导出能力</span>
+      </el-card>
+      <el-card shadow="never" class="metric-card">
+        <span class="metric-label">待后端补完</span>
+        <strong class="metric-value">{{ pendingReportCount }}</strong>
+        <span class="metric-tip">接口已开放但服务层仍可能返回未完成提示</span>
+      </el-card>
+      <el-card shadow="never" class="metric-card">
+        <span class="metric-label">矩阵准备度</span>
+        <strong class="metric-value">{{ readyIndicatorCount }}/{{ indicatorRows.length || 0 }}</strong>
+        <span class="metric-tip">当前专业下已满足列权重要求的指标点数量</span>
+      </el-card>
+    </section>
+
     <section class="page-grid top-grid">
       <div class="panel span-5">
         <div class="toolbar">
@@ -97,6 +115,11 @@
           </el-descriptions>
         </el-card>
       </div>
+      <el-empty
+        v-else-if="courseClasses.length && !courseActionLoading"
+        description="当前还没有课程报表返回结果。你可以先下载模板，或者直接查询一次报表数据验证接口状态。"
+        class="section-empty"
+      />
     </section>
 
     <section v-if="canUseMajorReport" class="panel action-panel">
@@ -161,6 +184,11 @@
           </el-descriptions>
         </el-card>
       </div>
+      <el-empty
+        v-else-if="majors.length && schoolYears.length && !majorActionLoading"
+        description="当前还没有专业报表返回结果。请先选好专业、学期和年级，再发起真实接口查询。"
+        class="section-empty"
+      />
     </section>
 
     <section v-if="canUseMatrixLedger" class="panel action-panel">
@@ -283,6 +311,9 @@ const majorStatus = ref<StatusState>()
 
 const selectedMajor = computed(() => majors.value.find((item) => item.id === selectedMajorId.value))
 const canSubmitMajorRequest = computed(() => Boolean(selectedMajorId.value && selectedTermId.value && selectedGrade.value))
+const availableReportCount = computed(() => reportCatalog.value.filter((item) => item.tagType === 'success').length)
+const pendingReportCount = computed(() => reportCatalog.value.filter((item) => item.tagType === 'warning').length)
+const readyIndicatorCount = computed(() => indicatorRows.value.filter((item) => item.ready).length)
 
 const roleSummary = computed<StatusState>(() => {
   if (canUseCourseReport.value) {
@@ -828,6 +859,40 @@ onMounted(async () => {
   margin-bottom: 20px;
 }
 
+.summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.metric-card {
+  border: 1px solid var(--line);
+}
+
+.metric-label,
+.metric-tip {
+  display: block;
+}
+
+.metric-label {
+  color: #4b5d79;
+  font-size: 13px;
+}
+
+.metric-value {
+  display: block;
+  margin: 10px 0 6px;
+  color: #123259;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.metric-tip {
+  color: #6b7b93;
+  font-size: 12px;
+}
+
 .action-panel {
   margin-top: 20px;
 }
@@ -851,5 +916,9 @@ onMounted(async () => {
 
 .result-card {
   border: 1px solid var(--line);
+}
+
+.section-empty {
+  padding: 18px 0 6px;
 }
 </style>
