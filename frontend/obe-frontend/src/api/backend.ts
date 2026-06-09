@@ -390,6 +390,109 @@ export interface PenetrationAccountVO {
   studentScores?: Array<Record<string, unknown>>
 }
 
+export interface AchievementCalculationRequest {
+  classId: number
+  forceRecalculate?: boolean
+}
+
+export interface AchievementLevelStats {
+  totalStudents?: number
+  totalObjectives?: number
+  totalIndicators?: number
+  totalRecords?: number
+  averageAchievement?: number | string
+  minAchievement?: number | string
+  maxAchievement?: number | string
+}
+
+export interface AchievementCalculationResultVO {
+  success?: boolean
+  classId?: number
+  calcStartTime?: string
+  calcEndTime?: string
+  errorMessage?: string
+  levelOneStats?: AchievementLevelStats
+  levelTwoStats?: AchievementLevelStats
+}
+
+export interface AchievementCalculationStatusVO {
+  classId?: number
+  className?: string
+  courseId?: number
+  termId?: number
+  levelOneRecordCount?: number
+  levelTwoRecordCount?: number
+  hasCalculationResult?: boolean
+}
+
+export interface MajorCalculationRequest {
+  majorId: number
+  termId?: number | null
+  grade?: string
+  forceRecalculate?: boolean
+}
+
+export interface MajorDashboardQueryRequest {
+  majorId: number
+  termId?: number | null
+  grade?: string
+  current?: number
+  pageSize?: number
+}
+
+export interface MajorCourseStatusItem {
+  classId?: number
+  className?: string
+  courseId?: number
+  hasAchievementData?: boolean
+  achievementDataCount?: number
+}
+
+export interface MajorCalculationDashboardVO {
+  majorId?: number
+  termId?: number
+  grade?: string
+  majorName?: string
+  termName?: string
+  totalCourses?: number
+  coursesWithData?: number
+  canCalculate?: boolean
+  errorMessage?: string
+  courseStatusList?: MajorCourseStatusItem[]
+}
+
+export interface MajorCalculationAchievementItem {
+  indicatorId?: number
+  indicatorCode?: string
+  indicatorName?: string
+  requirementId?: number
+  requirementCode?: string
+  requirementName?: string
+  achievement?: number | string
+  meetsThreshold?: boolean
+  supportingCourseCount?: number
+}
+
+export interface MajorCalculationResultVO {
+  success?: boolean
+  calcStatus?: number
+  majorId?: number
+  majorName?: string
+  termId?: number
+  termName?: string
+  grade?: string
+  totalIndicators?: number
+  totalRecords?: number
+  averageAchievement?: number | string
+  minAchievement?: number | string
+  maxAchievement?: number | string
+  threshold?: number | string
+  meetsGraduationRequirement?: boolean
+  calcEndTime?: string
+  errorMessage?: string
+  achievements?: MajorCalculationAchievementItem[]
+}
+
 export interface IndicatorPointVO {
   id: number
   indicatorCode: string

@@ -19,7 +19,7 @@ const featureRoles: Record<FeatureKey, Role[]> = {
   matrix: ['admin', 'edu'],
   syllabus: ['admin', 'teacher'],
   score: ['admin', 'edu'],
-  calculation: ['admin', 'edu'],
+  calculation: ['admin', 'edu', 'leader', 'teacher'],
   report: ['admin', 'edu', 'leader', 'teacher']
 }
 
