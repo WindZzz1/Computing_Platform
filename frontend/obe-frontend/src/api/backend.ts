@@ -310,6 +310,86 @@ export interface StudentScoreUpdateRequest {
   scores: StudentScoreUpdateItem[]
 }
 
+export interface CourseAchievementReportRequest {
+  classId: number
+  exportFormat?: 'EXCEL' | 'PDF'
+  includeStudentDetails?: boolean
+  includeIndicatorAchievement?: boolean
+}
+
+export interface CourseAchievementReportVO {
+  classId?: number
+  className?: string
+  courseCode?: string
+  courseName?: string
+  teacherName?: string
+  yearName?: string
+  semesterName?: string
+  studentCount?: number
+  objectiveSummaries?: Array<{
+    objectiveId?: number
+    objectiveCode?: string
+    objectiveName?: string
+    classAverage?: number
+    passRate?: number
+    studentCount?: number
+  }>
+  indicatorAchievements?: Array<{
+    indicatorId?: number
+    indicatorCode?: string
+    indicatorName?: string
+    achievement?: number
+    calculationTime?: string
+  }>
+  reportGeneratedTime?: string
+  calculationTime?: string
+}
+
+export interface MajorReportRequest {
+  majorId: number
+  termId: number
+  grade: string
+  reportType?: 'RADAR' | 'ACCOUNT'
+}
+
+export interface MajorAchievementRadarVO {
+  majorId?: number
+  majorName?: string
+  majorCode?: string
+  yearName?: string
+  semesterName?: string
+  grade?: string
+  indicatorPoints?: Array<{
+    indicatorId?: number
+    indicatorCode?: string
+    indicatorName?: string
+    achievement?: number
+    requirementId?: number
+    requirementCode?: string
+    requirementName?: string
+  }>
+  generatedTime?: string
+}
+
+export interface PenetrationAccountVO {
+  majorInfo?: {
+    majorId?: number
+    majorName?: string
+    majorCode?: string
+    termId?: number
+    yearName?: string
+    semesterName?: string
+    grade?: string
+    totalCourses?: number
+    totalStudents?: number
+    overallAchievement?: number
+  }
+  courses?: Array<Record<string, unknown>>
+  studentObjectives?: Array<Record<string, unknown>>
+  assessmentPoints?: Array<Record<string, unknown>>
+  studentScores?: Array<Record<string, unknown>>
+}
+
 export interface IndicatorPointVO {
   id: number
   indicatorCode: string
