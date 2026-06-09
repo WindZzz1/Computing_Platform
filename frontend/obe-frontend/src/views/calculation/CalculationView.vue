@@ -76,6 +76,14 @@
           </div>
 
           <el-alert
+            v-if="courseGuideMessage"
+            :title="courseGuideMessage"
+            :type="courseGuideType"
+            show-icon
+            class="block-alert"
+          />
+
+          <el-alert
             v-if="courseStatusMessage"
             :title="courseStatusMessage"
             type="success"
@@ -192,6 +200,14 @@
             <div class="summary-value">{{ hasMajorResult ? '是' : '否' }}</div>
           </el-card>
         </div>
+
+        <el-alert
+          v-if="majorGuideMessage"
+          :title="majorGuideMessage"
+          :type="majorGuideType"
+          show-icon
+          class="block-alert"
+        />
 
         <el-alert
           v-if="majorDashboard?.errorMessage"
@@ -350,9 +366,54 @@ const courseStatusMessage = computed(() => {
     : '当前教学班还没有课程级达成度结果，建议先执行一次课程级计算。'
 })
 
+const courseGuideMessage = computed(() => {
+  if (!teacherTeachingClasses.value.length) {
+    return ''
+  }
+  if (!selectedCourseClassId.value) {
+    return '先选择一个教学班，再查看当前班级是否已有一级、二级达成度结果。'
+  }
+  if (courseCalculationError.value) {
+    return ''
+  }
+  if (!courseCalculationStatus.value?.hasCalculationResult) {
+    return '建议顺序：先确认成绩已经导入，再执行课程级计算，得到一级和二级达成度记录。'
+  }
+  return '当前班级课程级结果已具备。如果后续要做专业级计算，可以切到右侧继续查看专业看板。'
+})
+
+const courseGuideType = computed<'info' | 'success'>(() =>
+  courseCalculationStatus.value?.hasCalculationResult ? 'success' : 'info'
+)
+
 const canQueryMajorCalculation = computed(() => Boolean(selectedMajorId.value && selectedTermId.value && selectedGrade.value.trim()))
 const canRunMajorCalculationNow = computed(() => majorDashboard.value?.canCalculate ?? false)
 const hasMajorResult = computed(() => (majorCalculationResult.value?.totalRecords ?? 0) > 0)
+
+const majorGuideMessage = computed(() => {
+  if (!canMajorQueryData.value) {
+    return ''
+  }
+  if (!canQueryMajorCalculation.value) {
+    return '先补齐专业、学年学期和年级这 3 个条件，页面才会读取专业级看板和结果。'
+  }
+  if (majorCalculationError.value) {
+    return ''
+  }
+  if (majorDashboard.value?.canCalculate) {
+    return hasMajorResult.value
+      ? '当前条件下已经有专业级计算结果。你可以重新查看结果，也可以在确认需要时强制重算。'
+      : '当前条件下已经具备专业级计算前置条件，可以直接执行三级计算。'
+  }
+  return '当前还有课程缺少课程级达成度结果，先在左侧完成课程级计算，再回来执行专业级计算。'
+})
+
+const majorGuideType = computed<'info' | 'success' | 'warning'>(() => {
+  if (majorDashboard.value?.canCalculate) {
+    return hasMajorResult.value ? 'success' : 'info'
+  }
+  return 'warning'
+})
 
 function buildClassLabel(item: TeachingClassVO) {
   const course = item.courseName || item.courseCode || '未命名课程'
