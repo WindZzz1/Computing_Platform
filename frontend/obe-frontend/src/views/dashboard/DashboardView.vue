@@ -88,6 +88,54 @@
           show-icon
           style="margin-top: 12px"
         />
+        <div
+          v-if="selectedMajorId && (readyMajorCourseStatusCount || pendingMajorCourseStatusList.length)"
+          class="major-course-status-board"
+        >
+          <div class="major-course-status-head">
+            <div>
+              <div class="major-course-status-title">专业级计算前置明细</div>
+              <div class="muted">首页直接显示当前专业还差哪些课程级结果，方便继续联调和补数据。</div>
+            </div>
+            <el-tag :type="pendingMajorCourseStatusList.length ? 'warning' : 'success'" effect="light">
+              {{ pendingMajorCourseStatusList.length ? `待补 ${pendingMajorCourseStatusList.length}` : '已全部齐备' }}
+            </el-tag>
+          </div>
+
+          <div class="major-course-status-metrics">
+            <div class="major-course-status-metric">
+              <strong>{{ readyMajorCourseStatusCount }}</strong>
+              <span>已具备课程级结果</span>
+            </div>
+            <div class="major-course-status-metric warning">
+              <strong>{{ pendingMajorCourseStatusList.length }}</strong>
+              <span>仍待补齐</span>
+            </div>
+          </div>
+
+          <div v-if="pendingMajorCourseStatusList.length" class="pending-class-list major-pending-list">
+            <div class="pending-class-title">待补课程级结果的课程 / 教学班</div>
+            <div
+              v-for="item in pendingMajorCourseStatusPreview"
+              :key="`${item.classId ?? 'class'}-${item.courseId ?? 'course'}`"
+              class="pending-class-item"
+            >
+              <span>{{ item.className || `班级 ${item.classId ?? '-'}` }}</span>
+              <small>{{ formatPendingMajorCourseMeta(item) }}</small>
+            </div>
+            <div v-if="pendingMajorCourseStatusList.length > pendingMajorCourseStatusPreview.length" class="major-status-more">
+              还有 {{ pendingMajorCourseStatusList.length - pendingMajorCourseStatusPreview.length }} 门课程待补，可前往计算中心继续排查。
+            </div>
+          </div>
+          <el-alert
+            v-else
+            title="当前专业相关课程都已有课程级结果，可以直接继续专业级计算或复核结果。"
+            type="success"
+            :closable="false"
+            show-icon
+            style="margin-top: 14px"
+          />
+        </div>
         <div class="action-strip">
           <el-button type="primary" @click="goToCalculationWithHint(primaryCalculationAction)">
             {{ primaryCalculationAction.buttonText }}
@@ -649,6 +697,7 @@ const readyMajorCourseStatusCount = computed(
 const pendingMajorCourseStatusList = computed(
   () => (majorCalculationDashboard.value?.courseStatusList ?? []).filter((item) => !item.hasAchievementData)
 )
+const pendingMajorCourseStatusPreview = computed(() => pendingMajorCourseStatusList.value.slice(0, 4))
 
 const readyIndicatorCount = computed(() => {
   const matrixData = majorMatrixConfig.value?.matrixData ?? []
@@ -768,7 +817,11 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
         status: majorCalculationDashboard.value?.canCalculate ? '已具备' : '待补齐',
         statusLabel: majorCalculationDashboard.value?.canCalculate ? '课程级已齐备' : '课程级待补齐',
         statusType: majorCalculationDashboard.value?.canCalculate ? 'success' : 'warning',
-        hint: majorCalculationDashboard.value?.errorMessage || '课程级结果齐全后，才可以继续专业级计算'
+        hint: pendingMajorCourseStatusList.value.length
+          ? `还差 ${pendingMajorCourseStatusList.value.length} 门课程未形成课程级结果，优先处理 ${pendingMajorCourseStatusPreview.value
+              .map((item) => item.className || `班级${item.classId ?? '-'}`)
+              .join('、')}${pendingMajorCourseStatusList.value.length > pendingMajorCourseStatusPreview.value.length ? ' 等' : ''}`
+          : majorCalculationDashboard.value?.errorMessage || '课程级结果齐全后，才可以继续专业级计算'
       },
       {
         label: '专业级结果',
@@ -1224,6 +1277,16 @@ function formatRecordTime(value?: string | null) {
   return `${date.getMonth() + 1}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
+function formatPendingMajorCourseMeta(item: { courseId?: number; classId?: number; achievementDataCount?: number }) {
+  const courseLabel = item.courseId ? `课程 ID ${item.courseId}` : '课程待确认'
+  const classLabel = item.classId ? `班级 ID ${item.classId}` : '班级待确认'
+  const countLabel =
+    item.achievementDataCount !== undefined && item.achievementDataCount !== null
+      ? `当前记录 ${item.achievementDataCount} 条`
+      : '当前还没有课程级结果'
+  return `${courseLabel} · ${classLabel} · ${countLabel}`
+}
+
 function buildFallbackSortTime() {
   return new Date().toISOString()
 }
@@ -1440,6 +1503,60 @@ onBeforeUnmount(() => {
   margin-top: 12px;
 }
 
+.major-course-status-board {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid #e8edf5;
+  background: linear-gradient(180deg, #f9fbff 0%, #ffffff 100%);
+}
+
+.major-course-status-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.major-course-status-title {
+  color: #20324d;
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.major-course-status-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.major-course-status-metric {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f4f8ff;
+  border: 1px solid #dfe8f5;
+}
+
+.major-course-status-metric.warning {
+  background: #fff8ef;
+  border-color: #f5dfb6;
+}
+
+.major-course-status-metric strong {
+  color: #20324d;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.major-course-status-metric span {
+  color: #6c7b90;
+  font-size: 13px;
+}
+
 .status-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1497,6 +1614,10 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+.major-pending-list {
+  margin-top: 16px;
+}
+
 .pending-class-title {
   color: #20324d;
   font-size: 13px;
@@ -1515,6 +1636,11 @@ onBeforeUnmount(() => {
 
 .pending-class-item small {
   color: #9a7d47;
+}
+
+.major-status-more {
+  color: #6c7b90;
+  font-size: 12px;
 }
 
 .empty-guide-box {
