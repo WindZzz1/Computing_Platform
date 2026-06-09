@@ -89,7 +89,9 @@
           style="margin-top: 12px"
         />
         <div class="action-strip">
-          <el-button type="primary" @click="$router.push('/calculation')">去计算中心继续处理</el-button>
+          <el-button type="primary" @click="goToCalculationWithHint(primaryCalculationAction)">
+            {{ primaryCalculationAction.buttonText }}
+          </el-button>
           <el-button plain @click="$router.push('/score')">去成绩页补课程级前置数据</el-button>
           <el-button plain @click="$router.push('/matrix')">去矩阵页检查支撑关系</el-button>
         </div>
@@ -151,8 +153,8 @@
           </div>
         </div>
 
-        <el-button style="margin-top: 14px" type="primary" plain @click="$router.push('/calculation')">
-          去计算中心补课程级结果
+        <el-button style="margin-top: 14px" type="primary" plain @click="goToCalculationWithHint(courseCalculationAction)">
+          {{ courseCalculationAction.buttonText }}
         </el-button>
       </div>
 
@@ -202,8 +204,8 @@
           </div>
         </div>
 
-        <el-button style="margin-top: 14px" type="primary" plain @click="$router.push('/calculation')">
-          去计算中心查看专业级结果
+        <el-button style="margin-top: 14px" type="primary" plain @click="goToCalculationWithHint(majorCalculationAction)">
+          {{ majorCalculationAction.buttonText }}
         </el-button>
       </div>
 
@@ -355,6 +357,11 @@ type NoticeItem = {
   type: 'success' | 'warning' | 'info'
 }
 
+type CalculationEntryAction = {
+  buttonText: string
+  message: string
+}
+
 const user = useUserStore()
 
 const pieEl = ref<HTMLDivElement>()
@@ -495,6 +502,66 @@ const majorResultCardMessage = computed(() => {
 const majorResultIndicatorPreview = computed<MajorCalculationAchievementItem[]>(() =>
   (majorCalculationResult.value?.achievements ?? []).slice(0, 3)
 )
+const courseCalculationAction = computed<CalculationEntryAction>(() => {
+  if (!allTeachingClasses.value.length) {
+    return {
+      buttonText: '先准备教学班再去计算中心',
+      message: '当前还没有教学班，建议先去成绩页补教学班、学生和成绩，再进入计算中心。'
+    }
+  }
+  if (classesWithoutCalculationCount.value) {
+    return {
+      buttonText: `去计算中心补 ${classesWithoutCalculationCount.value} 个班的课程级结果`,
+      message: '首页检测到还有教学班未形成课程级结果，进入计算中心后优先处理课程级计算。'
+    }
+  }
+  return {
+    buttonText: '去计算中心复核课程级结果',
+    message: '当前所有教学班都已有课程级结果，进入计算中心后适合做课程级结果复核。'
+  }
+})
+const majorCalculationAction = computed<CalculationEntryAction>(() => {
+  if (!selectedMajorId.value) {
+    return {
+      buttonText: '先选择专业再去计算中心',
+      message: '首页还没锁定专业，建议先选专业，再进入计算中心查看对应专业级结果。'
+    }
+  }
+  if (!selectedTermId.value || !selectedGrade.value.trim()) {
+    return {
+      buttonText: '补齐筛选条件后去计算中心',
+      message: '专业级结果依赖学年学期和年级，补齐条件后再进入计算中心更合适。'
+    }
+  }
+  if (currentMajorHasCalculationResult.value) {
+    return {
+      buttonText: '去计算中心查看专业级结果',
+      message: '当前专业级结果已生成，进入计算中心后可以继续查看专业级结果细节。'
+    }
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return {
+      buttonText: '去计算中心执行专业级计算',
+      message: '课程级前置条件已经齐备，进入计算中心后优先执行专业级计算。'
+    }
+  }
+  return {
+    buttonText: '去计算中心检查专业级前置条件',
+    message: '当前专业级结果还没准备好，进入计算中心后可以继续排查课程级结果和专业级前置条件。'
+  }
+})
+const primaryCalculationAction = computed<CalculationEntryAction>(() => {
+  if (currentMajorHasCalculationResult.value) {
+    return majorCalculationAction.value
+  }
+  if (classesWithoutCalculationCount.value) {
+    return courseCalculationAction.value
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return majorCalculationAction.value
+  }
+  return courseCalculationAction.value
+})
 const readyMajorCourseStatusCount = computed(
   () => majorCalculationDashboard.value?.courseStatusList?.filter((item) => item.hasAchievementData).length ?? 0
 )
@@ -921,6 +988,13 @@ function formatNumber(value?: number | string | null) {
   if (value === undefined || value === null || value === '') return '-'
   const num = Number(value)
   return Number.isNaN(num) ? String(value) : num.toFixed(4)
+}
+
+function goToCalculationWithHint(action: CalculationEntryAction) {
+  ElMessage.info(action.message)
+  window.setTimeout(() => {
+    window.location.hash = '#/calculation'
+  }, 120)
 }
 
 const openDoc = () => {
