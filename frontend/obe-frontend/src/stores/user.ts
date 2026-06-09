@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { loginWithToken } from '@/api/auth'
+import { getLoginUser, loginWithToken } from '@/api/auth'
 import type { SysUserLoginVO } from '@/api/backend'
 import type { Role } from '@/types'
 
@@ -21,19 +21,34 @@ export const useUserStore = defineStore('user', {
     roleName: (state) => roleNames[state.role]
   },
   actions: {
-    async login(username: string, password: string) {
-      const result: SysUserLoginVO = await loginWithToken({ username, password })
+    applyUser(result: SysUserLoginVO) {
       this.name = result.username
       this.role = result.roleCode as Role
-      this.token = result.token
       this.collegeName = result.collegeName || ''
+      if (result.token) {
+        this.token = result.token
+      }
       localStorage.setItem('role', this.role)
       localStorage.setItem('name', this.name)
       localStorage.setItem('token', this.token)
       localStorage.setItem('collegeName', this.collegeName)
     },
+    async login(username: string, password: string) {
+      const result: SysUserLoginVO = await loginWithToken({ username, password })
+      this.applyUser(result)
+    },
+    async syncCurrentUser() {
+      if (!this.token) return
+      const result: SysUserLoginVO = await getLoginUser()
+      this.applyUser({
+        ...result,
+        token: this.token
+      })
+    },
     logout() {
       this.token = ''
+      this.name = 'admin'
+      this.role = 'admin'
       this.collegeName = ''
       localStorage.removeItem('token')
       localStorage.removeItem('name')
