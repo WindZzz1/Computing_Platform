@@ -173,6 +173,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { listCourses } from '@/api/course'
@@ -225,6 +226,7 @@ type AssessmentRow = {
   raw: AssessmentPointVO
 }
 
+const route = useRoute()
 const loading = ref(false)
 const courses = ref<CourseSimpleVO[]>([])
 const currentCourseId = ref<number>()
@@ -275,6 +277,12 @@ const assessmentRules: FormRules<AssessmentPointCreateRequest> = {
 const currentCourseLabel = computed(() => {
   const course = courses.value.find((item) => item.id === currentCourseId.value)
   return course ? `${course.courseCode} - ${course.courseName}` : '未选择课程'
+})
+const routeCourseId = computed(() => {
+  const raw = route.query.courseId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
 })
 
 const objectiveRows = computed<ObjectiveRow[]>(() =>
@@ -584,7 +592,10 @@ const saveWeights = async () => {
 onMounted(async () => {
   try {
     courses.value = await listCourses()
-    currentCourseId.value = courses.value[0]?.id
+    const routeMatchedCourse = routeCourseId.value
+      ? courses.value.find((item) => item.id === routeCourseId.value)
+      : undefined
+    currentCourseId.value = routeMatchedCourse?.id ?? courses.value[0]?.id
     await reloadCourseData()
   } catch (error) {
     const message = error instanceof Error ? error.message : '课程列表加载失败'

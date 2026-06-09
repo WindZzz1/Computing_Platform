@@ -46,6 +46,9 @@
           <span>{{ selectedClass.courseName || '未绑定课程' }}</span>
           <span>{{ selectedClass.teacherName || '未分配教师' }}</span>
           <span>{{ formatTerm(selectedClass) }}</span>
+          <el-button type="primary" link :disabled="!selectedClass.courseId" @click="navigateToSyllabus">
+            去当前课程大纲
+          </el-button>
         </div>
       </div>
 
@@ -164,6 +167,9 @@
             <span class="muted">如果学生已经在系统库中，优先用按学号批量绑定；如果还没进系统，再走 Excel 导入。</span>
           </div>
           <div class="toolbar-actions">
+            <el-button type="primary" plain :disabled="!selectedClass?.courseId" @click="navigateToSyllabus">
+              去课程大纲
+            </el-button>
             <el-button type="primary" plain :disabled="!selectedClassId" @click="openBindDialog">按学号批量绑定</el-button>
             <el-button type="primary" plain :disabled="!selectedClassId" @click="loadGradeEntries()">刷新成绩</el-button>
           </div>
@@ -359,7 +365,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, UploadProps, UploadUserFile } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
@@ -403,6 +409,7 @@ type ClassFormState = TeachingClassCreateRequest
 
 const loading = ref(false)
 const route = useRoute()
+const router = useRouter()
 const classLoading = ref(false)
 const importingStudents = ref(false)
 const importingStudentsToClass = ref(false)
@@ -570,6 +577,21 @@ const routeClassId = computed(() => {
   const numeric = Number(value)
   return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
 })
+
+const navigateToSyllabus = () => {
+  if (!selectedClass.value?.courseId) {
+    ElMessage.warning('当前教学班还没有绑定课程')
+    return
+  }
+
+  void router.push({
+    path: '/syllabus',
+    query: {
+      courseId: String(selectedClass.value.courseId),
+      classId: String(selectedClass.value.id)
+    }
+  })
+}
 
 const formatTerm = (row: Pick<TeachingClassVO, 'yearName' | 'semesterName'>) =>
   row.yearName || row.semesterName ? `${row.yearName || '-'} / ${row.semesterName || '-'}` : '-'

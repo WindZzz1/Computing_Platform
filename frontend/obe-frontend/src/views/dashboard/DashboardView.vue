@@ -531,6 +531,14 @@ const pendingCourseCalculationClasses = computed(() => {
   )
   return allTeachingClasses.value.filter((item) => !calculatedClassIds.has(item.id))
 })
+const preferredContextCourseId = computed(() => {
+  const pendingMajorCourseId = pendingMajorCourseStatusList.value.find((item) => item.courseId)?.courseId
+  if (pendingMajorCourseId) return pendingMajorCourseId
+  if (pendingCourseCalculationClasses.value.length) return pendingCourseCalculationClasses.value[0].courseId
+  if (majorTeachingClasses.value.length) return majorTeachingClasses.value[0].courseId
+  if (allTeachingClasses.value.length) return allTeachingClasses.value[0].courseId
+  return undefined
+})
 const preferredContextClassId = computed(() => {
   const pendingMajorClassId = pendingMajorCourseStatusList.value.find((item) => item.classId)?.classId
   if (pendingMajorClassId) return pendingMajorClassId
@@ -1307,6 +1315,7 @@ function buildPageQuery() {
   if (selectedTermId.value) query.termId = String(selectedTermId.value)
   if (selectedGrade.value.trim()) query.grade = selectedGrade.value.trim()
   if (preferredContextClassId.value) query.classId = String(preferredContextClassId.value)
+  if (preferredContextCourseId.value) query.courseId = String(preferredContextCourseId.value)
   return query
 }
 
