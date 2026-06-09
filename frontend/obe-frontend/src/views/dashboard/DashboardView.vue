@@ -22,15 +22,38 @@
       <div class="panel span-8">
         <div class="toolbar">
           <h3 class="panel-title">专业数据准备概览</h3>
-          <el-select
-            v-model="selectedMajorId"
-            style="width: 260px"
-            clearable
-            placeholder="选择专业查看详情"
-            @change="reloadMajorBoard"
-          >
-            <el-option v-for="major in majors" :key="major.id" :label="major.majorName" :value="major.id" />
-          </el-select>
+          <div class="toolbar-actions">
+            <el-select
+              v-model="selectedMajorId"
+              style="width: 220px"
+              clearable
+              placeholder="选择专业查看详情"
+              @change="reloadMajorBoard"
+            >
+              <el-option v-for="major in majors" :key="major.id" :label="major.majorName" :value="major.id" />
+            </el-select>
+            <el-select
+              v-model="selectedTermId"
+              style="width: 220px"
+              clearable
+              placeholder="选择学年学期"
+              @change="reloadMajorBoard"
+            >
+              <el-option
+                v-for="term in schoolYears"
+                :key="term.id"
+                :label="`${term.yearName} ${term.semesterName}`"
+                :value="term.id"
+              />
+            </el-select>
+            <el-input
+              v-model="selectedGrade"
+              style="width: 150px"
+              clearable
+              placeholder="年级，如 2022"
+              @change="reloadMajorBoard"
+            />
+          </div>
         </div>
 
         <el-table v-loading="majorLoading" :data="majorOverviewRows" border>
@@ -55,6 +78,13 @@
           v-if="matrixCheckMessage"
           :title="matrixCheckMessage"
           :type="matrixCheckValid ? 'success' : 'warning'"
+          show-icon
+          style="margin-top: 12px"
+        />
+        <el-alert
+          v-if="majorCalculationSummaryMessage"
+          :title="majorCalculationSummaryMessage"
+          :type="majorCalculationSummaryType"
           show-icon
           style="margin-top: 12px"
         />
@@ -130,20 +160,26 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { getCourseAchievementCalculationStatus, getMajorCalculationDashboard, getMajorCalculationResult } from '@/api/calculation'
 import { listCourses, pageCourses } from '@/api/course'
 import { pageGraduationRequirements, pageIndicators } from '@/api/indicator'
 import { listMajors } from '@/api/major'
 import { getMatrixConfig, checkMatrixConfig } from '@/api/matrix'
 import { apiDocUrl } from '@/api/request'
+import { listSchoolYears } from '@/api/schoolyear'
 import { pageTeachingClasses } from '@/api/teaching-class'
 import type {
+  AchievementCalculationStatusVO,
   CourseSimpleVO,
   CourseVO,
   GraduationRequirementVO,
   IndicatorPointVO,
+  MajorCalculationDashboardVO,
+  MajorCalculationResultVO,
   MatrixConfigVO,
   MatrixWeightCheckVO,
   SysDictMajorSimpleVO,
+  SysDictSchoolYearVO,
   TeachingClassVO
 } from '@/api/backend'
 
@@ -174,12 +210,16 @@ const majorLoading = ref(false)
 
 const majors = ref<SysDictMajorSimpleVO[]>([])
 const selectedMajorId = ref<number>()
+const schoolYears = ref<SysDictSchoolYearVO[]>([])
+const selectedTermId = ref<number>()
+const selectedGrade = ref('')
 
 const courseList = ref<CourseSimpleVO[]>([])
 const allCourseRows = ref<CourseVO[]>([])
 const allTeachingClasses = ref<TeachingClassVO[]>([])
 const allIndicators = ref<IndicatorPointVO[]>([])
 const allRequirements = ref<GraduationRequirementVO[]>([])
+const allCalculationStatuses = ref<AchievementCalculationStatusVO[]>([])
 
 const majorCourseRows = ref<CourseVO[]>([])
 const majorRequirements = ref<GraduationRequirementVO[]>([])
@@ -187,6 +227,8 @@ const majorIndicators = ref<IndicatorPointVO[]>([])
 const majorTeachingClasses = ref<TeachingClassVO[]>([])
 const majorMatrixConfig = ref<MatrixConfigVO>()
 const majorMatrixCheck = ref<MatrixWeightCheckVO>()
+const majorCalculationDashboard = ref<MajorCalculationDashboardVO>()
+const majorCalculationResult = ref<MajorCalculationResultVO>()
 
 const selectedMajorName = computed(
   () => majors.value.find((item) => item.id === selectedMajorId.value)?.majorName || ''
@@ -208,6 +250,13 @@ const classCoveredCourseCount = computed(() => classCoveredCourseIds.value.size)
 const unconfiguredCourseCount = computed(() =>
   Math.max(majorCourseRows.value.length - configuredCourseCount.value, 0)
 )
+const classesWithCalculationCount = computed(
+  () => allCalculationStatuses.value.filter((item) => item.hasCalculationResult).length
+)
+const classesWithoutCalculationCount = computed(() =>
+  Math.max(allTeachingClasses.value.length - classesWithCalculationCount.value, 0)
+)
+const currentMajorHasCalculationResult = computed(() => (majorCalculationResult.value?.totalRecords ?? 0) > 0)
 
 const readyIndicatorCount = computed(() => {
   const matrixData = majorMatrixConfig.value?.matrixData ?? []
@@ -242,6 +291,20 @@ const metrics = computed(() => [
     sub: `覆盖课程 ${new Set(allTeachingClasses.value.map((item) => item.courseId).filter(Boolean)).size} 门`,
     icon: School,
     tone: 'yellow'
+  },
+  {
+    label: '课程级计算',
+    value: `${classesWithCalculationCount.value}/${allTeachingClasses.value.length || 0}`,
+    sub: classesWithoutCalculationCount.value ? `仍有 ${classesWithoutCalculationCount.value} 个班未计算` : '全部教学班已有课程级结果',
+    icon: Aim,
+    tone: classesWithoutCalculationCount.value ? 'yellow' : 'green'
+  },
+  {
+    label: '专业级结果',
+    value: currentMajorHasCalculationResult.value ? '已生成' : '未生成',
+    sub: selectedMajorName.value ? `${selectedMajorName.value} 当前条件结果状态` : '选择专业后查看',
+    icon: Memo,
+    tone: currentMajorHasCalculationResult.value ? 'green' : 'lock'
   },
   {
     label: '专业数',
@@ -304,6 +367,22 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
       hint: majorTeachingClasses.value.length ? '该专业已有教学班与学生规模数据' : '暂时没有查到教学班'
     },
     {
+      label: '课程级计算',
+      value: `${majorCalculationDashboard.value?.coursesWithData ?? 0} / ${majorCalculationDashboard.value?.totalCourses ?? 0}`,
+      status: majorCalculationDashboard.value?.canCalculate ? '已具备' : '待补齐',
+      statusType: majorCalculationDashboard.value?.canCalculate ? 'success' : 'warning',
+      hint: majorCalculationDashboard.value?.errorMessage || '课程级结果齐全后，才可以继续专业级计算'
+    },
+    {
+      label: '专业级结果',
+      value: currentMajorHasCalculationResult.value ? `${majorCalculationResult.value?.totalRecords ?? 0} 条` : '暂无结果',
+      status: currentMajorHasCalculationResult.value ? '已生成' : '未生成',
+      statusType: currentMajorHasCalculationResult.value ? 'success' : 'warning',
+      hint: currentMajorHasCalculationResult.value
+        ? `平均达成度 ${formatNumber(majorCalculationResult.value?.averageAchievement)}`
+        : '当前条件下还没有专业级计算结果'
+    },
+    {
       label: '矩阵校验',
       value: matrixCheckValid.value ? '通过' : '未通过',
       status: matrixCheckValid.value ? '就绪' : '待完善',
@@ -353,14 +432,14 @@ const notices = computed(() => [
     type: 'success' as const
   },
   {
-    title: '专业级计算结果接口仍未提供',
-    desc: '因此首页只展示“准备状态”，不伪造专业达成度结果和最终报表结果。',
-    tag: '后端待补',
-    type: 'warning' as const
+    title: '首页已接入真实计算结果',
+    desc: '课程级计算状态与专业级结果会按当前专业、学年学期和年级读取，不再停留在准备态说明。',
+    tag: '已接通',
+    type: 'success' as const
   },
   {
     title: '前端联调优先级建议',
-    desc: '继续优先接课程、矩阵、教学班、成绩导入这些后端已经存在的链路。',
+    desc: '继续优先补首页总览、结果穿透和跨页面跳转，让已接通能力更容易被老师和组员看见。',
     tag: '建议',
     type: 'info' as const
   }
@@ -371,9 +450,41 @@ const quickEntries = [
   { label: '支撑矩阵', path: '/matrix', icon: Grid, desc: '课程与指标点权重矩阵' },
   { label: '课程大纲', path: '/syllabus', icon: Notebook, desc: '课程目标与考核点' },
   { label: '成绩导入', path: '/score', icon: DataAnalysis, desc: '学生与教学班数据' },
-  { label: '计算准备', path: '/calculation', icon: Aim, desc: '专业级计算前置检查' },
+  { label: '计算中心', path: '/calculation', icon: Aim, desc: '课程级与专业级计算入口' },
   { label: '报表准备', path: '/report', icon: Memo, desc: '报表导出能力现状' }
 ]
+
+const majorCalculationSummaryMessage = computed(() => {
+  if (!selectedMajorId.value) {
+    return ''
+  }
+  if (!selectedTermId.value || !selectedGrade.value.trim()) {
+    return '补齐学年学期和年级后，首页才能同步读取当前专业的真实计算结果。'
+  }
+  if (currentMajorHasCalculationResult.value) {
+    return `当前专业在所选条件下已生成专业级结果，平均达成度 ${formatNumber(majorCalculationResult.value?.averageAchievement)}。`
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return '当前专业已具备专业级计算前置条件，但还没有最终结果，可以前往计算中心执行。'
+  }
+  return majorCalculationDashboard.value?.errorMessage || '当前还有课程未完成课程级计算，首页会继续提示未就绪状态。'
+})
+
+const majorCalculationSummaryType = computed<'success' | 'warning' | 'info'>(() => {
+  if (currentMajorHasCalculationResult.value) {
+    return 'success'
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return 'info'
+  }
+  return 'warning'
+})
+
+function formatNumber(value?: number | string | null) {
+  if (value === undefined || value === null || value === '') return '-'
+  const num = Number(value)
+  return Number.isNaN(num) ? String(value) : num.toFixed(4)
+}
 
 const openDoc = () => {
   window.open(apiDocUrl, '_blank')
@@ -427,6 +538,8 @@ const reloadMajorBoard = async () => {
     majorTeachingClasses.value = []
     majorMatrixConfig.value = undefined
     majorMatrixCheck.value = undefined
+    majorCalculationDashboard.value = undefined
+    majorCalculationResult.value = undefined
     await nextTick()
     renderPieChart()
     return
@@ -461,6 +574,23 @@ const reloadMajorBoard = async () => {
           columnSums: {}
         }
 
+    if (selectedTermId.value && selectedGrade.value.trim()) {
+      const request = {
+        majorId: selectedMajorId.value,
+        termId: selectedTermId.value,
+        grade: selectedGrade.value.trim()
+      }
+      const [dashboard, result] = await Promise.all([
+        getMajorCalculationDashboard({ ...request, current: 1, pageSize: 100 }),
+        getMajorCalculationResult(request)
+      ])
+      majorCalculationDashboard.value = dashboard
+      majorCalculationResult.value = result
+    } else {
+      majorCalculationDashboard.value = undefined
+      majorCalculationResult.value = undefined
+    }
+
     await nextTick()
     renderPieChart()
   } catch (error) {
@@ -474,9 +604,10 @@ const reloadMajorBoard = async () => {
 const loadPageData = async () => {
   pageLoading.value = true
   try {
-    const [majorResult, courseListResult, coursePageResult, classPageResult, requirementPageResult, indicatorPageResult] =
+    const [majorResult, schoolYearResult, courseListResult, coursePageResult, classPageResult, requirementPageResult, indicatorPageResult] =
       await Promise.all([
         listMajors(),
+        listSchoolYears(),
         listCourses(),
         pageCourses({ current: 1, pageSize: 300 }),
         pageTeachingClasses({ current: 1, pageSize: 500 }),
@@ -485,6 +616,7 @@ const loadPageData = async () => {
       ])
 
     majors.value = majorResult
+    schoolYears.value = schoolYearResult
     courseList.value = courseListResult
     allCourseRows.value = coursePageResult.records
     allTeachingClasses.value = classPageResult.records
@@ -494,6 +626,19 @@ const loadPageData = async () => {
     if (!selectedMajorId.value && majors.value.length) {
       selectedMajorId.value = majors.value[0].id
     }
+    if (!selectedTermId.value && schoolYears.value.length) {
+      selectedTermId.value = schoolYears.value[0].id
+    }
+    if (!selectedGrade.value) {
+      selectedGrade.value = String(new Date().getFullYear() - 4)
+    }
+
+    const statusResults = await Promise.allSettled(
+      classPageResult.records.map((item) => getCourseAchievementCalculationStatus(item.id))
+    )
+    allCalculationStatuses.value = statusResults
+      .filter((item): item is PromiseFulfilledResult<AchievementCalculationStatusVO> => item.status === 'fulfilled')
+      .map((item) => item.value)
 
     await reloadMajorBoard()
   } catch (error) {
