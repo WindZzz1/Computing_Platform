@@ -22,15 +22,38 @@
       <div class="panel span-8">
         <div class="toolbar">
           <h3 class="panel-title">专业数据准备概览</h3>
-          <el-select
-            v-model="selectedMajorId"
-            style="width: 260px"
-            clearable
-            placeholder="选择专业查看详情"
-            @change="reloadMajorBoard"
-          >
-            <el-option v-for="major in majors" :key="major.id" :label="major.majorName" :value="major.id" />
-          </el-select>
+          <div class="toolbar-actions">
+            <el-select
+              v-model="selectedMajorId"
+              style="width: 220px"
+              clearable
+              placeholder="选择专业查看详情"
+              @change="reloadMajorBoard"
+            >
+              <el-option v-for="major in majors" :key="major.id" :label="major.majorName" :value="major.id" />
+            </el-select>
+            <el-select
+              v-model="selectedTermId"
+              style="width: 220px"
+              clearable
+              placeholder="选择学年学期"
+              @change="reloadMajorBoard"
+            >
+              <el-option
+                v-for="term in schoolYears"
+                :key="term.id"
+                :label="`${term.yearName} ${term.semesterName}`"
+                :value="term.id"
+              />
+            </el-select>
+            <el-input
+              v-model="selectedGrade"
+              style="width: 150px"
+              clearable
+              placeholder="年级，如 2022"
+              @change="reloadMajorBoard"
+            />
+          </div>
         </div>
 
         <el-table v-loading="majorLoading" :data="majorOverviewRows" border>
@@ -58,6 +81,18 @@
           show-icon
           style="margin-top: 12px"
         />
+        <el-alert
+          v-if="majorCalculationSummaryMessage"
+          :title="majorCalculationSummaryMessage"
+          :type="majorCalculationSummaryType"
+          show-icon
+          style="margin-top: 12px"
+        />
+        <div class="action-strip">
+          <el-button type="primary" @click="$router.push('/calculation')">去计算中心继续处理</el-button>
+          <el-button plain @click="$router.push('/score')">去成绩页补课程级前置数据</el-button>
+          <el-button plain @click="$router.push('/matrix')">去矩阵页检查支撑关系</el-button>
+        </div>
       </div>
 
       <div class="panel span-4">
@@ -72,6 +107,7 @@
 
       <div class="panel span-5">
         <h3 class="panel-title">最近数据变更</h3>
+        <p class="muted" style="margin-bottom: 12px">{{ recentCalculationFocus }}</p>
         <div v-if="recentRecords.length" class="record-list">
           <div v-for="record in recentRecords" :key="record.key" class="record-item">
             <b>{{ record.time }}</b>
@@ -92,6 +128,45 @@
               <div class="muted">{{ notice.desc }}</div>
             </div>
             <el-tag :type="notice.type" effect="light">{{ notice.tag }}</el-tag>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel span-12">
+        <div class="toolbar">
+          <div>
+            <h3 class="panel-title">计算结果状态摘要</h3>
+            <span class="muted">根据首页当前选择的专业、学年学期和年级，展示最值得优先处理的下一步。</span>
+          </div>
+          <el-tag :type="calculationStatusTagType">{{ calculationStatusTagText }}</el-tag>
+        </div>
+
+        <el-empty
+          v-if="!selectedMajorId"
+          description="先选择专业，再结合学年学期和年级查看当前首页可读取到的真实计算结果。"
+        />
+
+        <div v-else class="status-summary">
+          <div class="status-summary-item">
+            <div class="status-summary-label">课程级计算概况</div>
+            <div class="status-summary-value">
+              {{ classesWithCalculationCount }} / {{ allTeachingClasses.length || 0 }} 个教学班已有结果
+            </div>
+            <div class="muted">{{ courseCalculationHint }}</div>
+          </div>
+
+          <div class="status-summary-item">
+            <div class="status-summary-label">专业级计算概况</div>
+            <div class="status-summary-value">
+              {{ currentMajorHasCalculationResult ? '当前条件下已生成结果' : '当前条件下暂未生成结果' }}
+            </div>
+            <div class="muted">{{ majorCalculationHint }}</div>
+          </div>
+
+          <div class="status-summary-item">
+            <div class="status-summary-label">推荐下一步</div>
+            <div class="status-summary-value">{{ nextActionTitle }}</div>
+            <div class="muted">{{ nextActionDesc }}</div>
           </div>
         </div>
       </div>
@@ -130,20 +205,26 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { getCourseAchievementCalculationStatus, getMajorCalculationDashboard, getMajorCalculationResult } from '@/api/calculation'
 import { listCourses, pageCourses } from '@/api/course'
 import { pageGraduationRequirements, pageIndicators } from '@/api/indicator'
 import { listMajors } from '@/api/major'
 import { getMatrixConfig, checkMatrixConfig } from '@/api/matrix'
 import { apiDocUrl } from '@/api/request'
+import { listSchoolYears } from '@/api/schoolyear'
 import { pageTeachingClasses } from '@/api/teaching-class'
 import type {
+  AchievementCalculationStatusVO,
   CourseSimpleVO,
   CourseVO,
   GraduationRequirementVO,
   IndicatorPointVO,
+  MajorCalculationDashboardVO,
+  MajorCalculationResultVO,
   MatrixConfigVO,
   MatrixWeightCheckVO,
   SysDictMajorSimpleVO,
+  SysDictSchoolYearVO,
   TeachingClassVO
 } from '@/api/backend'
 
@@ -164,6 +245,13 @@ type RecentRecord = {
   tagType: 'primary' | 'success' | 'warning'
 }
 
+type NoticeItem = {
+  title: string
+  desc: string
+  tag: string
+  type: 'success' | 'warning' | 'info'
+}
+
 const user = useUserStore()
 
 const pieEl = ref<HTMLDivElement>()
@@ -174,12 +262,16 @@ const majorLoading = ref(false)
 
 const majors = ref<SysDictMajorSimpleVO[]>([])
 const selectedMajorId = ref<number>()
+const schoolYears = ref<SysDictSchoolYearVO[]>([])
+const selectedTermId = ref<number>()
+const selectedGrade = ref('')
 
 const courseList = ref<CourseSimpleVO[]>([])
 const allCourseRows = ref<CourseVO[]>([])
 const allTeachingClasses = ref<TeachingClassVO[]>([])
 const allIndicators = ref<IndicatorPointVO[]>([])
 const allRequirements = ref<GraduationRequirementVO[]>([])
+const allCalculationStatuses = ref<AchievementCalculationStatusVO[]>([])
 
 const majorCourseRows = ref<CourseVO[]>([])
 const majorRequirements = ref<GraduationRequirementVO[]>([])
@@ -187,6 +279,8 @@ const majorIndicators = ref<IndicatorPointVO[]>([])
 const majorTeachingClasses = ref<TeachingClassVO[]>([])
 const majorMatrixConfig = ref<MatrixConfigVO>()
 const majorMatrixCheck = ref<MatrixWeightCheckVO>()
+const majorCalculationDashboard = ref<MajorCalculationDashboardVO>()
+const majorCalculationResult = ref<MajorCalculationResultVO>()
 
 const selectedMajorName = computed(
   () => majors.value.find((item) => item.id === selectedMajorId.value)?.majorName || ''
@@ -207,6 +301,19 @@ const configuredCourseCount = computed(() => configuredCourseIds.value.size)
 const classCoveredCourseCount = computed(() => classCoveredCourseIds.value.size)
 const unconfiguredCourseCount = computed(() =>
   Math.max(majorCourseRows.value.length - configuredCourseCount.value, 0)
+)
+const classesWithCalculationCount = computed(
+  () => allCalculationStatuses.value.filter((item) => item.hasCalculationResult).length
+)
+const classesWithoutCalculationCount = computed(() =>
+  Math.max(allTeachingClasses.value.length - classesWithCalculationCount.value, 0)
+)
+const currentMajorHasCalculationResult = computed(() => (majorCalculationResult.value?.totalRecords ?? 0) > 0)
+const readyMajorCourseStatusCount = computed(
+  () => majorCalculationDashboard.value?.courseStatusList?.filter((item) => item.hasAchievementData).length ?? 0
+)
+const pendingMajorCourseStatusList = computed(
+  () => (majorCalculationDashboard.value?.courseStatusList ?? []).filter((item) => !item.hasAchievementData)
 )
 
 const readyIndicatorCount = computed(() => {
@@ -242,6 +349,20 @@ const metrics = computed(() => [
     sub: `覆盖课程 ${new Set(allTeachingClasses.value.map((item) => item.courseId).filter(Boolean)).size} 门`,
     icon: School,
     tone: 'yellow'
+  },
+  {
+    label: '课程级计算',
+    value: `${classesWithCalculationCount.value}/${allTeachingClasses.value.length || 0}`,
+    sub: classesWithoutCalculationCount.value ? `仍有 ${classesWithoutCalculationCount.value} 个班未计算` : '全部教学班已有课程级结果',
+    icon: Aim,
+    tone: classesWithoutCalculationCount.value ? 'yellow' : 'green'
+  },
+  {
+    label: '专业级结果',
+    value: currentMajorHasCalculationResult.value ? '已生成' : '未生成',
+    sub: selectedMajorName.value ? `${selectedMajorName.value} 当前条件结果状态` : '选择专业后查看',
+    icon: Memo,
+    tone: currentMajorHasCalculationResult.value ? 'green' : 'lock'
   },
   {
     label: '专业数',
@@ -304,6 +425,22 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
       hint: majorTeachingClasses.value.length ? '该专业已有教学班与学生规模数据' : '暂时没有查到教学班'
     },
     {
+      label: '课程级计算',
+      value: `${majorCalculationDashboard.value?.coursesWithData ?? 0} / ${majorCalculationDashboard.value?.totalCourses ?? 0}`,
+      status: majorCalculationDashboard.value?.canCalculate ? '已具备' : '待补齐',
+      statusType: majorCalculationDashboard.value?.canCalculate ? 'success' : 'warning',
+      hint: majorCalculationDashboard.value?.errorMessage || '课程级结果齐全后，才可以继续专业级计算'
+    },
+    {
+      label: '专业级结果',
+      value: currentMajorHasCalculationResult.value ? `${majorCalculationResult.value?.totalRecords ?? 0} 条` : '暂无结果',
+      status: currentMajorHasCalculationResult.value ? '已生成' : '未生成',
+      statusType: currentMajorHasCalculationResult.value ? 'success' : 'warning',
+      hint: currentMajorHasCalculationResult.value
+        ? `平均达成度 ${formatNumber(majorCalculationResult.value?.averageAchievement)}`
+        : '当前条件下还没有专业级计算结果'
+    },
+    {
       label: '矩阵校验',
       value: matrixCheckValid.value ? '通过' : '未通过',
       status: matrixCheckValid.value ? '就绪' : '待完善',
@@ -322,6 +459,51 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
 })
 
 const recentRecords = computed<RecentRecord[]>(() => {
+  const calculationRecords: RecentRecord[] = []
+
+  if (selectedMajorId.value && selectedMajorName.value && selectedTermId.value && selectedGrade.value.trim()) {
+    if (majorCalculationResult.value?.calcEndTime) {
+      calculationRecords.push({
+        key: `major-result-${selectedMajorId.value}-${selectedTermId.value}-${selectedGrade.value.trim()}`,
+        time: majorCalculationResult.value.calcEndTime,
+        title: `${selectedMajorName.value} 专业级结果已更新`,
+        detail: `平均达成度 ${formatNumber(majorCalculationResult.value.averageAchievement)} · ${majorCalculationResult.value.totalRecords ?? 0} 条记录`,
+        tag: '专业级结果',
+        tagType: 'warning'
+      })
+    } else if (majorCalculationDashboard.value?.canCalculate) {
+      calculationRecords.push({
+        key: `major-ready-${selectedMajorId.value}-${selectedTermId.value}-${selectedGrade.value.trim()}`,
+        time: selectedGrade.value.trim(),
+        title: `${selectedMajorName.value} 已具备专业级计算条件`,
+        detail: `课程级结果已覆盖 ${majorCalculationDashboard.value.coursesWithData ?? 0} / ${majorCalculationDashboard.value.totalCourses ?? 0} 门课程`,
+        tag: '待执行',
+        tagType: 'warning'
+      })
+    } else if (pendingMajorCourseStatusList.value.length) {
+      calculationRecords.push({
+        key: `major-pending-${selectedMajorId.value}-${selectedTermId.value}-${selectedGrade.value.trim()}`,
+        time: selectedGrade.value.trim(),
+        title: `${selectedMajorName.value} 仍有课程未满足专业级前置条件`,
+        detail: `还差 ${pendingMajorCourseStatusList.value.length} 门课程完成课程级结果写入`,
+        tag: '待补齐',
+        tagType: 'warning'
+      })
+    }
+  }
+
+  const courseStatusRecords = allCalculationStatuses.value
+    .filter((item) => item.hasCalculationResult && item.className)
+    .slice(0, 2)
+    .map((item) => ({
+      key: `calc-class-${item.classId}`,
+      time: `班级 ${item.classId ?? '-'}`,
+      title: `${item.className} 已有课程级结果`,
+      detail: `一级 ${item.levelOneRecordCount ?? 0} 条 · 二级 ${item.levelTwoRecordCount ?? 0} 条`,
+      tag: '课程级结果',
+      tagType: 'success' as const
+    }))
+
   const courseRecords = allCourseRows.value.slice(0, 4).map((course) => ({
     key: `course-${course.id}`,
     time: course.updateTime || course.createTime || '-',
@@ -340,40 +522,220 @@ const recentRecords = computed<RecentRecord[]>(() => {
     tagType: 'success' as const
   }))
 
-  return [...courseRecords, ...classRecords]
+  return [...calculationRecords, ...courseStatusRecords, ...courseRecords, ...classRecords]
     .sort((a, b) => String(b.time).localeCompare(String(a.time)))
     .slice(0, 6)
 })
 
-const notices = computed(() => [
-  {
-    title: '首页已切换为真实数据看板',
-    desc: '不再使用演示用达成度和假通知，全部来自当前已经接通的后端接口。',
-    tag: '已完成',
-    type: 'success' as const
-  },
-  {
-    title: '专业级计算结果接口仍未提供',
-    desc: '因此首页只展示“准备状态”，不伪造专业达成度结果和最终报表结果。',
-    tag: '后端待补',
-    type: 'warning' as const
-  },
-  {
-    title: '前端联调优先级建议',
-    desc: '继续优先接课程、矩阵、教学班、成绩导入这些后端已经存在的链路。',
-    tag: '建议',
-    type: 'info' as const
+const notices = computed(() => {
+  const dynamicNotices: NoticeItem[] = [
+    {
+      title: '首页已切换为真实数据看板',
+      desc: '不再使用演示用达成度和假通知，全部来自当前已经接通的后端接口。',
+      tag: '已完成',
+      type: 'success' as const
+    }
+  ]
+
+  if (!selectedMajorId.value) {
+    dynamicNotices.push({
+      title: '下一步先选择专业',
+      desc: '选定专业后，首页才能联动课程级状态、矩阵校验和专业级结果提示。',
+      tag: '待处理',
+      type: 'info' as const
+    })
+    return dynamicNotices
   }
-])
+
+  if (!selectedTermId.value || !selectedGrade.value.trim()) {
+    dynamicNotices.push({
+      title: '专业级结果还缺查询条件',
+      desc: '补齐学年学期和年级后，首页才能继续读取当前专业的专业级结果和可计算状态。',
+      tag: '待补条件',
+      type: 'warning' as const
+    })
+  } else if (currentMajorHasCalculationResult.value) {
+    dynamicNotices.push({
+      title: '当前专业已生成专业级结果',
+      desc: `当前条件下已生成 ${majorCalculationResult.value?.totalRecords ?? 0} 条结果，适合继续看细节或准备报表。`,
+      tag: '结果可用',
+      type: 'success' as const
+    })
+  } else if (majorCalculationDashboard.value?.canCalculate) {
+    dynamicNotices.push({
+      title: '当前专业可以继续专业级计算',
+      desc: '课程级结果已经具备，下一步最直接的是去计算中心执行专业级计算并写入结果。',
+      tag: '可推进',
+      type: 'info' as const
+    })
+  } else {
+    dynamicNotices.push({
+      title: '当前专业还在补前置数据',
+      desc: majorCalculationDashboard.value?.errorMessage || '课程级结果、矩阵权重或教学班条件还没完全齐备。',
+      tag: '待补齐',
+      type: 'warning' as const
+    })
+  }
+
+  if (classesWithoutCalculationCount.value) {
+    dynamicNotices.push({
+      title: '仍有教学班缺少课程级结果',
+      desc: `全局还有 ${classesWithoutCalculationCount.value} 个教学班未形成课程级结果，首页建议继续优先补这一层。`,
+      tag: '课程级待补',
+      type: 'warning' as const
+    })
+  } else {
+    dynamicNotices.push({
+      title: '课程级计算已全部覆盖',
+      desc: '所有教学班都已有课程级结果，可以把重心更多放到专业级结果复核与首页展示。',
+      tag: '已覆盖',
+      type: 'success' as const
+    })
+  }
+
+  if (!matrixCheckValid.value && selectedMajorId.value) {
+    dynamicNotices.push({
+      title: '当前专业矩阵还需要再检查',
+      desc: matrixCheckMessage.value || '矩阵权重还没有完全通过校验，会影响后续专业级计算稳定性。',
+      tag: '矩阵待完善',
+      type: 'warning' as const
+    })
+  } else if (selectedMajorId.value) {
+    dynamicNotices.push({
+      title: '当前专业矩阵校验通过',
+      desc: `当前专业已有 ${readyIndicatorCount.value} 个指标点达到可用状态，适合继续推进真实结果展示。`,
+      tag: '矩阵就绪',
+      type: 'success' as const
+    })
+  }
+
+  return dynamicNotices.slice(0, 4)
+})
 
 const quickEntries = [
   { label: '基础数据', path: '/basic-data', icon: Document, desc: '课程、毕业要求、指标点' },
   { label: '支撑矩阵', path: '/matrix', icon: Grid, desc: '课程与指标点权重矩阵' },
   { label: '课程大纲', path: '/syllabus', icon: Notebook, desc: '课程目标与考核点' },
   { label: '成绩导入', path: '/score', icon: DataAnalysis, desc: '学生与教学班数据' },
-  { label: '计算准备', path: '/calculation', icon: Aim, desc: '专业级计算前置检查' },
+  { label: '计算中心', path: '/calculation', icon: Aim, desc: '课程级与专业级计算入口' },
   { label: '报表准备', path: '/report', icon: Memo, desc: '报表导出能力现状' }
 ]
+
+const majorCalculationSummaryMessage = computed(() => {
+  if (!selectedMajorId.value) {
+    return ''
+  }
+  if (!selectedTermId.value || !selectedGrade.value.trim()) {
+    return '补齐学年学期和年级后，首页才能同步读取当前专业的真实计算结果。'
+  }
+  if (currentMajorHasCalculationResult.value) {
+    return `当前专业在所选条件下已生成专业级结果，平均达成度 ${formatNumber(majorCalculationResult.value?.averageAchievement)}。`
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return '当前专业已具备专业级计算前置条件，但还没有最终结果，可以前往计算中心执行。'
+  }
+  return majorCalculationDashboard.value?.errorMessage || '当前还有课程未完成课程级计算，首页会继续提示未就绪状态。'
+})
+
+const recentCalculationFocus = computed(() => {
+  if (!selectedMajorId.value) {
+    return '首页现在已经能读取真实计算接口，下一步先选择专业，再继续看课程级与专业级状态。'
+  }
+  if (!selectedTermId.value || !selectedGrade.value.trim()) {
+    return '当前专业已切到真实看板，但专业级结果还缺筛选条件，补齐后首页会自动联动状态。'
+  }
+  if (currentMajorHasCalculationResult.value) {
+    return `当前专业最近一次结果可直接从首页看到，平均达成度 ${formatNumber(majorCalculationResult.value?.averageAchievement)}。`
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return `当前专业已有 ${readyMajorCourseStatusCount.value} 门课程具备课程级结果，已经可以继续专业级计算。`
+  }
+  if (pendingMajorCourseStatusList.value.length) {
+    const pendingNames = pendingMajorCourseStatusList.value
+      .slice(0, 2)
+      .map((item) => item.className || `班级${item.classId ?? '-'}`)
+      .join('、')
+    return `当前专业还差 ${pendingMajorCourseStatusList.value.length} 门课程完成课程级结果，优先处理 ${pendingNames}${pendingMajorCourseStatusList.value.length > 2 ? ' 等' : ''}。`
+  }
+  return '首页已经切到真实联调状态，下一步可以继续补首页穿透、结果细化和计算页联动。'
+})
+
+const majorCalculationSummaryType = computed<'success' | 'warning' | 'info'>(() => {
+  if (currentMajorHasCalculationResult.value) {
+    return 'success'
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return 'info'
+  }
+  return 'warning'
+})
+
+const calculationStatusTagText = computed(() => {
+  if (!selectedMajorId.value) return '待选择条件'
+  if (currentMajorHasCalculationResult.value) return '已有专业级结果'
+  if (majorCalculationDashboard.value?.canCalculate) return '可继续专业级计算'
+  return '优先补课程级前置数据'
+})
+
+const calculationStatusTagType = computed<'success' | 'warning' | 'info'>(() => {
+  if (!selectedMajorId.value) return 'info'
+  if (currentMajorHasCalculationResult.value) return 'success'
+  if (majorCalculationDashboard.value?.canCalculate) return 'info'
+  return 'warning'
+})
+
+const courseCalculationHint = computed(() => {
+  if (!allTeachingClasses.value.length) {
+    return '当前系统里还没有教学班，建议先在成绩页建立教学班并导入学生、成绩。'
+  }
+  if (!classesWithoutCalculationCount.value) {
+    return '所有教学班都已有课程级结果，可以把重点放到专业级计算和结果复核。'
+  }
+  return `还有 ${classesWithoutCalculationCount.value} 个教学班没有课程级结果，首页建议优先去成绩页和计算中心处理。`
+})
+
+const majorCalculationHint = computed(() => {
+  if (!selectedTermId.value || !selectedGrade.value.trim()) {
+    return '补齐学年学期和年级后，首页才能对应读取专业级真实结果。'
+  }
+  if (currentMajorHasCalculationResult.value) {
+    return `当前条件下已生成 ${majorCalculationResult.value?.totalRecords ?? 0} 条专业级结果，可继续查看详细结果与达标情况。`
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return '前置条件已具备，但还没有专业级结果，建议直接去计算中心执行专业级计算。'
+  }
+  return majorCalculationDashboard.value?.errorMessage || '当前条件下还没有达到专业级计算的前置条件。'
+})
+
+const nextActionTitle = computed(() => {
+  if (!selectedMajorId.value) return '先选择一个专业'
+  if (!selectedTermId.value || !selectedGrade.value.trim()) return '补齐学年学期和年级条件'
+  if (currentMajorHasCalculationResult.value) return '查看并复核专业级结果'
+  if (majorCalculationDashboard.value?.canCalculate) return '去计算中心执行专业级计算'
+  if (classesWithoutCalculationCount.value) return '先补课程级计算结果'
+  return '继续完善矩阵和教学班前置数据'
+})
+
+const nextActionDesc = computed(() => {
+  if (!selectedMajorId.value) return '首页当前还无法判断该专业的真实计算情况。'
+  if (!selectedTermId.value || !selectedGrade.value.trim()) return '专业级结果和看板都依赖条件筛选。'
+  if (currentMajorHasCalculationResult.value) {
+    return '当前首页已经能看到真实结果状态，下一步更适合去计算中心看细节。'
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return '课程级结果已齐备，专业级结果还没生成，适合直接推进。'
+  }
+  if (classesWithoutCalculationCount.value) {
+    return '仍有教学班缺少课程级结果，先补这一层最划算。'
+  }
+  return '当前结果不足以支撑专业级计算，建议先补矩阵、教学班或成绩数据。'
+})
+
+function formatNumber(value?: number | string | null) {
+  if (value === undefined || value === null || value === '') return '-'
+  const num = Number(value)
+  return Number.isNaN(num) ? String(value) : num.toFixed(4)
+}
 
 const openDoc = () => {
   window.open(apiDocUrl, '_blank')
@@ -427,6 +789,8 @@ const reloadMajorBoard = async () => {
     majorTeachingClasses.value = []
     majorMatrixConfig.value = undefined
     majorMatrixCheck.value = undefined
+    majorCalculationDashboard.value = undefined
+    majorCalculationResult.value = undefined
     await nextTick()
     renderPieChart()
     return
@@ -461,6 +825,23 @@ const reloadMajorBoard = async () => {
           columnSums: {}
         }
 
+    if (selectedTermId.value && selectedGrade.value.trim()) {
+      const request = {
+        majorId: selectedMajorId.value,
+        termId: selectedTermId.value,
+        grade: selectedGrade.value.trim()
+      }
+      const [dashboard, result] = await Promise.all([
+        getMajorCalculationDashboard({ ...request, current: 1, pageSize: 100 }),
+        getMajorCalculationResult(request)
+      ])
+      majorCalculationDashboard.value = dashboard
+      majorCalculationResult.value = result
+    } else {
+      majorCalculationDashboard.value = undefined
+      majorCalculationResult.value = undefined
+    }
+
     await nextTick()
     renderPieChart()
   } catch (error) {
@@ -474,9 +855,10 @@ const reloadMajorBoard = async () => {
 const loadPageData = async () => {
   pageLoading.value = true
   try {
-    const [majorResult, courseListResult, coursePageResult, classPageResult, requirementPageResult, indicatorPageResult] =
+    const [majorResult, schoolYearResult, courseListResult, coursePageResult, classPageResult, requirementPageResult, indicatorPageResult] =
       await Promise.all([
         listMajors(),
+        listSchoolYears(),
         listCourses(),
         pageCourses({ current: 1, pageSize: 300 }),
         pageTeachingClasses({ current: 1, pageSize: 500 }),
@@ -485,6 +867,7 @@ const loadPageData = async () => {
       ])
 
     majors.value = majorResult
+    schoolYears.value = schoolYearResult
     courseList.value = courseListResult
     allCourseRows.value = coursePageResult.records
     allTeachingClasses.value = classPageResult.records
@@ -494,6 +877,19 @@ const loadPageData = async () => {
     if (!selectedMajorId.value && majors.value.length) {
       selectedMajorId.value = majors.value[0].id
     }
+    if (!selectedTermId.value && schoolYears.value.length) {
+      selectedTermId.value = schoolYears.value[0].id
+    }
+    if (!selectedGrade.value) {
+      selectedGrade.value = String(new Date().getFullYear() - 4)
+    }
+
+    const statusResults = await Promise.allSettled(
+      classPageResult.records.map((item) => getCourseAchievementCalculationStatus(item.id))
+    )
+    allCalculationStatuses.value = statusResults
+      .filter((item): item is PromiseFulfilledResult<AchievementCalculationStatusVO> => item.status === 'fulfilled')
+      .map((item) => item.value)
 
     await reloadMajorBoard()
   } catch (error) {
@@ -533,5 +929,37 @@ onBeforeUnmount(() => {
 .quick-button small {
   color: #6c7b90;
   font-size: 12px;
+}
+
+.action-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.status-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.status-summary-item {
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+  padding: 16px;
+  background: #f9fbff;
+}
+
+.status-summary-label {
+  color: #6c7b90;
+  font-size: 13px;
+}
+
+.status-summary-value {
+  margin: 10px 0 8px;
+  color: #20324d;
+  font-size: 18px;
+  font-weight: 600;
 }
 </style>
