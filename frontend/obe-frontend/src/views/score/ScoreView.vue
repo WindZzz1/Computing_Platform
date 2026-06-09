@@ -54,6 +54,13 @@
 
         <div class="import-block">
           <div class="section-title">学生导入</div>
+          <el-alert
+            type="info"
+            show-icon
+            :closable="false"
+            title="当前支持三种方式：先导入系统库、直接导入当前教学班、按学号批量绑定。系统学生库列表暂未开放查询，所以当前还不能在页面中直接选人。"
+            style="margin-bottom: 12px"
+          />
           <el-upload
             v-model:file-list="studentFileList"
             drag
@@ -152,7 +159,10 @@
 
       <div class="panel span-8">
         <div class="toolbar">
-          <h3 class="panel-title">班级学生预览</h3>
+          <div>
+            <h3 class="panel-title">班级学生预览</h3>
+            <span class="muted">如果学生已经在系统库中，优先用按学号批量绑定；如果还没进系统，再走 Excel 导入。</span>
+          </div>
           <div class="toolbar-actions">
             <el-button type="primary" plain :disabled="!selectedClassId" @click="openBindDialog">按学号批量绑定</el-button>
             <el-button type="primary" plain :disabled="!selectedClassId" @click="loadGradeEntries()">刷新成绩</el-button>
@@ -281,6 +291,13 @@
     </el-dialog>
 
     <el-dialog v-model="bindDialogVisible" title="按学号绑定教学班" width="560px" destroy-on-close>
+      <el-alert
+        type="info"
+        show-icon
+        :closable="false"
+        title="这里适合绑定已经存在于系统学生库中的学生。若学生还没导入系统，请先使用左侧的系统库导入或直接导入当前教学班。"
+        style="margin-bottom: 12px"
+      />
       <p class="muted dialog-tip">每行一名学生，支持 `学号` 或 `学号,姓名` 两种格式。</p>
       <el-input
         v-model="bindStudentText"
@@ -288,6 +305,7 @@
         :rows="10"
         placeholder="例如：&#10;20230001,张三&#10;20230002,李四"
       />
+      <div class="muted bind-preview">当前预计绑定 {{ bindStudentPreviewCount }} 名学生，提交后会自动刷新当前教学班学生列表。</div>
       <template #footer>
         <el-button @click="bindDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="bindingStudents" @click="submitBindStudents">绑定到当前教学班</el-button>
@@ -423,6 +441,13 @@ const previewRows = computed(() =>
     collegeName: student.collegeName || '-',
     majorName: student.majorName || '-'
   }))
+)
+
+const bindStudentPreviewCount = computed(() =>
+  bindStudentText.value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean).length
 )
 
 const results = computed(() => {
@@ -951,6 +976,8 @@ const submitBindStudents = async () => {
     await showImportResult(result, '教学班学生绑定完成')
     if (result.successCount > 0) {
       ElMessage.success(`当前教学班已新增 ${result.successCount} 名学生`)
+    } else {
+      ElMessage.warning('本次没有新增学生，请检查学号是否已经绑定，或学生是否还未导入系统库')
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : '学生绑定失败'
@@ -1134,6 +1161,11 @@ onMounted(async () => {
 
 .dialog-tip {
   margin: 0 0 12px;
+}
+
+.bind-preview {
+  margin-top: 10px;
+  line-height: 1.5;
 }
 
 .section-title {
