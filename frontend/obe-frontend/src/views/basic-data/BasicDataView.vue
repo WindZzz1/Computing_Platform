@@ -84,6 +84,22 @@
         </el-table>
       </div>
 
+      <div class="panel span-4">
+        <div class="toolbar">
+          <h3 class="panel-title">用户管理</h3>
+          <el-button type="primary" @click="openUserCreateDialog">新增用户</el-button>
+        </div>
+        <el-empty v-if="!createdUsers.length" description="本轮只补新增入口，创建后会在这里展示最近新增记录。" />
+        <el-table v-else :data="createdUsers" border size="small">
+          <el-table-column prop="username" label="用户名" min-width="120" />
+          <el-table-column prop="roleCode" label="角色" width="100" />
+          <el-table-column prop="collegeName" label="所属学院" min-width="120" />
+          <el-table-column prop="status" label="状态" width="80">
+            <template #default="{ row }">{{ row.status === 1 ? '启用' : '停用' }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
+
       <div class="panel span-12">
         <div class="toolbar">
           <h3 class="panel-title">毕业要求管理</h3>
@@ -284,6 +300,34 @@
         <el-button type="primary" :loading="submittingIndicator" @click="submitIndicator">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="userDialogVisible" title="新增用户" width="520px" destroy-on-close>
+      <el-form ref="userFormRef" :model="userForm" :rules="userRules" label-width="96px">
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model="userForm.username" placeholder="请输入用户名" />
+        </el-form-item>
+        <el-form-item label="初始密码" prop="password">
+          <el-input v-model="userForm.password" placeholder="请输入初始密码" show-password />
+        </el-form-item>
+        <el-form-item label="角色" prop="roleCode">
+          <el-select v-model="userForm.roleCode" style="width: 100%">
+            <el-option label="课程教师" value="teacher" />
+            <el-option label="专业负责人" value="leader" />
+            <el-option label="教务管理员" value="edu" />
+            <el-option label="系统管理员" value="admin" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="所属学院" prop="collegeId">
+          <el-select v-model="userForm.collegeId" clearable placeholder="请选择所属学院" style="width: 100%">
+            <el-option v-for="college in colleges" :key="college.id" :label="college.collegeName" :value="college.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="userDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingUser" @click="submitUser">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -292,6 +336,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, UploadProps, UploadUserFile } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
+import { createSysUser } from '@/api/auth'
 import { createCollege, deleteCollege, listColleges, pageColleges, updateCollege } from '@/api/college'
 import { createCourse, deleteCourse, downloadCourseTemplate, importCoursesFromExcel, pageCourses, updateCourse } from '@/api/course'
 import {
@@ -313,6 +358,7 @@ import type {
   CourseImportResult,
   CourseUpdateRequest,
   CourseVO,
+  CreateUserRequest,
   GraduationRequirementCreateRequest,
   GraduationRequirementUpdateRequest,
   GraduationRequirementVO,
@@ -330,6 +376,7 @@ import type {
   SysDictSchoolYearCreateRequest,
   SysDictSchoolYearUpdateRequest,
   SysDictSchoolYearVO,
+  SysUserVO,
   TeachingClassVO
 } from '@/api/backend'
 
@@ -342,6 +389,10 @@ const colleges = ref<SysDictCollegeSimpleVO[]>([])
 const collegeRecords = ref<SysDictCollegeVO[]>([])
 const schoolYearRecords = ref<SysDictSchoolYearVO[]>([])
 const teachingClasses = ref<TeachingClassVO[]>([])
+const userDialogVisible = ref(false)
+const submittingUser = ref(false)
+const userFormRef = ref<FormInstance>()
+const createdUsers = ref<SysUserVO[]>([])
 
 const loadingCourses = ref(false)
 const loadingRequirements = ref(false)
@@ -447,10 +498,24 @@ const indicatorForm = reactive<IndicatorPointCreateRequest>({
   requirementId: 0
 })
 
+const userForm = reactive<CreateUserRequest>({
+  username: '',
+  password: '',
+  roleCode: 'teacher',
+  collegeId: undefined,
+  status: 1
+})
+
 const indicatorRules: FormRules<IndicatorPointCreateRequest> = {
   indicatorCode: [{ required: true, message: '请输入指标点编号', trigger: 'blur' }],
   indicatorName: [{ required: true, message: '请输入指标点名称', trigger: 'blur' }],
   requirementId: [{ required: true, message: '请选择所属毕业要求', trigger: 'change' }]
+}
+
+const userRules: FormRules<CreateUserRequest> = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入初始密码', trigger: 'blur' }],
+  roleCode: [{ required: true, message: '请选择角色', trigger: 'change' }]
 }
 
 const getCourseStudentCount = (courseId: number) => {
@@ -570,6 +635,15 @@ const resetIndicatorForm = () => {
   indicatorFormRef.value?.clearValidate()
 }
 
+const resetUserForm = () => {
+  userForm.username = ''
+  userForm.password = ''
+  userForm.roleCode = 'teacher'
+  userForm.collegeId = colleges.value[0]?.id
+  userForm.status = 1
+  userFormRef.value?.clearValidate()
+}
+
 const openCreateDialog = () => {
   editingCourse.value = undefined
   resetCreateForm()
@@ -658,6 +732,11 @@ const openIndicatorEditDialog = (indicator: IndicatorPointVO) => {
   indicatorForm.description = indicator.description || ''
   indicatorForm.requirementId = indicator.requirementId || requirements.value[0]?.id || 0
   indicatorDialogVisible.value = true
+}
+
+const openUserCreateDialog = () => {
+  resetUserForm()
+  userDialogVisible.value = true
 }
 
 const loadCourses = async () => {
@@ -1018,6 +1097,39 @@ const submitIndicator = async () => {
     ElMessage.error(message)
   } finally {
     submittingIndicator.value = false
+  }
+}
+
+const submitUser = async () => {
+  const isValid = await userFormRef.value?.validate().catch(() => false)
+  if (!isValid) return
+
+  submittingUser.value = true
+  try {
+    const userId = await createSysUser({
+      username: userForm.username.trim(),
+      password: userForm.password,
+      roleCode: userForm.roleCode,
+      collegeId: userForm.collegeId ?? undefined,
+      status: userForm.status ?? 1
+    })
+
+    const collegeName = colleges.value.find((item) => item.id === userForm.collegeId)?.collegeName
+    createdUsers.value.unshift({
+      id: userId,
+      username: userForm.username.trim(),
+      roleCode: userForm.roleCode,
+      collegeName,
+      status: userForm.status ?? 1
+    })
+
+    userDialogVisible.value = false
+    ElMessage.success('用户已创建')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '用户创建失败'
+    ElMessage.error(message)
+  } finally {
+    submittingUser.value = false
   }
 }
 
