@@ -19,7 +19,7 @@
               @keyup.enter="loadTeachingClasses"
             />
             <el-button @click="loadTeachingClasses">刷新</el-button>
-            <el-button type="primary" @click="openClassCreateDialog">新增教学班</el-button>
+            <el-button v-if="canManageClassSection" type="primary" @click="openClassCreateDialog">新增教学班</el-button>
           </div>
         </div>
 
@@ -34,9 +34,9 @@
           <el-table-column prop="updateTime" label="更新时间" min-width="180" />
           <el-table-column label="操作" width="210">
             <template #default="{ row }">
-              <el-button link type="primary" @click.stop="openClassEditDialog(row)">编辑</el-button>
+              <el-button v-if="canManageClassSection" link type="primary" @click.stop="openClassEditDialog(row)">编辑</el-button>
               <el-button link type="primary" @click.stop="handleSelectClass(row)">进入班级</el-button>
-              <el-button link type="danger" @click.stop="handleDeleteClass(row)">删除</el-button>
+              <el-button v-if="canManageClassSection" link type="danger" @click.stop="handleDeleteClass(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -46,16 +46,22 @@
           <span>{{ selectedClass.courseName || '未绑定课程' }}</span>
           <span>{{ selectedClass.teacherName || '未分配教师' }}</span>
           <span>{{ formatTerm(selectedClass) }}</span>
-          <el-button type="primary" link :disabled="!selectedClass.courseId" @click="navigateToSyllabus">
+          <el-button
+            v-if="canNavigateToSyllabus"
+            type="primary"
+            link
+            :disabled="!selectedClass.courseId"
+            @click="navigateToSyllabus"
+          >
             去当前课程大纲
           </el-button>
         </div>
       </div>
 
-      <div class="panel span-4">
+      <div v-if="canManageStudentSection || canManageGradeSection" class="panel span-4">
         <h3 class="panel-title">学生与成绩导入</h3>
 
-        <div class="import-block">
+        <div v-if="canManageStudentSection" class="import-block">
           <div class="section-title">学生导入</div>
           <el-alert
             type="info"
@@ -109,9 +115,9 @@
           />
         </div>
 
-        <el-divider content-position="left">成绩导入</el-divider>
+        <el-divider v-if="canManageStudentSection && canManageGradeSection" content-position="left">成绩导入</el-divider>
 
-        <div class="import-block">
+        <div v-if="canManageGradeSection" class="import-block">
           <div class="section-title">当前教学班成绩模板</div>
           <div class="muted">先选择教学班，再下载专属成绩模板并回传成绩 Excel。</div>
           <el-upload
@@ -160,18 +166,23 @@
         </div>
       </div>
 
-      <div class="panel span-8">
+      <div v-if="canManageStudentSection" class="panel span-8">
         <div class="toolbar">
           <div>
             <h3 class="panel-title">班级学生预览</h3>
             <span class="muted">如果学生已经在系统库中，优先用按学号批量绑定；如果还没进系统，再走 Excel 导入。</span>
           </div>
           <div class="toolbar-actions">
-            <el-button type="primary" plain :disabled="!selectedClass?.courseId" @click="navigateToSyllabus">
+            <el-button
+              v-if="canNavigateToSyllabus"
+              type="primary"
+              plain
+              :disabled="!selectedClass?.courseId"
+              @click="navigateToSyllabus"
+            >
               去课程大纲
             </el-button>
             <el-button type="primary" plain :disabled="!selectedClassId" @click="openBindDialog">按学号批量绑定</el-button>
-            <el-button type="primary" plain :disabled="!selectedClassId" @click="loadGradeEntries()">刷新成绩</el-button>
           </div>
         </div>
 
@@ -195,7 +206,7 @@
         </el-table>
       </div>
 
-      <div class="panel span-12">
+      <div v-if="canManageGradeSection" class="panel span-12">
         <div class="toolbar">
           <div>
             <h3 class="panel-title">成绩录入预览</h3>
@@ -251,7 +262,7 @@
         </div>
       </div>
 
-      <div class="panel span-12">
+      <div v-if="canViewPreparationStatus" class="panel span-12">
         <h3 class="panel-title">课程级计算准备状态</h3>
         <el-table v-loading="loading" :data="results" border>
           <el-table-column prop="objective" label="课程目标" min-width="180" />
@@ -404,10 +415,12 @@ import type {
   TeachingClassUpdateRequest,
   TeachingClassVO
 } from '@/api/backend'
+import { useUserStore } from '@/stores/user'
 
 type ClassFormState = TeachingClassCreateRequest
 
 const loading = ref(false)
+const userStore = useUserStore()
 const route = useRoute()
 const router = useRouter()
 const classLoading = ref(false)
@@ -485,6 +498,12 @@ const classRules: FormRules<ClassFormState> = {
   termId: [{ required: true, message: '请选择学年学期', trigger: 'change' }]
 }
 
+const canManageClassSection = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canManageStudentSection = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canManageGradeSection = computed(() => userStore.role === 'admin')
+const canNavigateToSyllabus = computed(() => userStore.role === 'admin' || userStore.role === 'teacher')
+const canViewPreparationStatus = computed(() => userStore.role === 'admin' || userStore.role === 'teacher')
+
 const selectedClass = computed(() => selectedClassDetail.value ?? teachingClasses.value.find((item) => item.id === selectedClassId.value))
 
 const lastImportSummary = computed(() => {
@@ -525,6 +544,10 @@ const bindStudentPreviewCount = computed(() =>
 )
 
 const results = computed(() => {
+  if (!canViewPreparationStatus.value) {
+    return []
+  }
+
   if (!selectedClass.value) {
     return []
   }
@@ -1253,12 +1276,25 @@ const reloadPreview = async () => {
     selectedClassDetail.value = await getTeachingClass(classId)
     const current = selectedClassDetail.value
     students.value = await getTeachingClassStudents(current.id)
-    await loadCourseDetails(current.courseId)
-    if (gradeQuery.pointId && !assessments.value.some((item) => item.id === gradeQuery.pointId)) {
-      gradeQuery.pointId = undefined
+    if (canViewPreparationStatus.value || canManageGradeSection.value) {
+      await loadCourseDetails(current.courseId)
+    } else {
+      objectives.value = []
+      assessments.value = []
+      indicators.value = []
     }
-    gradeQuery.current = 1
-    await loadGradeEntries(1)
+
+    if (canManageGradeSection.value) {
+      if (gradeQuery.pointId && !assessments.value.some((item) => item.id === gradeQuery.pointId)) {
+        gradeQuery.pointId = undefined
+      }
+      gradeQuery.current = 1
+      await loadGradeEntries(1)
+    } else {
+      gradeQuery.pointId = undefined
+      gradeRows.value = []
+      gradeTotal.value = 0
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : '班级预览数据加载失败'
     ElMessage.error(message)

@@ -4,12 +4,12 @@
     <p class="page-desc">当前页集中维护课程、专业、毕业要求和指标点，优先把后端已经存在的基础数据能力全部接通。</p>
 
     <section class="page-grid">
-      <div class="panel span-8">
+      <div v-if="canManageCourseSection" class="panel span-8">
         <div class="toolbar">
           <h3 class="panel-title">课程库</h3>
           <div class="toolbar-actions">
             <el-button @click="openImportDialog">批量导入</el-button>
-            <el-button type="primary" @click="openCreateDialog">新增课程</el-button>
+            <el-button type="primary" :disabled="!availableCourseMajors.length" @click="openCreateDialog">新增课程</el-button>
           </div>
         </div>
         <el-table v-loading="loadingCourses" :data="courseRows" border>
@@ -33,7 +33,7 @@
         </el-table>
       </div>
 
-      <div class="panel span-4">
+      <div v-if="canManageDictionarySection" class="panel span-4">
         <div class="toolbar">
           <h3 class="panel-title">学院管理</h3>
           <el-button type="primary" @click="openCollegeCreateDialog">新增学院</el-button>
@@ -49,7 +49,7 @@
         </el-table>
       </div>
 
-      <div class="panel span-4">
+      <div v-if="canManageDictionarySection" class="panel span-4">
         <div class="toolbar">
           <h3 class="panel-title">专业管理</h3>
           <el-button type="primary" @click="openMajorCreateDialog">新增专业</el-button>
@@ -67,7 +67,7 @@
         </el-table>
       </div>
 
-      <div class="panel span-4">
+      <div v-if="canManageDictionarySection" class="panel span-4">
         <div class="toolbar">
           <h3 class="panel-title">学年学期管理</h3>
           <el-button type="primary" @click="openSchoolYearCreateDialog">新增学年学期</el-button>
@@ -84,7 +84,7 @@
         </el-table>
       </div>
 
-      <div class="panel span-4">
+      <div v-if="canManageUserSection" class="panel span-4">
         <div class="toolbar">
           <h3 class="panel-title">用户管理</h3>
           <el-button type="primary" @click="openUserCreateDialog">新增用户</el-button>
@@ -115,10 +115,10 @@
         </el-table>
       </div>
 
-      <div class="panel span-12">
+      <div v-if="canManageRequirementSection" class="panel span-12">
         <div class="toolbar">
           <h3 class="panel-title">毕业要求管理</h3>
-          <el-button type="primary" @click="openRequirementCreateDialog">新增毕业要求</el-button>
+          <el-button type="primary" :disabled="!availableRequirementMajors.length" @click="openRequirementCreateDialog">新增毕业要求</el-button>
         </div>
         <el-table v-loading="loadingRequirements" :data="requirementRows" border>
           <el-table-column prop="code" label="毕业要求编号" width="140" />
@@ -135,7 +135,7 @@
         </el-table>
       </div>
 
-      <div class="panel span-12">
+      <div v-if="canManageRequirementSection" class="panel span-12">
         <div class="toolbar">
           <h3 class="panel-title">指标点管理</h3>
           <el-button type="primary" :disabled="!requirements.length" @click="openIndicatorCreateDialog">新增指标点</el-button>
@@ -174,7 +174,7 @@
         </el-form-item>
         <el-form-item label="所属专业" prop="majorId">
           <el-select v-model="createForm.majorId" placeholder="请选择专业" style="width: 100%" filterable>
-            <el-option v-for="major in majors" :key="major.id" :label="major.majorName" :value="major.id" />
+            <el-option v-for="major in availableCourseMajors" :key="major.id" :label="major.majorName" :value="major.id" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -275,7 +275,7 @@
         </el-form-item>
         <el-form-item label="所属专业" prop="majorId">
           <el-select v-model="requirementForm.majorId" placeholder="请选择专业" style="width: 100%" filterable>
-            <el-option v-for="major in majors" :key="major.id" :label="major.majorName" :value="major.id" />
+            <el-option v-for="major in availableRequirementMajors" :key="major.id" :label="major.majorName" :value="major.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="要求描述" prop="description">
@@ -368,6 +368,7 @@ import { createMajor, deleteMajor, listMajors, pageMajors, updateMajor } from '@
 import { createSchoolYear, deleteSchoolYear, pageSchoolYears, updateSchoolYear } from '@/api/schoolyear'
 import { pageTeachingClasses } from '@/api/teaching-class'
 import StatusTag from '@/components/StatusTag/StatusTag.vue'
+import { useUserStore } from '@/stores/user'
 import type {
   CourseCreateRequest,
   CourseImportResult,
@@ -395,6 +396,7 @@ import type {
   TeachingClassVO
 } from '@/api/backend'
 
+const userStore = useUserStore()
 const courses = ref<CourseVO[]>([])
 const indicators = ref<IndicatorPointVO[]>([])
 const requirements = ref<GraduationRequirementVO[]>([])
@@ -551,6 +553,10 @@ const roleLabelMap: Record<string, string> = {
 }
 
 const getRoleLabel = (roleCode?: string) => roleLabelMap[roleCode || ''] || roleCode || '-'
+const canManageCourseSection = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canManageDictionarySection = computed(() => userStore.role === 'admin')
+const canManageUserSection = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canManageRequirementSection = computed(() => userStore.role === 'admin' || userStore.role === 'leader')
 
 const formatDateTime = (value?: string) => {
   if (!value) return '-'
@@ -644,12 +650,54 @@ const indicatorRows = computed(() =>
   }))
 )
 
+const availableCourseMajors = computed<SysDictMajorSimpleVO[]>(() => {
+  if (majors.value.length) {
+    return majors.value
+  }
+
+  const majorMap = new Map<number, SysDictMajorSimpleVO>()
+  for (const course of courses.value) {
+    if (course.majorId && course.majorName) {
+      majorMap.set(course.majorId, {
+        id: course.majorId,
+        majorName: course.majorName
+      } as SysDictMajorSimpleVO)
+    }
+  }
+  return Array.from(majorMap.values())
+})
+
+const availableRequirementMajors = computed<SysDictMajorSimpleVO[]>(() => {
+  if (majors.value.length) {
+    return majors.value
+  }
+
+  const majorMap = new Map<number, SysDictMajorSimpleVO>()
+  for (const requirement of requirements.value) {
+    if (requirement.majorId && requirement.majorName) {
+      majorMap.set(requirement.majorId, {
+        id: requirement.majorId,
+        majorName: requirement.majorName
+      } as SysDictMajorSimpleVO)
+    }
+  }
+  for (const course of courses.value) {
+    if (course.majorId && course.majorName) {
+      majorMap.set(course.majorId, {
+        id: course.majorId,
+        majorName: course.majorName
+      } as SysDictMajorSimpleVO)
+    }
+  }
+  return Array.from(majorMap.values())
+})
+
 const resetCreateForm = () => {
   createForm.courseCode = ''
   createForm.courseName = ''
   createForm.courseNature = '必修'
   createForm.credit = 3
-  createForm.majorId = majors.value[0]?.id
+  createForm.majorId = availableCourseMajors.value[0]?.id
   createFormRef.value?.clearValidate()
 }
 
@@ -675,7 +723,7 @@ const resetRequirementForm = () => {
   requirementForm.requirementCode = ''
   requirementForm.requirementName = ''
   requirementForm.description = ''
-  requirementForm.majorId = majors.value[0]?.id
+  requirementForm.majorId = availableRequirementMajors.value[0]?.id
   requirementFormRef.value?.clearValidate()
 }
 
@@ -1292,50 +1340,43 @@ const submitImportCourses = async () => {
 }
 
 onMounted(async () => {
-  const [collegeSimpleResult, collegePageResult, schoolYearResult, majorSimpleResult, majorPageResult, courseResult, requirementResult, indicatorResult, classResult, userListResult] =
-    await Promise.allSettled([
-      loadColleges(),
-      loadCollegeRecords(),
-      loadSchoolYearRecords(),
-      loadMajors(),
-      loadMajorRecords(),
-      loadCourses(),
-      loadRequirements(),
-      loadIndicators(),
-      loadTeachingClasses(),
-      loadUsersByRole()
-    ])
+  const loaders: Array<{ label: string; task: Promise<unknown> }> = []
 
-  if (collegeSimpleResult.status === 'rejected') {
-    ElMessage.error(collegeSimpleResult.reason instanceof Error ? collegeSimpleResult.reason.message : '学院下拉加载失败')
+  if (canManageDictionarySection.value) {
+    loaders.push(
+      { label: '学院下拉', task: loadColleges() },
+      { label: '学院列表', task: loadCollegeRecords() },
+      { label: '学年学期列表', task: loadSchoolYearRecords() },
+      { label: '专业下拉', task: loadMajors() },
+      { label: '专业列表', task: loadMajorRecords() }
+    )
   }
-  if (collegePageResult.status === 'rejected') {
-    ElMessage.error(collegePageResult.reason instanceof Error ? collegePageResult.reason.message : '学院列表加载失败')
+
+  if (canManageCourseSection.value) {
+    loaders.push(
+      { label: '课程列表', task: loadCourses() },
+      { label: '教学班列表', task: loadTeachingClasses() }
+    )
   }
-  if (schoolYearResult.status === 'rejected') {
-    ElMessage.error(schoolYearResult.reason instanceof Error ? schoolYearResult.reason.message : '学年学期列表加载失败')
+
+  if (canManageRequirementSection.value) {
+    loaders.push(
+      { label: '毕业要求列表', task: loadRequirements() },
+      { label: '指标点列表', task: loadIndicators() }
+    )
   }
-  if (majorSimpleResult.status === 'rejected') {
-    ElMessage.error(majorSimpleResult.reason instanceof Error ? majorSimpleResult.reason.message : '专业下拉加载失败')
+
+  if (canManageUserSection.value) {
+    loaders.push({ label: '用户列表', task: loadUsersByRole() })
   }
-  if (majorPageResult.status === 'rejected') {
-    ElMessage.error(majorPageResult.reason instanceof Error ? majorPageResult.reason.message : '专业列表加载失败')
-  }
-  if (courseResult.status === 'rejected') {
-    ElMessage.error(courseResult.reason instanceof Error ? courseResult.reason.message : '课程列表加载失败')
-  }
-  if (requirementResult.status === 'rejected') {
-    ElMessage.error(requirementResult.reason instanceof Error ? requirementResult.reason.message : '毕业要求列表加载失败')
-  }
-  if (indicatorResult.status === 'rejected') {
-    ElMessage.error(indicatorResult.reason instanceof Error ? indicatorResult.reason.message : '指标点列表加载失败')
-  }
-  if (classResult.status === 'rejected') {
-    ElMessage.error(classResult.reason instanceof Error ? classResult.reason.message : '教学班列表加载失败')
-  }
-  if (userListResult.status === 'rejected') {
-    ElMessage.error(userListResult.reason instanceof Error ? userListResult.reason.message : '用户列表加载失败')
-  }
+
+  const loadResults = await Promise.allSettled(loaders.map((item) => item.task))
+  loadResults.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      const reason = result.reason instanceof Error ? result.reason.message : `${loaders[index].label}加载失败`
+      ElMessage.error(reason)
+    }
+  })
 })
 </script>
 

@@ -140,8 +140,8 @@
           <el-button type="primary" @click="goToCalculationWithHint(primaryCalculationAction)">
             {{ primaryCalculationAction.buttonText }}
           </el-button>
-          <el-button plain @click="navigateToScore">去成绩页补课程级前置数据</el-button>
-          <el-button plain @click="navigateToMatrix">去矩阵页检查支撑关系</el-button>
+          <el-button v-if="canAccessScore" plain @click="navigateToScore">去成绩页补课程级前置数据</el-button>
+          <el-button v-if="canAccessMatrix" plain @click="navigateToMatrix">去矩阵页检查支撑关系</el-button>
         </div>
       </div>
 
@@ -328,7 +328,7 @@
           <div class="muted">课程级结果还没全部形成，专业级计算暂时还推不下去，建议先补课程级这一层。</div>
           <div class="empty-guide-actions">
             <el-button type="primary" @click="navigateToCalculation">去计算中心补课程级结果</el-button>
-            <el-button plain @click="navigateToScore">去成绩页检查前置数据</el-button>
+            <el-button v-if="canAccessScore" plain @click="navigateToScore">去成绩页检查前置数据</el-button>
           </div>
         </div>
 
@@ -386,7 +386,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import {
   Aim,
@@ -410,6 +410,7 @@ import { getMatrixConfig, checkMatrixConfig } from '@/api/matrix'
 import { apiDocUrl } from '@/api/request'
 import { listSchoolYears } from '@/api/schoolyear'
 import { pageTeachingClasses } from '@/api/teaching-class'
+import { canAccessFeature, type FeatureKey } from '@/utils/roleAccess'
 import type {
   AchievementCalculationStatusVO,
   CourseSimpleVO,
@@ -465,11 +466,23 @@ type QuickEntry = {
   icon: typeof Document
   desc: string
   priority: number
+  feature?: FeatureKey
   recommended?: boolean
 }
 
 const user = useUserStore()
+const route = useRoute()
 const router = useRouter()
+
+const canAccessScore = computed(() => canAccessFeature(user.role, 'score'))
+const canAccessMatrix = computed(() => canAccessFeature(user.role, 'matrix'))
+const canLoadCourseCatalog = computed(() => user.role === 'admin' || user.role === 'edu')
+const canLoadRequirementCatalog = computed(() => user.role === 'admin' || user.role === 'leader')
+const canLoadTeachingClassCatalog = computed(() => user.role === 'admin' || user.role === 'edu')
+const canLoadSchoolYearCatalog = computed(() => user.role === 'admin' || user.role === 'edu')
+const canLoadMatrixData = computed(() => user.role === 'admin' || user.role === 'edu')
+const canLoadMajorCalculation = computed(() => user.role === 'admin' || user.role === 'edu' || user.role === 'leader')
+const canLoadGlobalCourseStatus = computed(() => user.role === 'admin' || user.role === 'teacher')
 
 const pieEl = ref<HTMLDivElement>()
 let pieChart: echarts.ECharts | undefined
@@ -519,17 +532,32 @@ const classCoveredCourseCount = computed(() => classCoveredCourseIds.value.size)
 const unconfiguredCourseCount = computed(() =>
   Math.max(majorCourseRows.value.length - configuredCourseCount.value, 0)
 )
-const classesWithCalculationCount = computed(
-  () => allCalculationStatuses.value.filter((item) => item.hasCalculationResult).length
+const classesWithCalculationCount = computed(() =>
+  canLoadGlobalCourseStatus.value ? allCalculationStatuses.value.filter((item) => item.hasCalculationResult).length : 0
 )
 const classesWithoutCalculationCount = computed(() =>
-  Math.max(allTeachingClasses.value.length - classesWithCalculationCount.value, 0)
+  canLoadGlobalCourseStatus.value ? Math.max(allTeachingClasses.value.length - classesWithCalculationCount.value, 0) : 0
 )
 const pendingCourseCalculationClasses = computed(() => {
+  if (!canLoadGlobalCourseStatus.value) {
+    return []
+  }
   const calculatedClassIds = new Set(
     allCalculationStatuses.value.filter((item) => item.hasCalculationResult).map((item) => item.classId)
   )
   return allTeachingClasses.value.filter((item) => !calculatedClassIds.has(item.id))
+})
+const routeClassId = computed(() => {
+  const raw = route.query.classId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
+})
+const routeCourseId = computed(() => {
+  const raw = route.query.courseId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
 })
 const preferredContextCourseId = computed(() => {
   const pendingMajorCourseId = pendingMajorCourseStatusList.value.find((item) => item.courseId)?.courseId
@@ -537,6 +565,7 @@ const preferredContextCourseId = computed(() => {
   if (pendingCourseCalculationClasses.value.length) return pendingCourseCalculationClasses.value[0].courseId
   if (majorTeachingClasses.value.length) return majorTeachingClasses.value[0].courseId
   if (allTeachingClasses.value.length) return allTeachingClasses.value[0].courseId
+  if (routeCourseId.value) return routeCourseId.value
   return undefined
 })
 const preferredContextClassId = computed(() => {
@@ -545,29 +574,39 @@ const preferredContextClassId = computed(() => {
   if (pendingCourseCalculationClasses.value.length) return pendingCourseCalculationClasses.value[0].id
   if (majorTeachingClasses.value.length) return majorTeachingClasses.value[0].id
   if (allTeachingClasses.value.length) return allTeachingClasses.value[0].id
+  if (routeClassId.value) return routeClassId.value
   return undefined
 })
 const courseCalculationCoverageRate = computed(() => {
+  if (!canLoadGlobalCourseStatus.value) return 0
   if (!allTeachingClasses.value.length) return 0
   return classesWithCalculationCount.value / allTeachingClasses.value.length
 })
-const courseCalculationCoverageText = computed(() => `${Math.round(courseCalculationCoverageRate.value * 100)}%`)
+const courseCalculationCoverageText = computed(() =>
+  canLoadGlobalCourseStatus.value ? `${Math.round(courseCalculationCoverageRate.value * 100)}%` : '-'
+)
 const courseCalculationCardTag = computed(() => {
+  if (!canLoadGlobalCourseStatus.value) return '角色受限'
   if (!allTeachingClasses.value.length) return '待建班'
   if (!classesWithoutCalculationCount.value) return '已覆盖'
   return '待补结果'
 })
 const courseCalculationCardType = computed<'success' | 'warning' | 'info'>(() => {
+  if (!canLoadGlobalCourseStatus.value) return 'info'
   if (!allTeachingClasses.value.length) return 'info'
   if (!classesWithoutCalculationCount.value) return 'success'
   return 'warning'
 })
 const courseCalculationCardHint = computed(() => {
+  if (!canLoadGlobalCourseStatus.value) return '当前角色不能读取全局状态'
   if (!allTeachingClasses.value.length) return '先准备教学班'
   if (!classesWithoutCalculationCount.value) return '全部班级已覆盖'
   return `还差 ${classesWithoutCalculationCount.value} 个班级`
 })
 const courseCalculationCardMessage = computed(() => {
+  if (!canLoadGlobalCourseStatus.value) {
+    return '当前角色暂不支持读取全局课程级状态，首页不再自动请求这组接口。'
+  }
   if (!allTeachingClasses.value.length) {
     return '当前还没有教学班数据，建议先去成绩页补教学班、学生和成绩。'
   }
@@ -732,31 +771,37 @@ const readyIndicatorCount = computed(() => {
 const metrics = computed(() => [
   {
     label: '课程总数',
-    value: String(courseList.value.length),
-    sub: '来自课程列表接口',
+    value: canLoadCourseCatalog.value ? String(courseList.value.length) : '-',
+    sub: canLoadCourseCatalog.value ? '来自课程列表接口' : '当前角色不读取课程总表',
     icon: Files,
     tone: ''
   },
   {
     label: '毕业要求',
-    value: String(allRequirements.value.length),
-    sub: `指标点 ${allIndicators.value.length} 条`,
+    value: canLoadRequirementCatalog.value ? String(allRequirements.value.length) : '-',
+    sub: canLoadRequirementCatalog.value ? `指标点 ${allIndicators.value.length} 条` : '当前角色不读取毕业要求总表',
     icon: Reading,
     tone: 'green'
   },
   {
     label: '教学班',
-    value: String(allTeachingClasses.value.length),
-    sub: `覆盖课程 ${new Set(allTeachingClasses.value.map((item) => item.courseId).filter(Boolean)).size} 门`,
+    value: canLoadTeachingClassCatalog.value ? String(allTeachingClasses.value.length) : '-',
+    sub: canLoadTeachingClassCatalog.value
+      ? `覆盖课程 ${new Set(allTeachingClasses.value.map((item) => item.courseId).filter(Boolean)).size} 门`
+      : '当前角色不读取教学班总表',
     icon: School,
     tone: 'yellow'
   },
   {
     label: '课程级计算',
-    value: `${classesWithCalculationCount.value}/${allTeachingClasses.value.length || 0}`,
-    sub: classesWithoutCalculationCount.value ? `仍有 ${classesWithoutCalculationCount.value} 个班未计算` : '全部教学班已有课程级结果',
+    value: canLoadGlobalCourseStatus.value ? `${classesWithCalculationCount.value}/${allTeachingClasses.value.length || 0}` : '-',
+    sub: !canLoadGlobalCourseStatus.value
+      ? '当前角色不读取全局课程级状态'
+      : classesWithoutCalculationCount.value
+        ? `仍有 ${classesWithoutCalculationCount.value} 个班未计算`
+        : '全部教学班已有课程级结果',
     icon: Aim,
-    tone: classesWithoutCalculationCount.value ? 'yellow' : 'green'
+    tone: !canLoadGlobalCourseStatus.value ? 'lock' : classesWithoutCalculationCount.value ? 'yellow' : 'green'
   },
   {
     label: '专业级结果',
@@ -1115,39 +1160,46 @@ const quickEntries = computed<QuickEntry[]>(() => {
       path: '/score',
       icon: DataAnalysis,
       desc: classesWithoutCalculationCount.value ? '建议优先回填课程级前置数据' : '学生与教学班数据',
-      priority: classesWithoutCalculationCount.value ? 1 : 4
+      priority: classesWithoutCalculationCount.value ? 1 : 4,
+      feature: 'score'
     },
     {
       label: '支撑矩阵',
       path: '/matrix',
       icon: Grid,
       desc: matrixCheckValid.value ? '当前矩阵校验已通过' : '建议优先检查矩阵权重',
-      priority: matrixCheckValid.value ? 5 : 2
+      priority: matrixCheckValid.value ? 5 : 2,
+      feature: 'matrix'
     },
     {
       label: '基础数据',
       path: '/basic-data',
       icon: Document,
       desc: selectedMajorId.value ? `当前聚焦 ${selectedMajorName.value || '专业数据'}` : '课程、毕业要求、指标点',
-      priority: selectedMajorId.value ? 3 : 1
+      priority: selectedMajorId.value ? 3 : 1,
+      feature: 'basicData'
     },
     {
       label: '课程大纲',
       path: '/syllabus',
       icon: Notebook,
       desc: '课程目标与考核点',
-      priority: 6
+      priority: 6,
+      feature: 'syllabus'
     },
     {
       label: '报表准备',
       path: '/report',
       icon: Memo,
       desc: currentMajorHasCalculationResult.value ? '当前已更适合继续准备报表' : '报表导出能力现状',
-      priority: currentMajorHasCalculationResult.value ? 2 : 7
+      priority: currentMajorHasCalculationResult.value ? 2 : 7,
+      feature: 'report'
     }
   ]
 
-  return entries.sort((a, b) => a.priority - b.priority)
+  return entries
+    .filter((entry) => !entry.feature || canAccessFeature(user.role, entry.feature))
+    .sort((a, b) => a.priority - b.priority)
 })
 const quickEntrySummaryTag = computed(() => {
   if (classesWithoutCalculationCount.value) return '优先补课程级'
@@ -1390,6 +1442,22 @@ const renderPieChart = () => {
   })
 }
 
+const mergeMajorOptions = (items: Array<{ id?: number | null; majorId?: number | null; majorName?: string | null }>) => {
+  const majorMap = new Map(majors.value.map((item) => [item.id, item]))
+  items.forEach((item) => {
+    const majorId = Number(item.id ?? item.majorId)
+    const majorName = item.majorName?.trim()
+    if (!Number.isFinite(majorId) || !majorName) {
+      return
+    }
+    majorMap.set(majorId, {
+      id: majorId,
+      majorName
+    })
+  })
+  majors.value = Array.from(majorMap.values())
+}
+
 const resizeCharts = () => {
   pieChart?.resize()
 }
@@ -1419,33 +1487,39 @@ const reloadMajorBoard = async () => {
   majorLoading.value = true
   try {
     const [coursePage, requirementPage, indicatorPage, classPage, matrix] = await Promise.all([
-      pageCourses({ current: 1, pageSize: 300, majorId: selectedMajorId.value }),
-      pageGraduationRequirements({ current: 1, pageSize: 200, majorId: selectedMajorId.value }),
-      pageIndicators({ current: 1, pageSize: 300 }),
-      pageTeachingClasses({ current: 1, pageSize: 500 }),
-      getMatrixConfig(selectedMajorId.value)
+      canLoadCourseCatalog.value
+        ? pageCourses({ current: 1, pageSize: 300, majorId: selectedMajorId.value })
+        : Promise.resolve({ records: [] } as any),
+      canLoadRequirementCatalog.value
+        ? pageGraduationRequirements({ current: 1, pageSize: 200, majorId: selectedMajorId.value })
+        : Promise.resolve({ records: [] } as any),
+      canLoadRequirementCatalog.value ? pageIndicators({ current: 1, pageSize: 300 }) : Promise.resolve({ records: [] } as any),
+      canLoadTeachingClassCatalog.value ? pageTeachingClasses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
+      canLoadMatrixData.value ? getMatrixConfig(selectedMajorId.value) : Promise.resolve(undefined)
     ])
 
     majorCourseRows.value = coursePage.records
     majorRequirements.value = requirementPage.records
-    majorIndicators.value = indicatorPage.records.filter((item) =>
-      item.requirementId ? requirementPage.records.some((req) => req.id === item.requirementId) : false
+    mergeMajorOptions(coursePage.records)
+    mergeMajorOptions(requirementPage.records)
+    majorIndicators.value = indicatorPage.records.filter((item: IndicatorPointVO) =>
+      item.requirementId ? requirementPage.records.some((req: GraduationRequirementVO) => req.id === item.requirementId) : false
     )
     majorTeachingClasses.value = classPage.records.filter(
-      (item) => item.courseId && coursePage.records.some((course) => course.id === item.courseId)
+      (item: TeachingClassVO) => item.courseId && coursePage.records.some((course: CourseVO) => course.id === item.courseId)
     )
     majorMatrixConfig.value = matrix
 
     const matrixItems = buildMatrixItems()
-    majorMatrixCheck.value = matrixItems.length
+    majorMatrixCheck.value = canLoadMatrixData.value && matrixItems.length
       ? await checkMatrixConfig(selectedMajorId.value, matrixItems)
       : {
           valid: false,
-          message: '当前专业还没有矩阵配置数据',
+          message: canLoadMatrixData.value ? '当前专业还没有矩阵配置数据' : '当前角色不读取矩阵配置接口',
           columnSums: {}
         }
 
-    if (selectedTermId.value && selectedGrade.value.trim()) {
+    if (canLoadMajorCalculation.value && selectedTermId.value && selectedGrade.value.trim()) {
       const request = {
         majorId: selectedMajorId.value,
         termId: selectedTermId.value,
@@ -1477,13 +1551,13 @@ const loadPageData = async () => {
   try {
     const [majorResult, schoolYearResult, courseListResult, coursePageResult, classPageResult, requirementPageResult, indicatorPageResult] =
       await Promise.all([
-        listMajors(),
-        listSchoolYears(),
-        listCourses(),
-        pageCourses({ current: 1, pageSize: 300 }),
-        pageTeachingClasses({ current: 1, pageSize: 500 }),
-        pageGraduationRequirements({ current: 1, pageSize: 300 }),
-        pageIndicators({ current: 1, pageSize: 500 })
+        user.role === 'admin' ? listMajors() : Promise.resolve([]),
+        canLoadSchoolYearCatalog.value ? listSchoolYears() : Promise.resolve([]),
+        canLoadCourseCatalog.value ? listCourses() : Promise.resolve([]),
+        canLoadCourseCatalog.value ? pageCourses({ current: 1, pageSize: 300 }) : Promise.resolve({ records: [] } as any),
+        canLoadTeachingClassCatalog.value ? pageTeachingClasses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
+        canLoadRequirementCatalog.value ? pageGraduationRequirements({ current: 1, pageSize: 300 }) : Promise.resolve({ records: [] } as any),
+        canLoadRequirementCatalog.value ? pageIndicators({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any)
       ])
 
     majors.value = majorResult
@@ -1493,6 +1567,9 @@ const loadPageData = async () => {
     allTeachingClasses.value = classPageResult.records
     allRequirements.value = requirementPageResult.records
     allIndicators.value = indicatorPageResult.records
+    mergeMajorOptions(courseListResult)
+    mergeMajorOptions(coursePageResult.records)
+    mergeMajorOptions(requirementPageResult.records)
 
     if (!selectedMajorId.value && majors.value.length) {
       selectedMajorId.value = majors.value[0].id
@@ -1504,12 +1581,16 @@ const loadPageData = async () => {
       selectedGrade.value = String(new Date().getFullYear() - 4)
     }
 
-    const statusResults = await Promise.allSettled(
-      classPageResult.records.map((item) => getCourseAchievementCalculationStatus(item.id))
-    )
-    allCalculationStatuses.value = statusResults
-      .filter((item): item is PromiseFulfilledResult<AchievementCalculationStatusVO> => item.status === 'fulfilled')
-      .map((item) => item.value)
+    if (canLoadGlobalCourseStatus.value) {
+      const statusResults = await Promise.allSettled(
+        classPageResult.records.map((item: TeachingClassVO) => getCourseAchievementCalculationStatus(item.id))
+      )
+      allCalculationStatuses.value = statusResults
+        .filter((item): item is PromiseFulfilledResult<AchievementCalculationStatusVO> => item.status === 'fulfilled')
+        .map((item) => item.value)
+    } else {
+      allCalculationStatuses.value = []
+    }
 
     await reloadMajorBoard()
   } catch (error) {
