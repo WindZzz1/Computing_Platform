@@ -8,7 +8,7 @@
         <div class="toolbar">
           <div>
             <h3 class="panel-title">课程级达成度计算</h3>
-            <p class="panel-desc">课程教师可按教学班触发一级、二级达成度计算，并查看当前班级是否已有结果。</p>
+            <p class="panel-desc">课程教师和管理员可按教学班触发一级、二级达成度计算，并查看当前班级是否已有结果。</p>
           </div>
           <el-tag :type="canRunCourseCalculation ? 'success' : canViewCourseCalculation ? 'warning' : 'info'">
             {{ canRunCourseCalculation ? '当前角色可操作' : canViewCourseCalculation ? '当前角色仅可查看状态' : '当前角色只可查看说明' }}
@@ -20,7 +20,7 @@
           :title="
             canViewCourseCalculation
               ? '当前角色可以查看课程级计算状态，但不能直接触发课程级计算。'
-              : '课程级达成度计算接口只对课程教师开放。你当前可以查看页面说明，但不能直接触发计算。'
+              : '当前账号暂时不能触发课程级计算，你当前可以先查看页面说明。'
           "
           type="info"
           show-icon
@@ -28,7 +28,13 @@
         />
 
         <div class="filters">
-          <el-select v-model="selectedCourseClassId" placeholder="请选择教学班" style="width: 320px" filterable>
+          <el-select
+            v-model="selectedCourseClassId"
+            :placeholder="courseClassSelectPlaceholder"
+            style="width: 320px"
+            filterable
+            :disabled="courseClassSelectorDisabled"
+          >
             <el-option
               v-for="item in teacherTeachingClasses"
               :key="item.id"
@@ -63,7 +69,7 @@
         </div>
 
         <el-empty
-          v-if="!teacherTeachingClasses.length"
+          v-if="!hasCourseClassContext"
           description="当前没有可用于课程级计算的教学班。请先确认自己名下已有教学班并且完成成绩录入。"
         />
 
@@ -413,6 +419,7 @@ import type {
   AchievementCalculationDetailVO,
   AchievementCalculationResultVO,
   AchievementCalculationStatusVO,
+  CourseVO,
   MajorCalculationDashboardVO,
   MajorCalculationResultVO,
   SysDictSchoolYearVO,
@@ -463,10 +470,14 @@ let courseLevelTwoChart: echarts.ECharts | undefined
 let majorAchievementChart: echarts.ECharts | undefined
 
 const canViewCourseCalculation = computed(() => userStore.role === 'teacher' || userStore.role === 'admin')
-const canRunCourseCalculation = computed(() => userStore.role === 'teacher')
-const canMajorQueryData = computed(() => userStore.role === 'edu' || userStore.role === 'leader')
-const canRunMajorCalculation = computed(() => userStore.role === 'edu' || userStore.role === 'leader')
+const canRunCourseCalculation = computed(() => userStore.role === 'teacher' || userStore.role === 'admin')
+const canMajorQueryData = computed(() => userStore.role === 'admin' || userStore.role === 'edu' || userStore.role === 'leader')
+const canRunMajorCalculation = computed(() => userStore.role === 'admin' || userStore.role === 'edu' || userStore.role === 'leader')
 const canDeleteMajorCalculation = computed(() => userStore.role === 'admin')
+const canLoadMajorOptions = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canLoadSchoolYearOptions = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canLoadTeachingClasses = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canLoadCourseCatalog = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
 
 const teacherTeachingClasses = computed(() => {
   if (userStore.role === 'teacher') {
@@ -474,12 +485,25 @@ const teacherTeachingClasses = computed(() => {
   }
   return teachingClasses.value
 })
+const hasCourseClassContext = computed(() => Boolean(selectedCourseClassId.value || teacherTeachingClasses.value.length))
+const isTeacherDirectClassMode = computed(
+  () => userStore.role === 'teacher' && !teacherTeachingClasses.value.length && Boolean(selectedCourseClassId.value)
+)
+const courseClassSelectorDisabled = computed(() => userStore.role === 'teacher' && !teacherTeachingClasses.value.length)
+const courseClassSelectPlaceholder = computed(() =>
+  isTeacherDirectClassMode.value ? '当前按 classId 直达单个教学班' : '请选择教学班'
+)
 
 const selectedCourseClass = computed(() =>
   teacherTeachingClasses.value.find((item) => item.id === selectedCourseClassId.value)
 )
 
-const selectedCourseClassName = computed(() => (selectedCourseClass.value ? buildClassLabel(selectedCourseClass.value) : ''))
+const selectedCourseClassName = computed(() => {
+  if (selectedCourseClass.value) {
+    return buildClassLabel(selectedCourseClass.value)
+  }
+  return selectedCourseClassId.value ? `教学班 ${selectedCourseClassId.value}` : ''
+})
 const courseLevelOneDetails = computed(() => courseCalculationDetail.value?.levelOneDetails ?? [])
 const courseLevelTwoDetails = computed(() => courseCalculationDetail.value?.levelTwoDetails ?? [])
 const courseLevelOneChartRows = computed(() => {
@@ -538,7 +562,7 @@ const courseStatusType = computed<'success' | 'warning'>(() =>
 )
 
 const courseGuideMessage = computed(() => {
-  if (!teacherTeachingClasses.value.length) {
+  if (!hasCourseClassContext.value) {
     return ''
   }
   if (!selectedCourseClassId.value) {
@@ -547,8 +571,16 @@ const courseGuideMessage = computed(() => {
   if (courseCalculationError.value) {
     return ''
   }
+  if (isTeacherDirectClassMode.value) {
+    if (!courseCalculationStatus.value?.hasCalculationResult) {
+      return `当前教师账号没有教学班列表读取接口，页面已按 classId=${selectedCourseClassId.value} 进入单班联调模式，可以直接查看状态或执行课程级计算。`
+    }
+    return canExportCourseReport.value
+      ? `当前教师账号正按 classId=${selectedCourseClassId.value} 联调该教学班，课程级结果已具备，可以继续导出课程报表。`
+      : `当前教师账号正按 classId=${selectedCourseClassId.value} 联调该教学班，课程级结果已具备。`
+  }
   if (!canRunCourseCalculation.value && courseCalculationStatus.value?.hasCalculationResult) {
-    return '当前角色可以查看这个班级的课程级结果。如果需要导出报表，请使用课程教师账号登录。'
+    return '当前角色可以查看这个班级的课程级结果。'
   }
   if (!courseCalculationStatus.value?.hasCalculationResult) {
     return '建议顺序：先确认学生、成绩和大纲配置已经准备完整，再执行课程级计算，得到一级和二级达成度记录。'
@@ -601,6 +633,19 @@ const routeGrade = computed(() => {
   const value = Array.isArray(raw) ? raw[0] : raw
   return typeof value === 'string' ? value.trim() : ''
 })
+
+const mergeMajorOptions = (items: Array<{ id?: number | null; majorId?: number | null; majorName?: string | null }>) => {
+  const majorMap = new Map(majors.value.map((item) => [item.id, item.name]))
+  items.forEach((item) => {
+    const majorId = Number(item.id ?? item.majorId)
+    const majorName = item.majorName?.trim()
+    if (!Number.isFinite(majorId) || !majorName) {
+      return
+    }
+    majorMap.set(majorId, majorName)
+  })
+  majors.value = Array.from(majorMap.entries()).map(([id, name]) => ({ id, name }))
+}
 
 const majorGuideMessage = computed(() => {
   if (!canMajorQueryData.value) {
@@ -1091,15 +1136,15 @@ async function loadBaseOptions() {
   loading.value = true
   try {
     const [majorList, schoolYearList, classPage, coursePage] = await Promise.all([
-      listMajors(),
-      listSchoolYears(),
-      pageTeachingClasses({ current: 1, pageSize: 500 }),
-      pageCourses({ current: 1, pageSize: 500 })
+      userStore.role === 'admin' ? listMajors() : Promise.resolve([]),
+      canLoadSchoolYearOptions.value ? listSchoolYears() : Promise.resolve([]),
+      canLoadTeachingClasses.value ? pageTeachingClasses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
+      canLoadCourseCatalog.value ? pageCourses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any)
     ])
 
     const majorMap = new Map<number, string>()
     majorList.forEach((item) => majorMap.set(item.id, item.majorName))
-    coursePage.records.forEach((course) => {
+    coursePage.records.forEach((course: CourseVO) => {
       if (course.majorId && course.majorName) {
         majorMap.set(course.majorId, course.majorName)
       }
@@ -1108,6 +1153,7 @@ async function loadBaseOptions() {
     majors.value = Array.from(majorMap.entries()).map(([id, name]) => ({ id, name }))
     schoolYears.value = schoolYearList
     teachingClasses.value = classPage.records
+    mergeMajorOptions(coursePage.records)
 
     const routeMatchedClass = routeClassId.value
       ? teacherTeachingClasses.value.find((item) => item.id === routeClassId.value)
@@ -1119,9 +1165,9 @@ async function loadBaseOptions() {
       ? schoolYears.value.find((item) => item.id === routeTermId.value)
       : undefined
 
-    selectedCourseClassId.value = routeMatchedClass?.id ?? teacherTeachingClasses.value[0]?.id
-    selectedMajorId.value = routeMatchedMajor?.id ?? selectedMajorId.value ?? majors.value[0]?.id
-    selectedTermId.value = routeMatchedTerm?.id ?? selectedTermId.value ?? schoolYears.value[0]?.id
+    selectedCourseClassId.value = routeMatchedClass?.id ?? routeClassId.value ?? teacherTeachingClasses.value[0]?.id
+    selectedMajorId.value = routeMatchedMajor?.id ?? routeMajorId.value ?? selectedMajorId.value ?? majors.value[0]?.id
+    selectedTermId.value = routeMatchedTerm?.id ?? routeTermId.value ?? selectedTermId.value ?? schoolYears.value[0]?.id
 
     if (routeGrade.value) {
       selectedGrade.value = routeGrade.value

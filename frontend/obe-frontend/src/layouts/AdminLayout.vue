@@ -3,43 +3,43 @@
     <el-aside width="224px" class="side">
       <div class="brand">OBE 达成度计算平台</div>
       <el-menu router :default-active="$route.path" class="menu">
-        <el-menu-item index="/dashboard">
+        <el-menu-item v-if="hasFeature('dashboard')" index="/dashboard">
           <el-icon><House /></el-icon>
           <span>首页</span>
         </el-menu-item>
-        <el-sub-menu index="basic">
+        <el-sub-menu v-if="hasFeature('basicData')" index="basic">
           <template #title>
             <el-icon><Files /></el-icon>
             <span>基础数据管理</span>
           </template>
           <el-menu-item index="/basic-data">专业课程库</el-menu-item>
         </el-sub-menu>
-        <el-menu-item index="/matrix">
+        <el-menu-item v-if="hasFeature('matrix')" index="/matrix">
           <el-icon><Grid /></el-icon>
           <span>矩阵配置</span>
         </el-menu-item>
-        <el-sub-menu index="course">
+        <el-sub-menu v-if="hasFeature('syllabus')" index="course">
           <template #title>
             <el-icon><Notebook /></el-icon>
             <span>课程大纲管理</span>
           </template>
           <el-menu-item index="/syllabus">课程目标与权重</el-menu-item>
         </el-sub-menu>
-        <el-sub-menu index="score">
+        <el-sub-menu v-if="hasFeature('score')" index="score">
           <template #title>
             <el-icon><DataAnalysis /></el-icon>
             <span>成绩管理与计算</span>
           </template>
           <el-menu-item index="/score">成绩导入与预览</el-menu-item>
         </el-sub-menu>
-        <el-sub-menu index="major">
+        <el-sub-menu v-if="hasFeature('calculation')" index="major">
           <template #title>
             <el-icon><Aim /></el-icon>
             <span>专业级计算</span>
           </template>
           <el-menu-item index="/calculation">计算看板</el-menu-item>
         </el-sub-menu>
-        <el-sub-menu index="report">
+        <el-sub-menu v-if="hasFeature('report')" index="report">
           <template #title>
             <el-icon><Document /></el-icon>
             <span>报表与导出</span>
@@ -80,6 +80,7 @@
 </template>
 
 <script setup lang="ts">
+import type { FeatureKey } from '@/utils/roleAccess'
 import { useRouter } from 'vue-router'
 import {
   Aim,
@@ -95,9 +96,12 @@ import {
   QuestionFilled
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import { canAccessFeature } from '@/utils/roleAccess'
 
 const user = useUserStore()
 const router = useRouter()
+
+const hasFeature = (feature: FeatureKey) => canAccessFeature(user.role, feature)
 
 const logout = () => {
   user.logout()
