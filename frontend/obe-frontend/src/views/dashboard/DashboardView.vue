@@ -387,10 +387,12 @@ type OverviewRow = {
 type RecentRecord = {
   key: string
   time: string
+  sortTime: string
   title: string
   detail: string
   tag: string
   tagType: 'primary' | 'success' | 'warning'
+  priority: number
 }
 
 type NoticeItem = {
@@ -719,7 +721,7 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
         label: '课程数量',
         value: `${majorCourseRows.value.length} 门`,
         status: majorCourseRows.value.length ? '正常' : '缺少',
-        statusLabel: majorCourseRows.value.length ? '课程齐备' : '缺少课程',
+        statusLabel: majorCourseRows.value.length ? '课程已齐备' : '课程仍缺失',
         statusType: majorCourseRows.value.length ? 'success' : 'warning',
         hint: majorCourseRows.value.length ? '该专业已存在课程数据' : '这个专业下还没有查到课程'
       },
@@ -727,7 +729,7 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
         label: '毕业要求 / 指标点',
         value: `${majorRequirements.value.length} / ${majorIndicators.value.length}`,
         status: majorIndicators.value.length ? '正常' : '缺少',
-        statusLabel: majorIndicators.value.length ? '指标点可用' : '指标点缺失',
+        statusLabel: majorIndicators.value.length ? '指标点已可用' : '指标点仍缺失',
         statusType: majorIndicators.value.length ? 'success' : 'warning',
         hint: majorIndicators.value.length ? '毕业要求与指标点接口可正常返回' : '还没有查到该专业的指标点'
       },
@@ -735,7 +737,7 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
         label: '矩阵配置课程',
         value: `${configuredCourseCount.value} 门`,
         status: configuredCourseCount.value ? '已配置' : '未配置',
-        statusLabel: configuredCourseCount.value ? '矩阵已挂接' : '矩阵未挂接',
+        statusLabel: configuredCourseCount.value ? '矩阵已挂接' : '矩阵待挂接',
         statusType: configuredCourseCount.value ? 'success' : 'warning',
         hint: configuredCourseCount.value
           ? '这些课程已经在课程-指标点矩阵中配置关系'
@@ -745,7 +747,7 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
         label: '教学班覆盖',
         value: `${majorTeachingClasses.value.length} 个班`,
         status: majorTeachingClasses.value.length ? '已开课' : '未开课',
-        statusLabel: majorTeachingClasses.value.length ? '教学班已开' : '教学班缺失',
+        statusLabel: majorTeachingClasses.value.length ? '教学班已覆盖' : '教学班待建立',
         statusType: majorTeachingClasses.value.length ? 'success' : 'warning',
         hint: majorTeachingClasses.value.length ? '该专业已有教学班与学生规模数据' : '暂时没有查到教学班'
       },
@@ -761,7 +763,7 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
         label: '专业级结果',
         value: currentMajorHasCalculationResult.value ? `${majorCalculationResult.value?.totalRecords ?? 0} 条` : '暂无结果',
         status: currentMajorHasCalculationResult.value ? '已生成' : '未生成',
-        statusLabel: currentMajorHasCalculationResult.value ? '结果已生成' : '结果未生成',
+        statusLabel: currentMajorHasCalculationResult.value ? '结果已生成' : '结果待生成',
         statusType: currentMajorHasCalculationResult.value ? 'success' : 'warning',
         hint: currentMajorHasCalculationResult.value
           ? `平均达成度 ${formatNumber(majorCalculationResult.value?.averageAchievement)}`
@@ -781,7 +783,7 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
         status: readyIndicatorCount.value === majorIndicators.value.length && majorIndicators.value.length ? '齐全' : '待补充',
         statusLabel:
           readyIndicatorCount.value === majorIndicators.value.length && majorIndicators.value.length
-            ? '指标点就绪'
+            ? '指标点已就绪'
             : '指标点待补充',
         statusType:
           readyIndicatorCount.value === majorIndicators.value.length && majorIndicators.value.length ? 'success' : 'warning',
@@ -797,29 +799,35 @@ const recentRecords = computed<RecentRecord[]>(() => {
     if (majorCalculationResult.value?.calcEndTime) {
       calculationRecords.push({
         key: `major-result-${selectedMajorId.value}-${selectedTermId.value}-${selectedGrade.value.trim()}`,
-        time: majorCalculationResult.value.calcEndTime,
+        time: formatRecordTime(majorCalculationResult.value.calcEndTime),
+        sortTime: majorCalculationResult.value.calcEndTime,
         title: `${selectedMajorName.value} 专业级结果已更新`,
         detail: `平均达成度 ${formatNumber(majorCalculationResult.value.averageAchievement)} · ${majorCalculationResult.value.totalRecords ?? 0} 条记录`,
         tag: '专业级结果',
-        tagType: 'warning'
+        tagType: 'warning',
+        priority: 0
       })
     } else if (majorCalculationDashboard.value?.canCalculate) {
       calculationRecords.push({
         key: `major-ready-${selectedMajorId.value}-${selectedTermId.value}-${selectedGrade.value.trim()}`,
-        time: selectedGrade.value.trim(),
+        time: `${selectedGrade.value.trim()} 级`,
+        sortTime: buildFallbackSortTime(),
         title: `${selectedMajorName.value} 已具备专业级计算条件`,
         detail: `课程级结果已覆盖 ${majorCalculationDashboard.value.coursesWithData ?? 0} / ${majorCalculationDashboard.value.totalCourses ?? 0} 门课程`,
         tag: '待执行',
-        tagType: 'warning'
+        tagType: 'warning',
+        priority: 1
       })
     } else if (pendingMajorCourseStatusList.value.length) {
       calculationRecords.push({
         key: `major-pending-${selectedMajorId.value}-${selectedTermId.value}-${selectedGrade.value.trim()}`,
-        time: selectedGrade.value.trim(),
+        time: `${selectedGrade.value.trim()} 级`,
+        sortTime: buildFallbackSortTime(),
         title: `${selectedMajorName.value} 仍有课程未满足专业级前置条件`,
         detail: `还差 ${pendingMajorCourseStatusList.value.length} 门课程完成课程级结果写入`,
         tag: '待补齐',
-        tagType: 'warning'
+        tagType: 'warning',
+        priority: 1
       })
     }
   }
@@ -830,26 +838,31 @@ const recentRecords = computed<RecentRecord[]>(() => {
     .map((item) => ({
       key: `calc-class-${item.classId}`,
       time: `班级 ${item.classId ?? '-'}`,
+      sortTime: buildFallbackSortTime(),
       title: `${item.className} 已有课程级结果`,
       detail: `一级 ${item.levelOneRecordCount ?? 0} 条 · 二级 ${item.levelTwoRecordCount ?? 0} 条`,
       tag: '课程级结果',
-      tagType: 'success' as const
+      tagType: 'success' as const,
+      priority: 2
     }))
 
   const pendingStatusRecords = pendingCourseCalculationClasses.value.slice(0, 2).map((item) => ({
     key: `pending-class-${item.id}`,
     time: `班级 ${item.id}`,
+    sortTime: buildFallbackSortTime(),
     title: `${item.className} 仍待补课程级结果`,
     detail: `${item.courseName || '未绑定课程'} · 建议优先去计算中心处理`,
     tag: '待补齐',
-    tagType: 'warning' as const
+    tagType: 'warning' as const,
+    priority: 0
   }))
 
   const overviewStatusRecords: RecentRecord[] = []
   if (selectedMajorId.value && selectedMajorName.value) {
     overviewStatusRecords.push({
       key: `overview-major-${selectedMajorId.value}`,
-      time: selectedGrade.value.trim() || '当前条件',
+      time: selectedGrade.value.trim() ? `${selectedGrade.value.trim()} 级` : '当前条件',
+      sortTime: buildFallbackSortTime(),
       title: `${selectedMajorName.value} 当前概览状态已更新`,
       detail: currentMajorHasCalculationResult.value
         ? `专业级结果已生成，当前平均达成度 ${formatNumber(majorCalculationResult.value?.averageAchievement)}`
@@ -857,30 +870,40 @@ const recentRecords = computed<RecentRecord[]>(() => {
           ? '当前条件下已经具备专业级计算条件'
           : '当前条件下仍在补课程级结果或前置条件',
       tag: '概览状态',
-      tagType: currentMajorHasCalculationResult.value ? 'success' : 'primary'
+      tagType: currentMajorHasCalculationResult.value ? 'success' : 'primary',
+      priority: currentMajorHasCalculationResult.value ? 1 : 2
     })
   }
 
   const courseRecords = allCourseRows.value.slice(0, 4).map((course) => ({
     key: `course-${course.id}`,
-    time: course.updateTime || course.createTime || '-',
+    time: formatRecordTime(course.updateTime || course.createTime),
+    sortTime: course.updateTime || course.createTime || '',
     title: course.courseName,
     detail: `${course.courseCode} · ${course.majorName || '未绑定专业'}`,
     tag: '课程',
-    tagType: 'primary' as const
+    tagType: 'primary' as const,
+    priority: 3
   }))
 
   const classRecords = allTeachingClasses.value.slice(0, 4).map((item) => ({
     key: `class-${item.id}`,
-    time: item.updateTime || item.createTime || '-',
+    time: formatRecordTime(item.updateTime || item.createTime),
+    sortTime: item.updateTime || item.createTime || '',
     title: item.className,
     detail: `${item.courseName || '-'} · ${item.teacherName || '未分配教师'}`,
     tag: '教学班',
-    tagType: 'success' as const
+    tagType: 'success' as const,
+    priority: 3
   }))
 
   return [...calculationRecords, ...overviewStatusRecords, ...courseStatusRecords, ...pendingStatusRecords, ...courseRecords, ...classRecords]
-    .sort((a, b) => String(b.time).localeCompare(String(a.time)))
+    .sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return a.priority - b.priority
+      }
+      return String(b.sortTime).localeCompare(String(a.sortTime))
+    })
     .slice(0, 6)
 })
 
@@ -1112,6 +1135,17 @@ function formatNumber(value?: number | string | null) {
   if (value === undefined || value === null || value === '') return '-'
   const num = Number(value)
   return Number.isNaN(num) ? String(value) : num.toFixed(4)
+}
+
+function formatRecordTime(value?: string | null) {
+  if (!value) return '时间未知'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return `${date.getMonth() + 1}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function buildFallbackSortTime() {
+  return new Date().toISOString()
 }
 
 function goToCalculationWithHint(action: CalculationEntryAction) {
