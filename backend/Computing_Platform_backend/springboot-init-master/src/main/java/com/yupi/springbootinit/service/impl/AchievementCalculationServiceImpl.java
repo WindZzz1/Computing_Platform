@@ -6,8 +6,11 @@ import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.mapper.*;
 import com.yupi.springbootinit.model.dto.gradeEntry.AchievementCalculationRequest;
 import com.yupi.springbootinit.model.entity.*;
+import com.yupi.springbootinit.model.vo.gradeEntry.CourseIndicatorAchievementVO;
+import com.yupi.springbootinit.model.vo.gradeEntry.StudentObjectiveAchievementVO;
 import com.yupi.springbootinit.service.AchievementCalculationService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +59,9 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
 
     @Resource
     private CourseIndicatorAchievementMapper courseIndicatorAchievementMapper;
+
+    @Resource
+    private StudentMapper studentMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -401,6 +407,59 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
 
         // 判断是否有计算结果
         result.put("hasCalculationResult", levelOneCount > 0 || levelTwoCount > 0);
+
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> getCalculationDetail(Long classId) {
+        Map<String, Object> result = new HashMap<>();
+
+        if (classId == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "教学班级ID不能为空");
+        }
+
+        TeachingClass teachingClass = teachingClassMapper.selectById(classId);
+        if (teachingClass == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "教学班级不存在");
+        }
+
+        List<StudentObjectiveAchievement> levelOneEntities = studentObjectiveAchievementMapper.selectByClassId(classId);
+        List<CourseIndicatorAchievement> levelTwoEntities = courseIndicatorAchievementMapper.selectByClassId(classId);
+
+        Set<Long> studentIds = levelOneEntities.stream()
+                .map(StudentObjectiveAchievement::getStudentId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Map<Long, Student> studentMap = studentIds.isEmpty()
+                ? Collections.emptyMap()
+                : studentMapper.selectBatchIds(studentIds).stream()
+                .collect(Collectors.toMap(Student::getId, student -> student));
+
+        List<StudentObjectiveAchievementVO> levelOneDetails = new ArrayList<>();
+        for (StudentObjectiveAchievement entity : levelOneEntities) {
+            StudentObjectiveAchievementVO vo = new StudentObjectiveAchievementVO();
+            BeanUtils.copyProperties(entity, vo);
+            Student student = studentMap.get(entity.getStudentId());
+            if (student != null) {
+                vo.setStudentNo(student.getStudentNo());
+                vo.setName(student.getName());
+            }
+            levelOneDetails.add(vo);
+        }
+
+        List<CourseIndicatorAchievementVO> levelTwoDetails = new ArrayList<>();
+        for (CourseIndicatorAchievement entity : levelTwoEntities) {
+            CourseIndicatorAchievementVO vo = new CourseIndicatorAchievementVO();
+            BeanUtils.copyProperties(entity, vo);
+            levelTwoDetails.add(vo);
+        }
+
+        result.put("classId", classId);
+        result.put("className", teachingClass.getClassName());
+        result.put("levelOneDetails", levelOneDetails);
+        result.put("levelTwoDetails", levelTwoDetails);
 
         return result;
     }

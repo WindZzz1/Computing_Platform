@@ -415,6 +415,34 @@ export interface AchievementCalculationResultVO {
   levelTwoStats?: AchievementLevelStats
 }
 
+export interface StudentObjectiveAchievementDetail {
+  id?: number
+  studentId?: number
+  studentNo?: string
+  name?: string
+  objectiveId?: number
+  objectiveCode?: string
+  objectiveName?: string
+  achievement?: number | string
+  calculateTime?: string
+}
+
+export interface CourseIndicatorAchievementDetail {
+  id?: number
+  indicatorId?: number
+  indicatorCode?: string
+  indicatorName?: string
+  achievement?: number | string
+  calculateTime?: string
+}
+
+export interface AchievementCalculationDetailVO {
+  classId?: number
+  className?: string
+  levelOneDetails?: StudentObjectiveAchievementDetail[]
+  levelTwoDetails?: CourseIndicatorAchievementDetail[]
+}
+
 export interface AchievementCalculationStatusVO {
   classId?: number
   className?: string

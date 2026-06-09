@@ -56,4 +56,20 @@ public class AchievementCalculationController {
         Map<String, Object> result = achievementCalculationService.getCalculationStatus(request.getClassId());
         return ResultUtils.success(result);
     }
+
+    /**
+     * 查询课程级计算明细
+     *
+     * @param request 查询请求
+     * @return 一级、二级达成度明细
+     */
+    @PostMapping("/detail")
+    @AuthCheck(anyRole = SysUserConstant.ROLE_TEACHER + "," + SysUserConstant.ROLE_ADMIN)
+    public BaseResponse<Map<String, Object>> getCalculationDetail(@RequestBody AchievementCalculationRequest request) {
+        if (request == null || request.getClassId() == null) {
+            throw new RuntimeException("教学班级ID不能为空");
+        }
+        Map<String, Object> result = achievementCalculationService.getCalculationDetail(request.getClassId());
+        return ResultUtils.success(result);
+    }
 }
