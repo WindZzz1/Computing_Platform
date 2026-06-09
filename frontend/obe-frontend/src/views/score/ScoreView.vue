@@ -310,6 +310,7 @@ import {
   deleteTeachingClass,
   downloadClassStudentTemplate,
   downloadStudentTemplate,
+  getTeachingClass,
   getTeachingClassStudents,
   importStudentsFromExcel,
   importStudentsToClassFromExcel,
@@ -355,6 +356,7 @@ const bindDialogVisible = ref(false)
 const classDialogVisible = ref(false)
 const classEditing = ref<TeachingClassVO>()
 const selectedClassId = ref<number>()
+const selectedClassDetail = ref<TeachingClassVO>()
 const classKeyword = ref('')
 const teachingClasses = ref<TeachingClassVO[]>([])
 const students = ref<StudentVO[]>([])
@@ -391,7 +393,7 @@ const classRules: FormRules<ClassFormState> = {
   termId: [{ required: true, message: '请选择学年学期', trigger: 'change' }]
 }
 
-const selectedClass = computed(() => teachingClasses.value.find((item) => item.id === selectedClassId.value))
+const selectedClass = computed(() => selectedClassDetail.value ?? teachingClasses.value.find((item) => item.id === selectedClassId.value))
 
 const lastImportSummary = computed(() => {
   const result = lastImportResult.value
@@ -679,6 +681,7 @@ const loadTeachingClasses = async () => {
 
     if (selectedClassId.value && !teachingClasses.value.some((item) => item.id === selectedClassId.value)) {
       selectedClassId.value = undefined
+      selectedClassDetail.value = undefined
       students.value = []
       objectives.value = []
       assessments.value = []
@@ -747,6 +750,7 @@ const handleDeleteClass = async (row: TeachingClassVO) => {
     await deleteTeachingClass(row.id)
     if (selectedClassId.value === row.id) {
       selectedClassId.value = undefined
+      selectedClassDetail.value = undefined
       students.value = []
       objectives.value = []
       assessments.value = []
@@ -1052,8 +1056,8 @@ const handleDeleteGrades = async () => {
 }
 
 const reloadPreview = async () => {
-  const current = selectedClass.value
-  if (!current?.id) {
+  const classId = selectedClassId.value
+  if (!classId) {
     gradeRows.value = []
     gradeTotal.value = 0
     return
@@ -1061,6 +1065,8 @@ const reloadPreview = async () => {
 
   loading.value = true
   try {
+    selectedClassDetail.value = await getTeachingClass(classId)
+    const current = selectedClassDetail.value
     students.value = await getTeachingClassStudents(current.id)
     await loadCourseDetails(current.courseId)
     if (gradeQuery.pointId && !assessments.value.some((item) => item.id === gradeQuery.pointId)) {
