@@ -5,5 +5,18 @@ import 'element-plus/dist/index.css'
 import './styles.css'
 import App from './App.vue'
 import router from './router'
+import { useUserStore } from './stores/user'
 
-createApp(App).use(createPinia()).use(router).use(ElementPlus).mount('#app')
+const app = createApp(App)
+const pinia = createPinia()
+
+app.use(pinia).use(router).use(ElementPlus)
+
+const user = useUserStore(pinia)
+if (user.token) {
+  user.syncCurrentUser().catch(() => {
+    user.logout()
+  })
+}
+
+app.mount('#app')

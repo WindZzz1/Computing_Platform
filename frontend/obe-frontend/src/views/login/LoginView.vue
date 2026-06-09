@@ -15,14 +15,13 @@
           <el-form-item label="密码">
             <el-input v-model="password" type="password" show-password placeholder="请输入密码" />
           </el-form-item>
-          <el-form-item label="角色">
-            <el-select v-model="role" style="width: 100%">
-              <el-option label="系统管理员" value="admin" />
-              <el-option label="教务管理员" value="edu" />
-              <el-option label="专业负责人" value="leader" />
-              <el-option label="课程教师" value="teacher" />
-            </el-select>
-          </el-form-item>
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            title="登录后的角色和学院信息将以当前后端账号返回结果为准。"
+            style="margin-bottom: 16px"
+          />
           <el-button type="primary" style="width: 100%" :loading="loading" @click="submit">登录</el-button>
         </el-form>
       </el-card>
@@ -36,9 +35,7 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import type { Role } from '@/types'
 
-const role = ref<Role>('admin')
 const username = ref('')
 const password = ref('')
 const loading = ref(false)
