@@ -22,7 +22,35 @@
             <el-button type="primary" :loading="saving" :disabled="!selectedMajorId" @click="saveMatrix">保存</el-button>
           </div>
         </div>
+        <el-alert
+          :type="matrixCheckValid ? 'success' : 'warning'"
+          show-icon
+          :closable="false"
+          :title="matrixCheckMessage"
+          style="margin-bottom: 12px"
+        />
         <WeightMatrix :loading="loading" :indicators="indicatorRows" :rows="matrixRows" />
+        <div class="matrix-footer">
+          <span class="matrix-footer-label">列合计</span>
+          <span
+            v-for="indicator in indicatorRows"
+            :key="indicator.id"
+            :class="isColumnOk(indicator.id) ? 'success-text' : 'danger-text'"
+          >
+            {{ indicator.indicatorCode }} = {{ getColumnSum(indicator.id).toFixed(2) }}
+          </span>
+        </div>
+        <div v-if="matrixCheckPendingItems.length" class="matrix-warning-list">
+          <span class="formula">待处理：</span>
+          <el-tag
+            v-for="item in matrixCheckPendingItems"
+            :key="item.id"
+            type="warning"
+            effect="plain"
+          >
+            {{ item.label }}
+          </el-tag>
+        </div>
       </div>
     </section>
   </div>
@@ -34,7 +62,7 @@ import { ElMessage } from 'element-plus'
 import WeightMatrix from '@/components/WeightMatrix/WeightMatrix.vue'
 import { listMajors } from '@/api/major'
 import { checkMatrixConfig, getMatrixConfig, saveMatrixConfig } from '@/api/matrix'
-import type { MatrixConfigVO, SysDictMajorSimpleVO } from '@/api/backend'
+import type { MatrixConfigVO, MatrixWeightCheckVO, SysDictMajorSimpleVO } from '@/api/backend'
 
 type MatrixRow = {
   courseId: number
@@ -49,18 +77,67 @@ const selectedMajorId = ref<number>()
 const matrixConfig = ref<MatrixConfigVO>()
 const indicatorRows = ref<MatrixConfigVO['indicators']>([])
 const matrixRows = ref<MatrixRow[]>([])
+const matrixCheck = ref<MatrixWeightCheckVO>()
 
 const currentMajorLabel = computed(() => {
   if (!matrixConfig.value?.majorName) return '当前专业'
   return `当前专业：${matrixConfig.value.majorName}`
 })
 
+const matrixCheckValid = computed(() => matrixCheck.value?.valid ?? !invalidIndicators.value.length)
+const matrixCheckMessage = computed(() => {
+  if (!indicatorRows.value.length) return '当前专业暂无指标点，可先继续准备矩阵基础数据。'
+  if (matrixCheck.value?.message) return matrixCheck.value.message
+  return matrixCheckValid.value
+    ? '当前矩阵权重校验已通过，可以直接保存。'
+    : '当前矩阵权重还未通过校验，请先把各指标点列合计调整到 1.00。'
+})
+
+const matrixCheckPendingItems = computed(() =>
+  invalidIndicators.value.map((indicator) => ({
+    id: indicator.id,
+    label: `${indicator.indicatorCode} 当前合计 ${getColumnSum(indicator.id).toFixed(2)}`
+  }))
+)
+
 const getColumnSum = (indicatorId: number) =>
   matrixRows.value.reduce((acc, row) => acc + (Number(row.weights[indicatorId]) || 0), 0)
+
+const isColumnOk = (indicatorId: number) => Math.abs(getColumnSum(indicatorId) - 1) <= 0.001
 
 const invalidIndicators = computed(() =>
   indicatorRows.value.filter((indicator) => Math.abs(getColumnSum(indicator.id) - 1) > 0.001)
 )
+
+const buildMatrixItems = () =>
+  matrixRows.value.flatMap((row) =>
+    Object.entries(row.weights)
+      .filter(([, value]) => Number(value) > 0)
+      .map(([indicatorId, value]) => ({
+        courseId: row.courseId,
+        indicatorId: Number(indicatorId),
+        totalWeight: Number(Number(value).toFixed(2))
+      }))
+  )
+
+const updateMatrixCheckState = async () => {
+  if (!selectedMajorId.value || !indicatorRows.value.length || !matrixRows.value.length) {
+    matrixCheck.value = {
+      valid: true,
+      message: '当前专业还没有可校验的矩阵课程或指标点数据。'
+    }
+    return
+  }
+
+  try {
+    matrixCheck.value = await checkMatrixConfig(selectedMajorId.value, buildMatrixItems())
+  } catch (error) {
+    matrixCheck.value = {
+      valid: false,
+      message: error instanceof Error ? error.message : '矩阵校验结果读取失败'
+    }
+  }
+}
 
 const rebuildMatrixRows = (config: MatrixConfigVO) => {
   indicatorRows.value = config.indicators ?? []
@@ -87,6 +164,7 @@ const reloadMatrix = async () => {
   try {
     matrixConfig.value = await getMatrixConfig(selectedMajorId.value)
     rebuildMatrixRows(matrixConfig.value)
+    await updateMatrixCheckState()
   } catch (error) {
     const message = error instanceof Error ? error.message : '矩阵配置加载失败'
     ElMessage.error(message)
@@ -108,15 +186,7 @@ const saveMatrix = async () => {
     return
   }
 
-  const items = matrixRows.value.flatMap((row) =>
-    Object.entries(row.weights)
-      .filter(([, value]) => Number(value) > 0)
-      .map(([indicatorId, value]) => ({
-        courseId: row.courseId,
-        indicatorId: Number(indicatorId),
-        totalWeight: Number(Number(value).toFixed(2))
-      }))
-  )
+  const items = buildMatrixItems()
 
   saving.value = true
   try {
@@ -158,5 +228,28 @@ onMounted(async () => {
 
 .formula {
   color: var(--muted);
+}
+
+.matrix-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+  font-weight: 700;
+}
+
+.matrix-footer-label {
+  color: #1e3555;
+}
+
+.matrix-warning-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
 }
 </style>
