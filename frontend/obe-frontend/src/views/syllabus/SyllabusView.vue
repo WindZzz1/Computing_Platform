@@ -45,8 +45,15 @@
       <div class="panel span-7">
         <div class="toolbar">
           <h3 class="panel-title">内部贡献权重</h3>
-          <el-tag type="success">列合计应为 1.00</el-tag>
+          <el-tag :type="weightCheckValid ? 'success' : 'warning'">{{ weightCheckValid ? '当前校验已通过' : '当前校验待处理' }}</el-tag>
         </div>
+        <el-alert
+          :type="weightCheckValid ? 'success' : 'warning'"
+          show-icon
+          :closable="false"
+          :title="weightCheckMessage"
+          style="margin-bottom: 12px"
+        />
         <el-table v-loading="loading" :data="weightRows" border>
           <el-table-column prop="objectiveCode" label="课程目标" width="140" />
           <el-table-column
@@ -76,6 +83,17 @@
           >
             {{ indicator.indicatorCode }} = {{ getColumnSum(indicator.id).toFixed(2) }}
           </span>
+        </div>
+        <div v-if="weightCheckPendingItems.length" class="weight-warning-list">
+          <span class="muted">待处理：</span>
+          <el-tag
+            v-for="item in weightCheckPendingItems"
+            :key="item.id"
+            type="warning"
+            effect="plain"
+          >
+            {{ item.label }}
+          </el-tag>
         </div>
         <el-button type="primary" style="margin-top: 14px" :disabled="!currentCourseId" @click="saveWeights">
           保存
@@ -214,6 +232,10 @@ const objectives = ref<CourseObjectiveVO[]>([])
 const assessments = ref<AssessmentPointVO[]>([])
 const indicators = ref<IndicatorPointVO[]>([])
 const weightRows = ref<WeightRow[]>([])
+const weightCheckLoading = ref(false)
+const weightCheckValid = ref(true)
+const weightCheckMessage = ref('当前课程指标点内部权重列合计应为 1.00。')
+const weightCheckPendingItems = ref<Array<{ id: number; label: string }>>([])
 const objectiveDialogVisible = ref(false)
 const assessmentDialogVisible = ref(false)
 const objectiveEditing = ref<CourseObjectiveVO>()
@@ -282,6 +304,60 @@ const getColumnSum = (indicatorId: number) =>
   weightRows.value.reduce((sum, row) => sum + (Number(row.weights[indicatorId]) || 0), 0)
 
 const isColumnOk = (indicatorId: number) => Math.abs(getColumnSum(indicatorId) - 1) <= 0.001
+
+const buildWeightItems = () =>
+  weightRows.value.flatMap((row) =>
+    Object.entries(row.weights)
+      .filter(([, value]) => Number(value) > 0)
+      .map(([indicatorId, value]) => ({
+        objectiveId: row.objectiveId,
+        indicatorId: Number(indicatorId),
+        innerWeight: Number(value)
+      }))
+  )
+
+const updateWeightCheckState = async () => {
+  if (!currentCourseId.value || !indicators.value.length) {
+    weightCheckValid.value = true
+    weightCheckMessage.value = '当前课程暂无指标点，可先继续维护课程目标和考核点。'
+    weightCheckPendingItems.value = []
+    return
+  }
+
+  weightCheckLoading.value = true
+  try {
+    const checkResult = await checkObjectiveIndicatorWeights(currentCourseId.value, buildWeightItems())
+    weightCheckValid.value = Boolean(checkResult.valid)
+
+    const pendingItems = indicators.value
+      .map((indicator) => {
+        const sum = Number(checkResult.indicatorWeightSumMap?.[indicator.id] ?? getColumnSum(indicator.id))
+        return {
+          id: indicator.id,
+          label: `${indicator.indicatorCode} 当前合计 ${sum.toFixed(2)}`,
+          sum
+        }
+      })
+      .filter((item) => Math.abs(item.sum - 1) > 0.001)
+      .map(({ id, label }) => ({
+        id,
+        label
+      }))
+
+    weightCheckPendingItems.value = pendingItems
+    weightCheckMessage.value = checkResult.valid
+      ? '当前内部贡献权重校验已通过，可以直接保存。'
+      : pendingItems.length
+        ? `当前还有 ${pendingItems.length} 个指标点权重未通过，建议先调整到列合计 1.00。`
+        : '当前内部贡献权重还未通过校验，请继续调整各指标点列合计。'
+  } catch (error) {
+    weightCheckValid.value = false
+    weightCheckPendingItems.value = []
+    weightCheckMessage.value = error instanceof Error ? error.message : '权重校验结果读取失败'
+  } finally {
+    weightCheckLoading.value = false
+  }
+}
 
 const resetObjectiveForm = () => {
   objectiveForm.courseId = currentCourseId.value ?? 0
@@ -368,6 +444,7 @@ const reloadCourseData = async () => {
     }
 
     weightRows.value = Array.from(rowMap.values())
+    await updateWeightCheckState()
   } catch (error) {
     const message = error instanceof Error ? error.message : '课程大纲数据加载失败'
     ElMessage.error(message)
@@ -479,15 +556,7 @@ const handleDeleteAssessment = async (assessment: AssessmentPointVO) => {
 const saveWeights = async () => {
   if (!currentCourseId.value) return
 
-  const items = weightRows.value.flatMap((row) =>
-    Object.entries(row.weights)
-      .filter(([, value]) => Number(value) > 0)
-      .map(([indicatorId, value]) => ({
-        objectiveId: row.objectiveId,
-        indicatorId: Number(indicatorId),
-        innerWeight: Number(value)
-      }))
-  )
+  const items = buildWeightItems()
 
   try {
     const checkResult = await checkObjectiveIndicatorWeights(currentCourseId.value, items)
@@ -504,6 +573,7 @@ const saveWeights = async () => {
     }
 
     await saveObjectiveIndicatorWeights(currentCourseId.value, items)
+    await updateWeightCheckState()
     ElMessage.success('内部贡献权重已保存')
   } catch (error) {
     const message = error instanceof Error ? error.message : '权重保存失败'
@@ -540,5 +610,12 @@ onMounted(async () => {
   border-radius: 0 0 8px 8px;
   background: #fbfdff;
   font-weight: 700;
+}
+
+.weight-warning-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
 }
 </style>
