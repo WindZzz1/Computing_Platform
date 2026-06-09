@@ -102,6 +102,33 @@
         class="section-alert"
       />
 
+      <div v-if="selectedClassId" class="result-grid" style="margin-bottom: 16px">
+        <el-card shadow="never" class="result-card">
+          <template #header>课程报表前置状态</template>
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="教学班">{{ selectedCourseClass?.className || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="课程">{{ selectedCourseClass?.courseName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="班级学生数">{{ selectedCourseClass?.studentCount ?? '-' }}</el-descriptions-item>
+            <el-descriptions-item label="成绩记录数">{{ courseReportPrep.scoreRecordCount }}</el-descriptions-item>
+            <el-descriptions-item label="课程目标数">{{ courseReportPrep.objectiveCount }}</el-descriptions-item>
+            <el-descriptions-item label="考核点数">{{ courseReportPrep.assessmentCount }}</el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+
+        <el-card shadow="never" class="result-card">
+          <template #header>联调建议</template>
+          <div class="notice-list">
+            <div v-for="item in courseReportPrepHints" :key="item.title" class="notice-item">
+              <div>
+                <div class="notice-title">{{ item.title }}</div>
+                <div class="muted">{{ item.desc }}</div>
+              </div>
+              <el-tag :type="item.type" effect="light">{{ item.tag }}</el-tag>
+            </div>
+          </div>
+        </el-card>
+      </div>
+
       <div v-if="courseReportData" class="result-grid">
         <el-card shadow="never" class="result-card">
           <template #header>课程报表返回摘要</template>
@@ -277,12 +304,96 @@
         <el-table-column prop="totalWeight" label="权重" width="100" />
       </el-table>
     </section>
+
+    <section v-if="canUseCourseReport" class="panel action-panel">
+      <div class="toolbar">
+        <h3 class="panel-title">学生考核点原始成绩明细</h3>
+        <el-tag type="success">教师可查询</el-tag>
+      </div>
+      <div class="form-grid">
+        <el-select v-model="selectedClassId" placeholder="选择教学班" style="width: 320px" :disabled="!courseClasses.length">
+          <el-option v-for="item in courseClasses" :key="item.id" :label="buildClassLabel(item)" :value="item.id" />
+        </el-select>
+        <el-select
+          v-model="rawScorePointId"
+          placeholder="选择考核点，可选"
+          style="width: 260px"
+          clearable
+          :disabled="!rawScoreAssessmentPoints.length"
+        >
+          <el-option
+            v-for="point in rawScoreAssessmentPoints"
+            :key="point.id"
+            :label="`${point.pointCode} ${point.pointName}`"
+            :value="point.id"
+          />
+        </el-select>
+        <el-input
+          v-model.trim="rawScoreStudentNo"
+          placeholder="按学号筛选，可选"
+          style="width: 220px"
+          clearable
+        />
+        <el-button
+          type="primary"
+          :loading="rawScoreLoading"
+          :disabled="!selectedClassId"
+          @click="handleLoadRawScores(1)"
+        >
+          查询原始成绩
+        </el-button>
+        <el-button
+          :loading="rawScoreExporting"
+          :disabled="!rawScoreRows.length"
+          @click="handleExportRawScores"
+        >
+          导出 CSV
+        </el-button>
+      </div>
+      <el-alert
+        v-if="rawScoreStatus"
+        :title="rawScoreStatus.title"
+        :type="rawScoreStatus.type"
+        :description="rawScoreStatus.description"
+        show-icon
+        :closable="false"
+        class="section-alert"
+      />
+      <el-table
+        v-loading="rawScoreLoading"
+        :data="rawScoreRows"
+        border
+        empty-text="当前还没有查询到学生原始成绩明细"
+      >
+        <el-table-column prop="studentNo" label="学号" width="140" />
+        <el-table-column prop="name" label="姓名" width="120" />
+        <el-table-column prop="pointCode" label="考核点编号" width="150" />
+        <el-table-column prop="pointName" label="考核点名称" min-width="220" />
+        <el-table-column prop="scoreText" label="得分" width="100" />
+        <el-table-column prop="fullScoreText" label="满分" width="100" />
+      </el-table>
+      <div class="table-footer">
+        <span class="metric-tip">
+          当前共 {{ rawScorePage.total || 0 }} 条原始成绩记录
+        </span>
+        <el-pagination
+          :current-page="rawScoreQuery.current || 1"
+          :page-size="rawScoreQuery.pageSize || 20"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next"
+          :total="rawScorePage.total || 0"
+          @current-change="handleRawScoreCurrentChange"
+          @size-change="handleRawScoreSizeChange"
+        />
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { queryGrades } from '@/api/grade-entry'
 import { pageGraduationRequirements, pageIndicators } from '@/api/indicator'
 import { listMajors } from '@/api/major'
 import { checkMatrixConfig, getMatrixConfig } from '@/api/matrix'
@@ -296,16 +407,21 @@ import {
   getMajorReportRadarData
 } from '@/api/report'
 import { listSchoolYears } from '@/api/schoolyear'
+import { listAssessmentPoints, listCourseObjectives } from '@/api/syllabus'
 import { pageTeachingClasses } from '@/api/teaching-class'
 import { useUserStore } from '@/stores/user'
 import type {
+  AssessmentPointVO,
   CourseAchievementReportVO,
+  CourseObjectiveVO,
   GraduationRequirementVO,
   IndicatorPointVO,
   MajorAchievementRadarVO,
   MatrixConfigVO,
   MatrixWeightCheckVO,
+  PageResponse,
   PenetrationAccountVO,
+  StudentScoreVO,
   SysDictMajorSimpleVO,
   SysDictSchoolYearVO,
   TeachingClassVO
@@ -353,15 +469,21 @@ const canUseMatrixLedger = computed(() => user.role === 'admin' || user.role ===
 const supportLoading = ref(false)
 const courseActionLoading = ref(false)
 const majorActionLoading = ref(false)
+const rawScoreLoading = ref(false)
+const rawScoreExporting = ref(false)
 
 const majors = ref<SysDictMajorSimpleVO[]>([])
 const schoolYears = ref<SysDictSchoolYearVO[]>([])
 const courseClasses = ref<TeachingClassVO[]>([])
+const rawScoreAssessmentPoints = ref<AssessmentPointVO[]>([])
+const courseObjectives = ref<CourseObjectiveVO[]>([])
 
 const selectedMajorId = ref<number>()
 const selectedTermId = ref<number>()
 const selectedGrade = ref('')
 const selectedClassId = ref<number>()
+const rawScorePointId = ref<number>()
+const rawScoreStudentNo = ref('')
 
 const requirements = ref<GraduationRequirementVO[]>([])
 const indicators = ref<IndicatorPointVO[]>([])
@@ -371,15 +493,56 @@ const matrixCheck = ref<MatrixWeightCheckVO>()
 const courseReportData = ref<CourseAchievementReportVO>()
 const majorRadarData = ref<MajorAchievementRadarVO>()
 const majorPenetrationData = ref<PenetrationAccountVO>()
+const rawScorePage = ref<PageResponse<StudentScoreVO>>({
+  records: [],
+  total: 0,
+  size: 20,
+  current: 1,
+  pages: 0
+})
+const rawScoreQuery = ref({
+  current: 1,
+  pageSize: 20
+})
 
 const courseStatus = ref<StatusState>()
 const majorStatus = ref<StatusState>()
+const rawScoreStatus = ref<StatusState>()
 
 const selectedMajor = computed(() => majors.value.find((item) => item.id === selectedMajorId.value))
+const selectedCourseClass = computed(() => courseClasses.value.find((item) => item.id === selectedClassId.value))
 const canSubmitMajorRequest = computed(() => Boolean(selectedMajorId.value && selectedTermId.value && selectedGrade.value))
 const availableReportCount = computed(() => reportCatalog.value.filter((item) => item.tagType === 'success').length)
 const pendingReportCount = computed(() => reportCatalog.value.filter((item) => item.tagType === 'warning').length)
 const readyIndicatorCount = computed(() => indicatorRows.value.filter((item) => item.ready).length)
+const courseReportPrep = computed(() => ({
+  objectiveCount: courseObjectives.value.length,
+  assessmentCount: rawScoreAssessmentPoints.value.length,
+  scoreRecordCount: rawScorePage.value.total || 0
+}))
+const courseReportPrepHints = computed(() => {
+  const items: Array<{ title: string; desc: string; tag: string; type: 'success' | 'warning' | 'info' }> = []
+
+  items.push(
+    courseReportPrep.value.objectiveCount > 0
+      ? { title: '课程目标已配置', desc: `当前课程已有 ${courseReportPrep.value.objectiveCount} 个课程目标。`, tag: '已就绪', type: 'success' }
+      : { title: '缺少课程目标', desc: '先去课程大纲页补齐课程目标，否则报表很难生成有效汇总。', tag: '待处理', type: 'warning' }
+  )
+
+  items.push(
+    courseReportPrep.value.assessmentCount > 0
+      ? { title: '考核点已配置', desc: `当前课程已有 ${courseReportPrep.value.assessmentCount} 个考核点。`, tag: '已就绪', type: 'success' }
+      : { title: '缺少考核点', desc: '先去课程大纲页补齐考核点，再继续导入成绩和联调报表。', tag: '待处理', type: 'warning' }
+  )
+
+  items.push(
+    courseReportPrep.value.scoreRecordCount > 0
+      ? { title: '成绩记录已存在', desc: `当前教学班已查询到 ${courseReportPrep.value.scoreRecordCount} 条成绩记录。`, tag: '可联调', type: 'success' }
+      : { title: '还没有成绩记录', desc: '建议先去成绩页导入或检查当前教学班成绩，再回来验证课程报表。', tag: '待导入', type: 'info' }
+  )
+
+  return items
+})
 const courseObjectiveSummaryRows = computed(() =>
   (courseReportData.value?.objectiveSummaries ?? []).map((item) => ({
     objectiveCode: item.objectiveCode || '-',
@@ -443,12 +606,21 @@ const majorPenetrationScoreRows = computed(() =>
     }
   })
 )
+const rawScoreRows = computed(() =>
+  (rawScorePage.value.records ?? [])
+    .filter((item) => !rawScoreStudentNo.value || item.studentNo?.includes(rawScoreStudentNo.value))
+    .map((item) => ({
+      ...item,
+      scoreText: formatDecimal(item.score),
+      fullScoreText: formatDecimal(item.fullScore)
+    }))
+)
 
 const roleSummary = computed<StatusState>(() => {
   if (canUseCourseReport.value) {
     return {
       title: '当前角色可直接联调课程报表接口',
-      description: '课程报表模板下载接口可直接使用，报表数据和导出接口已开放，但后端服务层目前大概率仍会返回“待完整实现”。',
+      description: '课程报表模板下载、原始成绩明细查询都可以直接使用；课程报表数据和导出接口虽然已开放，但服务层目前仍可能返回“待完整实现”。',
       type: 'success'
     }
   }
@@ -497,9 +669,11 @@ const reportCatalog = computed<ReportCatalogRow[]>(() => [
   {
     name: '学生考核点原始成绩明细',
     targetRole: '课程教师、教务',
-    statusText: '后端缺失',
-    tagType: 'warning',
-    tip: '当前仓库还没有这组明细查询/导出接口，页面只保留状态说明。'
+    statusText: canUseCourseReport.value ? '可查询' : '当前角色不可调',
+    tagType: canUseCourseReport.value ? 'success' : 'info',
+    tip: canUseCourseReport.value
+      ? '已接入真实成绩查询接口，支持按教学班预览并导出 CSV。'
+      : '当前仅课程教师可直接查询这组原始成绩明细。'
   }
 ])
 
@@ -647,6 +821,10 @@ const setMajorStatus = (title: string, description: string, type: StatusState['t
   majorStatus.value = { title, description, type }
 }
 
+const setRawScoreStatus = (title: string, description: string, type: StatusState['type']) => {
+  rawScoreStatus.value = { title, description, type }
+}
+
 const ensureCourseClassSelected = () => {
   if (!selectedClassId.value) {
     ElMessage.warning('请先选择教学班')
@@ -669,6 +847,42 @@ const ensureMajorRequestReady = () => {
     return false
   }
   return true
+}
+
+const ensureRawScoreClassSelected = () => {
+  if (!selectedClassId.value) {
+    ElMessage.warning('请先选择教学班')
+    return false
+  }
+  return true
+}
+
+const loadRawScoreAssessmentPoints = async () => {
+  rawScoreAssessmentPoints.value = []
+  courseObjectives.value = []
+  rawScorePointId.value = undefined
+
+  if (!selectedClassId.value) {
+    return
+  }
+
+  const selectedClass = courseClasses.value.find((item) => item.id === selectedClassId.value)
+  if (!selectedClass?.courseId) {
+    return
+  }
+
+  try {
+    const [assessmentPage, objectivePage] = await Promise.all([
+      listAssessmentPoints(selectedClass.courseId),
+      listCourseObjectives(selectedClass.courseId)
+    ])
+    courseObjectives.value = objectivePage.records
+    const page = assessmentPage
+    rawScoreAssessmentPoints.value = page.records
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '考核点列表加载失败'
+    ElMessage.warning(message)
+  }
 }
 
 const buildMajorRequest = () => ({
@@ -864,6 +1078,77 @@ const handleExportMajorAccount = async () => {
   }
 }
 
+const handleLoadRawScores = async (page = rawScoreQuery.value.current || 1) => {
+  if (!ensureRawScoreClassSelected()) {
+    return
+  }
+
+  rawScoreLoading.value = true
+  try {
+    const data = await queryGrades({
+      classId: Number(selectedClassId.value),
+      pointId: rawScorePointId.value,
+      current: page,
+      pageSize: rawScoreQuery.value.pageSize
+    })
+    rawScoreQuery.value.current = page
+    rawScorePage.value = data
+    setRawScoreStatus(
+      '原始成绩查询成功',
+      rawScorePointId.value
+        ? '已按当前教学班和考核点读取原始成绩明细，可继续按学号筛选和导出。'
+        : '已从真实成绩录入接口读取当前教学班的考核点原始成绩明细，可继续筛选和导出。',
+      'success'
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '原始成绩查询失败'
+    const normalized = normalizeBackendMessage(message, 'course')
+    setRawScoreStatus('原始成绩查询失败', normalized, 'warning')
+    ElMessage.warning(normalized)
+  } finally {
+    rawScoreLoading.value = false
+  }
+}
+
+const handleExportRawScores = async () => {
+  if (!rawScoreRows.value.length) {
+    ElMessage.warning('当前没有可导出的原始成绩记录')
+    return
+  }
+
+  rawScoreExporting.value = true
+  try {
+    const headers = ['学号', '姓名', '考核点编号', '考核点名称', '得分', '满分']
+    const rows = rawScoreRows.value.map((item) => [
+      item.studentNo,
+      item.name,
+      item.pointCode || '-',
+      item.pointName || '-',
+      item.scoreText,
+      item.fullScoreText
+    ])
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\r\n')
+    const selectedClass = courseClasses.value.find((item) => item.id === selectedClassId.value)
+    const fileName = `${selectedClass?.className || '教学班'}_学生原始成绩明细.csv`
+    downloadBlob(new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }), fileName)
+    ElMessage.success('学生原始成绩明细已开始下载')
+  } finally {
+    rawScoreExporting.value = false
+  }
+}
+
+const handleRawScoreCurrentChange = (page: number) => {
+  void handleLoadRawScores(page)
+}
+
+const handleRawScoreSizeChange = (size: number) => {
+  rawScoreQuery.value.pageSize = size
+  rawScoreQuery.value.current = 1
+  void handleLoadRawScores(1)
+}
+
 const exportMatrixLedgerExcel = () => {
   if (!matrixLedgerRows.value.length) {
     ElMessage.warning('当前专业还没有矩阵台账数据，暂时无法导出')
@@ -991,6 +1276,7 @@ onMounted(async () => {
           selectedClassId.value = page.records[0]?.id
           if (!page.records.length) {
             setCourseStatus('当前暂无可用教学班', '请先在成绩管理页创建教学班并绑定课程、教师、学期，再继续联调课程报表。', 'info')
+            setRawScoreStatus('当前暂无可用教学班', '请先在成绩管理页准备教学班和成绩数据，再查询学生原始成绩明细。', 'info')
           }
         })
       )
@@ -1015,9 +1301,31 @@ onMounted(async () => {
     if (selectedMajorId.value && canUseMajorPrep.value) {
       await reloadMajorSupportData()
     }
+    if (selectedClassId.value && canUseCourseReport.value) {
+      await loadRawScoreAssessmentPoints()
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : '报表页初始化失败'
     ElMessage.error(message)
+  }
+})
+
+watch(selectedClassId, () => {
+  rawScorePage.value = {
+    records: [],
+    total: 0,
+    size: rawScoreQuery.value.pageSize,
+    current: 1,
+    pages: 0
+  }
+  rawScoreStudentNo.value = ''
+  rawScoreStatus.value = undefined
+
+  if (selectedClassId.value && canUseCourseReport.value) {
+    void loadRawScoreAssessmentPoints()
+  } else {
+    rawScoreAssessmentPoints.value = []
+    rawScorePointId.value = undefined
   }
 })
 </script>
