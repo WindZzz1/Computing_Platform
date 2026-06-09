@@ -355,6 +355,7 @@ const bindDialogVisible = ref(false)
 const classDialogVisible = ref(false)
 const classEditing = ref<TeachingClassVO>()
 const selectedClassId = ref<number>()
+const selectedClassDetail = ref<TeachingClassVO>()
 const classKeyword = ref('')
 const teachingClasses = ref<TeachingClassVO[]>([])
 const students = ref<StudentVO[]>([])
@@ -391,7 +392,7 @@ const classRules: FormRules<ClassFormState> = {
   termId: [{ required: true, message: '请选择学年学期', trigger: 'change' }]
 }
 
-const selectedClass = computed(() => teachingClasses.value.find((item) => item.id === selectedClassId.value))
+const selectedClass = computed(() => selectedClassDetail.value ?? teachingClasses.value.find((item) => item.id === selectedClassId.value))
 
 const lastImportSummary = computed(() => {
   const result = lastImportResult.value
