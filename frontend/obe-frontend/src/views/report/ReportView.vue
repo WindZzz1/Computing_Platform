@@ -195,6 +195,16 @@
           </el-descriptions>
         </el-card>
 
+        <el-card v-if="majorRadarData" shadow="never" class="result-card wide-result-card">
+          <template #header>雷达图指标点结果预览</template>
+          <el-table :data="majorRadarRows" border empty-text="当前雷达图结果没有返回指标点数据">
+            <el-table-column prop="requirementCode" label="毕业要求编号" width="140" />
+            <el-table-column prop="indicatorCode" label="指标点编号" width="140" />
+            <el-table-column prop="indicatorName" label="指标点名称" min-width="180" />
+            <el-table-column prop="achievementText" label="达成度" width="120" />
+          </el-table>
+        </el-card>
+
         <el-card v-if="majorPenetrationData" shadow="never" class="result-card">
           <template #header>穿透式台账接口返回摘要</template>
           <el-descriptions :column="2" border>
@@ -350,6 +360,14 @@ const courseIndicatorAchievementRows = computed(() =>
     indicatorName: item.indicatorName || '-',
     achievementText: formatPercent(item.achievement),
     calculationTimeText: formatDateTime(item.calculationTime)
+  }))
+)
+const majorRadarRows = computed(() =>
+  (majorRadarData.value?.indicatorPoints ?? []).map((item) => ({
+    requirementCode: item.requirementCode || '-',
+    indicatorCode: item.indicatorCode || '-',
+    indicatorName: item.indicatorName || '-',
+    achievementText: formatPercent(item.achievement)
   }))
 )
 
