@@ -145,6 +145,7 @@
 
         <el-card shadow="never" class="result-card wide-result-card">
           <template #header>课程目标汇总预览</template>
+          <div v-if="courseObjectiveSummaryRows.length" ref="courseObjectiveChartRef" class="report-chart-box"></div>
           <el-table :data="courseObjectiveSummaryRows" border empty-text="当前报表没有返回课程目标汇总数据">
             <el-table-column prop="objectiveCode" label="课程目标编号" width="140" />
             <el-table-column prop="objectiveName" label="课程目标名称" min-width="180" />
@@ -156,6 +157,7 @@
 
         <el-card shadow="never" class="result-card wide-result-card">
           <template #header>指标点达成结果预览</template>
+          <div v-if="courseIndicatorAchievementRows.length" ref="courseIndicatorChartRef" class="report-chart-box"></div>
           <el-table :data="courseIndicatorAchievementRows" border empty-text="当前报表没有返回指标点达成结果">
             <el-table-column prop="indicatorCode" label="指标点编号" width="140" />
             <el-table-column prop="indicatorName" label="指标点名称" min-width="180" />
@@ -225,6 +227,7 @@
 
         <el-card v-if="majorRadarData" shadow="never" class="result-card wide-result-card">
           <template #header>雷达图指标点结果预览</template>
+          <div v-if="majorRadarRows.length" ref="majorRadarChartRef" class="radar-chart-box"></div>
           <el-table :data="majorRadarRows" border empty-text="当前雷达图结果没有返回指标点数据">
             <el-table-column prop="requirementCode" label="毕业要求编号" width="140" />
             <el-table-column prop="indicatorCode" label="指标点编号" width="140" />
@@ -237,10 +240,40 @@
           <template #header>穿透式台账接口返回摘要</template>
           <el-descriptions :column="2" border>
             <el-descriptions-item label="专业">{{ majorPenetrationData.majorInfo?.majorName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="学年学期">
+              {{ [majorPenetrationData.majorInfo?.yearName, majorPenetrationData.majorInfo?.semesterName].filter(Boolean).join(' / ') || '-' }}
+            </el-descriptions-item>
             <el-descriptions-item label="年级">{{ majorPenetrationData.majorInfo?.grade || selectedGrade || '-' }}</el-descriptions-item>
             <el-descriptions-item label="课程数">{{ majorPenetrationData.majorInfo?.totalCourses ?? majorPenetrationData.courses?.length ?? 0 }}</el-descriptions-item>
             <el-descriptions-item label="学生数">{{ majorPenetrationData.majorInfo?.totalStudents ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="整体达成度">{{ formatPercent(majorPenetrationData.majorInfo?.overallAchievement) }}</el-descriptions-item>
           </el-descriptions>
+        </el-card>
+
+        <el-card v-if="majorPenetrationData" shadow="never" class="result-card wide-result-card">
+          <template #header>穿透式台账准备概览</template>
+          <div class="penetration-metric-grid">
+            <div class="penetration-metric-card">
+              <span class="penetration-metric-label">课程层记录</span>
+              <strong class="penetration-metric-value">{{ majorPenetrationCourseRows.length }}</strong>
+              <span class="metric-tip">按课程 / 教学班展开</span>
+            </div>
+            <div class="penetration-metric-card">
+              <span class="penetration-metric-label">学生课程目标记录</span>
+              <strong class="penetration-metric-value">{{ majorPenetrationObjectiveRows.length }}</strong>
+              <span class="metric-tip">用于查看学生层达成度</span>
+            </div>
+            <div class="penetration-metric-card">
+              <span class="penetration-metric-label">考核点记录</span>
+              <strong class="penetration-metric-value">{{ majorPenetrationAssessmentRows.length }}</strong>
+              <span class="metric-tip">考核点层过程数据</span>
+            </div>
+            <div class="penetration-metric-card">
+              <span class="penetration-metric-label">原始成绩记录</span>
+              <strong class="penetration-metric-value">{{ majorPenetrationScoreRows.length }}</strong>
+              <span class="metric-tip">学生得分与达成度明细</span>
+            </div>
+          </div>
         </el-card>
 
         <el-card v-if="majorPenetrationData" shadow="never" class="result-card wide-result-card">
@@ -263,6 +296,18 @@
             <el-table-column prop="courseName" label="课程名称" min-width="160" />
             <el-table-column prop="objectiveAchievementsText" label="课程目标达成度" min-width="220" />
             <el-table-column prop="averageAchievementText" label="平均达成度" width="130" />
+          </el-table>
+        </el-card>
+
+        <el-card v-if="majorPenetrationData" shadow="never" class="result-card wide-result-card">
+          <template #header>考核点层结果预览</template>
+          <el-table :data="majorPenetrationAssessmentRows" border empty-text="当前穿透式台账没有返回考核点层数据">
+            <el-table-column prop="courseName" label="课程名称" min-width="160" />
+            <el-table-column prop="assessmentPointCode" label="考核点编号" width="130" />
+            <el-table-column prop="assessmentPointName" label="考核点名称" min-width="180" />
+            <el-table-column prop="objectiveCode" label="课程目标编号" width="130" />
+            <el-table-column prop="fullScoreText" label="满分" width="100" />
+            <el-table-column prop="weightText" label="权重" width="100" />
           </el-table>
         </el-card>
 
@@ -392,7 +437,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { getCourseAchievementCalculationStatus } from '@/api/calculation'
@@ -465,6 +511,12 @@ type StatusState = {
 
 const user = useUserStore()
 const route = useRoute()
+const majorRadarChartRef = ref<HTMLDivElement>()
+const courseObjectiveChartRef = ref<HTMLDivElement>()
+const courseIndicatorChartRef = ref<HTMLDivElement>()
+let majorRadarChart: echarts.ECharts | undefined
+let courseObjectiveChart: echarts.ECharts | undefined
+let courseIndicatorChart: echarts.ECharts | undefined
 
 const canUseCourseReport = computed(() => user.role === 'teacher')
 const canUseMajorReport = computed(() => user.role === 'leader' || user.role === 'edu')
@@ -582,6 +634,14 @@ const majorRadarRows = computed(() =>
     achievementText: formatPercent(item.achievement)
   }))
 )
+const majorRadarSeriesData = computed(() =>
+  (majorRadarData.value?.indicatorPoints ?? []).map((item) => ({
+    name: item.indicatorCode || item.indicatorName || `指标点${item.indicatorId ?? ''}`,
+    fullName: [item.indicatorCode, item.indicatorName].filter(Boolean).join(' ').trim(),
+    value: Number(item.achievement ?? 0),
+    requirement: item.requirementCode || item.requirementName || '-'
+  }))
+)
 const majorPenetrationCourseRows = computed(() =>
   (majorPenetrationData.value?.courses ?? []).map((item) => {
     const record = toPlainRecord(item)
@@ -604,6 +664,19 @@ const majorPenetrationObjectiveRows = computed(() =>
       courseName: readRecordText(record, 'courseName'),
       objectiveAchievementsText: formatObjectiveAchievements(record.objectiveAchievements),
       averageAchievementText: formatPercent(record.averageAchievement)
+    }
+  })
+)
+const majorPenetrationAssessmentRows = computed(() =>
+  (majorPenetrationData.value?.assessmentPoints ?? []).map((item) => {
+    const record = toPlainRecord(item)
+    return {
+      courseName: readRecordText(record, 'courseName'),
+      assessmentPointCode: readRecordText(record, 'assessmentPointCode'),
+      assessmentPointName: readRecordText(record, 'assessmentPointName'),
+      objectiveCode: readRecordText(record, 'objectiveCode'),
+      fullScoreText: formatDecimal(record.fullScore),
+      weightText: formatPercent(record.weight)
     }
   })
 )
@@ -1010,6 +1083,9 @@ const handleLoadCourseReport = async () => {
     })
 
     courseReportData.value = data
+    await nextTick()
+    renderCourseObjectiveChart()
+    renderCourseIndicatorChart()
     setCourseStatus('课程报表数据查询成功', '后端已返回课程报表结果，可以继续补前端展示细节。', 'success')
   } catch (error) {
     const message = error instanceof Error ? error.message : '课程报表数据查询失败'
@@ -1065,6 +1141,8 @@ const handleLoadMajorRadar = async () => {
   try {
     const data = await getMajorReportRadarData(buildMajorRequest())
     majorRadarData.value = data
+    await nextTick()
+    renderMajorRadarChart()
     setMajorStatus('雷达图接口查询成功', '后端已返回雷达图数据，可以继续补图表渲染。', 'success')
   } catch (error) {
     const message = error instanceof Error ? error.message : '雷达图接口查询失败'
@@ -1074,6 +1152,218 @@ const handleLoadMajorRadar = async () => {
   } finally {
     majorActionLoading.value = false
   }
+}
+
+const renderMajorRadarChart = () => {
+  if (!majorRadarChartRef.value || !majorRadarSeriesData.value.length) {
+    majorRadarChart?.dispose()
+    majorRadarChart = undefined
+    return
+  }
+
+  if (!majorRadarChart) {
+    majorRadarChart = echarts.init(majorRadarChartRef.value)
+  }
+
+  const maxAchievement = Math.max(...majorRadarSeriesData.value.map((item) => item.value), 1)
+  const axisMax = Math.max(1, Number((Math.ceil(maxAchievement * 10) / 10).toFixed(1)))
+
+  majorRadarChart.setOption({
+    tooltip: {
+      trigger: 'item',
+      formatter: () =>
+        majorRadarSeriesData.value
+          .map((item) => `${item.fullName || item.name}: ${formatPercent(item.value)} (${item.requirement})`)
+          .join('<br/>')
+    },
+    radar: {
+      radius: '62%',
+      center: ['50%', '54%'],
+      indicator: majorRadarSeriesData.value.map((item) => ({
+        name: item.name,
+        max: axisMax
+      })),
+      splitNumber: 5,
+      axisName: {
+        color: '#20324d',
+        fontSize: 12
+      },
+      splitArea: {
+        areaStyle: {
+          color: ['rgba(23,118,242,0.06)', 'rgba(23,118,242,0.03)']
+        }
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#d8e4f2'
+        }
+      },
+      axisLine: {
+        lineStyle: {
+          color: '#d8e4f2'
+        }
+      }
+    },
+    series: [
+      {
+        type: 'radar',
+        data: [
+          {
+            value: majorRadarSeriesData.value.map((item) => Number(item.value.toFixed(4))),
+            name: `${selectedMajor.value?.majorName || majorRadarData.value?.majorName || '当前专业'}达成度`,
+            areaStyle: {
+              color: 'rgba(23,118,242,0.22)'
+            },
+            lineStyle: {
+              color: '#1776f2',
+              width: 2
+            },
+            itemStyle: {
+              color: '#1776f2'
+            },
+            symbolSize: 8
+          }
+        ]
+      }
+    ]
+  })
+}
+
+const renderCourseObjectiveChart = () => {
+  if (!courseObjectiveChartRef.value || !courseObjectiveSummaryRows.value.length) {
+    courseObjectiveChart?.dispose()
+    courseObjectiveChart = undefined
+    return
+  }
+
+  if (!courseObjectiveChart) {
+    courseObjectiveChart = echarts.init(courseObjectiveChartRef.value)
+  }
+
+  courseObjectiveChart.setOption({
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      bottom: 0
+    },
+    grid: {
+      left: 48,
+      right: 20,
+      top: 24,
+      bottom: 52
+    },
+    xAxis: {
+      type: 'category',
+      axisLabel: {
+        interval: 0,
+        color: '#4b5d79'
+      },
+      data: courseObjectiveSummaryRows.value.map((item) => item.objectiveCode)
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: 1,
+      axisLabel: {
+        color: '#4b5d79',
+        formatter: (value: number) => `${Math.round(value * 100)}%`
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#e8edf5'
+        }
+      }
+    },
+    series: [
+      {
+        name: '班级平均达成度',
+        type: 'bar',
+        barMaxWidth: 38,
+        itemStyle: {
+          color: '#1776f2',
+          borderRadius: [8, 8, 0, 0]
+        },
+        data: courseReportData.value?.objectiveSummaries?.map((item) => Number(item.classAverage ?? 0)) ?? []
+      },
+      {
+        name: '达标率',
+        type: 'line',
+        smooth: true,
+        itemStyle: {
+          color: '#f59e0b'
+        },
+        lineStyle: {
+          color: '#f59e0b',
+          width: 2
+        },
+        data: courseReportData.value?.objectiveSummaries?.map((item) => Number(item.passRate ?? 0)) ?? []
+      }
+    ]
+  })
+}
+
+const renderCourseIndicatorChart = () => {
+  if (!courseIndicatorChartRef.value || !courseIndicatorAchievementRows.value.length) {
+    courseIndicatorChart?.dispose()
+    courseIndicatorChart = undefined
+    return
+  }
+
+  if (!courseIndicatorChart) {
+    courseIndicatorChart = echarts.init(courseIndicatorChartRef.value)
+  }
+
+  courseIndicatorChart.setOption({
+    tooltip: {
+      trigger: 'axis'
+    },
+    grid: {
+      left: 48,
+      right: 20,
+      top: 24,
+      bottom: 52
+    },
+    xAxis: {
+      type: 'category',
+      axisLabel: {
+        interval: 0,
+        color: '#4b5d79'
+      },
+      data: courseIndicatorAchievementRows.value.map((item) => item.indicatorCode)
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: 1,
+      axisLabel: {
+        color: '#4b5d79',
+        formatter: (value: number) => `${Math.round(value * 100)}%`
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#e8edf5'
+        }
+      }
+    },
+    series: [
+      {
+        type: 'bar',
+        barMaxWidth: 42,
+        itemStyle: {
+          color: '#22c55e',
+          borderRadius: [8, 8, 0, 0]
+        },
+        data: courseReportData.value?.indicatorAchievements?.map((item) => Number(item.achievement ?? 0)) ?? []
+      }
+    ]
+  })
+}
+
+const resizeCharts = () => {
+  majorRadarChart?.resize()
+  courseObjectiveChart?.resize()
+  courseIndicatorChart?.resize()
 }
 
 const handleLoadPenetrationAccount = async () => {
@@ -1360,6 +1650,8 @@ onMounted(async () => {
     const message = error instanceof Error ? error.message : '报表页初始化失败'
     ElMessage.error(message)
   }
+
+  window.addEventListener('resize', resizeCharts)
 })
 
 watch(selectedClassId, () => {
@@ -1379,6 +1671,52 @@ watch(selectedClassId, () => {
     rawScoreAssessmentPoints.value = []
     rawScorePointId.value = undefined
   }
+})
+
+watch(
+  () => majorRadarSeriesData.value.length,
+  async (length) => {
+    if (!length) {
+      majorRadarChart?.dispose()
+      majorRadarChart = undefined
+      return
+    }
+    await nextTick()
+    renderMajorRadarChart()
+  }
+)
+
+watch(
+  () => courseObjectiveSummaryRows.value.length,
+  async (length) => {
+    if (!length) {
+      courseObjectiveChart?.dispose()
+      courseObjectiveChart = undefined
+      return
+    }
+    await nextTick()
+    renderCourseObjectiveChart()
+  }
+)
+
+watch(
+  () => courseIndicatorAchievementRows.value.length,
+  async (length) => {
+    if (!length) {
+      courseIndicatorChart?.dispose()
+      courseIndicatorChart = undefined
+      return
+    }
+    await nextTick()
+    renderCourseIndicatorChart()
+  }
+)
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeCharts)
+  majorRadarChart?.dispose()
+  courseObjectiveChart?.dispose()
+  courseIndicatorChart?.dispose()
 })
 </script>
 
@@ -1425,6 +1763,32 @@ watch(selectedClassId, () => {
   font-size: 12px;
 }
 
+.penetration-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.penetration-metric-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid #e8edf5;
+}
+
+.penetration-metric-label {
+  color: #4b5d79;
+  font-size: 13px;
+}
+
+.penetration-metric-value {
+  color: #123259;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
 .action-panel {
   margin-top: 20px;
 }
@@ -1448,6 +1812,22 @@ watch(selectedClassId, () => {
 
 .result-card {
   border: 1px solid var(--line);
+}
+
+.report-chart-box {
+  height: 320px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid #e8edf5;
+}
+
+.radar-chart-box {
+  height: 360px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid #e8edf5;
 }
 
 .wide-result-card {
