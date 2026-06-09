@@ -89,14 +89,29 @@
           <h3 class="panel-title">用户管理</h3>
           <el-button type="primary" @click="openUserCreateDialog">新增用户</el-button>
         </div>
-        <el-empty v-if="!createdUsers.length" description="本轮只补新增入口，创建后会在这里展示最近新增记录。" />
-        <el-table v-else :data="createdUsers" border size="small">
+        <div class="user-toolbar">
+          <el-radio-group v-model="selectedUserRole" size="small" @change="handleUserRoleChange">
+            <el-radio-button v-for="option in userRoleOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </el-radio-button>
+          </el-radio-group>
+          <div class="muted user-hint">当前展示后端真实列表，新增成功后会自动刷新当前角色。</div>
+        </div>
+        <div v-if="recentCreatedUser" class="user-created-note">
+          最近新增：{{ recentCreatedUser.username }}（{{ getRoleLabel(recentCreatedUser.roleCode) }}）
+        </div>
+        <el-empty
+          v-if="!loadingUsers && !userRows.length"
+          :description="`${currentUserRoleLabel}列表暂时为空，创建后会自动显示在这里。`"
+        />
+        <el-table v-else v-loading="loadingUsers" :data="userRows" border size="small">
           <el-table-column prop="username" label="用户名" min-width="120" />
-          <el-table-column prop="roleCode" label="角色" width="100" />
+          <el-table-column prop="roleLabel" label="角色" width="100" />
           <el-table-column prop="collegeName" label="所属学院" min-width="120" />
           <el-table-column prop="status" label="状态" width="80">
             <template #default="{ row }">{{ row.status === 1 ? '启用' : '停用' }}</template>
           </el-table-column>
+          <el-table-column prop="createTimeLabel" label="创建时间" min-width="150" />
         </el-table>
       </div>
 
@@ -336,7 +351,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, UploadProps, UploadUserFile } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
-import { createSysUser } from '@/api/auth'
+import { createSysUser, listUsersByRole } from '@/api/auth'
 import { createCollege, deleteCollege, listColleges, pageColleges, updateCollege } from '@/api/college'
 import { createCourse, deleteCourse, downloadCourseTemplate, importCoursesFromExcel, pageCourses, updateCourse } from '@/api/course'
 import {
@@ -392,7 +407,10 @@ const teachingClasses = ref<TeachingClassVO[]>([])
 const userDialogVisible = ref(false)
 const submittingUser = ref(false)
 const userFormRef = ref<FormInstance>()
-const createdUsers = ref<SysUserVO[]>([])
+const recentCreatedUser = ref<SysUserVO>()
+const selectedUserRole = ref<'teacher' | 'leader' | 'edu'>('teacher')
+const roleUsers = ref<SysUserVO[]>([])
+const loadingUsers = ref(false)
 
 const loadingCourses = ref(false)
 const loadingRequirements = ref(false)
@@ -518,6 +536,28 @@ const userRules: FormRules<CreateUserRequest> = {
   roleCode: [{ required: true, message: '请选择角色', trigger: 'change' }]
 }
 
+const userRoleOptions = [
+  { label: '课程教师', value: 'teacher' },
+  { label: '专业负责人', value: 'leader' },
+  { label: '教务管理员', value: 'edu' }
+] as const
+
+const roleLabelMap: Record<string, string> = {
+  teacher: '课程教师',
+  leader: '专业负责人',
+  edu: '教务管理员',
+  admin: '系统管理员'
+}
+
+const getRoleLabel = (roleCode?: string) => roleLabelMap[roleCode || ''] || roleCode || '-'
+
+const formatDateTime = (value?: string) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
 const getCourseStudentCount = (courseId: number) => {
   const relatedClasses = teachingClasses.value.filter((item) => item.courseId === courseId)
   if (!relatedClasses.length) return '-'
@@ -568,6 +608,17 @@ const schoolYearRows = computed(() =>
     yearName: item.yearName,
     semesterName: item.semesterName,
     raw: item
+  }))
+)
+
+const currentUserRoleLabel = computed(() => getRoleLabel(selectedUserRole.value))
+
+const userRows = computed(() =>
+  roleUsers.value.map((user) => ({
+    ...user,
+    roleLabel: getRoleLabel(user.roleCode),
+    collegeName: user.collegeName || '-',
+    createTimeLabel: formatDateTime(user.createTime)
   }))
 )
 
@@ -737,6 +788,24 @@ const openIndicatorEditDialog = (indicator: IndicatorPointVO) => {
 const openUserCreateDialog = () => {
   resetUserForm()
   userDialogVisible.value = true
+}
+
+const loadUsersByRole = async (roleCode = selectedUserRole.value) => {
+  loadingUsers.value = true
+  try {
+    roleUsers.value = await listUsersByRole(roleCode)
+  } finally {
+    loadingUsers.value = false
+  }
+}
+
+const handleUserRoleChange = async () => {
+  try {
+    await loadUsersByRole()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '用户列表加载失败'
+    ElMessage.error(message)
+  }
 }
 
 const loadCourses = async () => {
@@ -1115,15 +1184,19 @@ const submitUser = async () => {
     })
 
     const collegeName = colleges.value.find((item) => item.id === userForm.collegeId)?.collegeName
-    createdUsers.value.unshift({
+    recentCreatedUser.value = {
       id: userId,
       username: userForm.username.trim(),
       roleCode: userForm.roleCode,
       collegeName,
       status: userForm.status ?? 1
-    })
+    }
 
     userDialogVisible.value = false
+    if (selectedUserRole.value !== userForm.roleCode) {
+      selectedUserRole.value = userForm.roleCode as 'teacher' | 'leader' | 'edu'
+    }
+    await loadUsersByRole()
     ElMessage.success('用户已创建')
   } catch (error) {
     const message = error instanceof Error ? error.message : '用户创建失败'
@@ -1218,7 +1291,7 @@ const submitImportCourses = async () => {
 }
 
 onMounted(async () => {
-  const [collegeSimpleResult, collegePageResult, schoolYearResult, majorSimpleResult, majorPageResult, courseResult, requirementResult, indicatorResult, classResult] =
+  const [collegeSimpleResult, collegePageResult, schoolYearResult, majorSimpleResult, majorPageResult, courseResult, requirementResult, indicatorResult, classResult, userListResult] =
     await Promise.allSettled([
       loadColleges(),
       loadCollegeRecords(),
@@ -1228,7 +1301,8 @@ onMounted(async () => {
       loadCourses(),
       loadRequirements(),
       loadIndicators(),
-      loadTeachingClasses()
+      loadTeachingClasses(),
+      loadUsersByRole()
     ])
 
   if (collegeSimpleResult.status === 'rejected') {
@@ -1258,10 +1332,31 @@ onMounted(async () => {
   if (classResult.status === 'rejected') {
     ElMessage.error(classResult.reason instanceof Error ? classResult.reason.message : '教学班列表加载失败')
   }
+  if (userListResult.status === 'rejected') {
+    ElMessage.error(userListResult.reason instanceof Error ? userListResult.reason.message : '用户列表加载失败')
+  }
 })
 </script>
 
 <style scoped>
+.user-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.user-hint {
+  line-height: 1.4;
+}
+
+.user-created-note {
+  margin-bottom: 12px;
+  color: #22543d;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .toolbar-actions {
   display: flex;
   gap: 12px;
