@@ -88,6 +88,11 @@
           show-icon
           style="margin-top: 12px"
         />
+        <div class="action-strip">
+          <el-button type="primary" @click="$router.push('/calculation')">去计算中心继续处理</el-button>
+          <el-button plain @click="$router.push('/score')">去成绩页补课程级前置数据</el-button>
+          <el-button plain @click="$router.push('/matrix')">去矩阵页检查支撑关系</el-button>
+        </div>
       </div>
 
       <div class="panel span-4">
@@ -122,6 +127,45 @@
               <div class="muted">{{ notice.desc }}</div>
             </div>
             <el-tag :type="notice.type" effect="light">{{ notice.tag }}</el-tag>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel span-12">
+        <div class="toolbar">
+          <div>
+            <h3 class="panel-title">计算结果状态摘要</h3>
+            <span class="muted">根据首页当前选择的专业、学年学期和年级，展示最值得优先处理的下一步。</span>
+          </div>
+          <el-tag :type="calculationStatusTagType">{{ calculationStatusTagText }}</el-tag>
+        </div>
+
+        <el-empty
+          v-if="!selectedMajorId"
+          description="先选择专业，再结合学年学期和年级查看当前首页可读取到的真实计算结果。"
+        />
+
+        <div v-else class="status-summary">
+          <div class="status-summary-item">
+            <div class="status-summary-label">课程级计算概况</div>
+            <div class="status-summary-value">
+              {{ classesWithCalculationCount }} / {{ allTeachingClasses.length || 0 }} 个教学班已有结果
+            </div>
+            <div class="muted">{{ courseCalculationHint }}</div>
+          </div>
+
+          <div class="status-summary-item">
+            <div class="status-summary-label">专业级计算概况</div>
+            <div class="status-summary-value">
+              {{ currentMajorHasCalculationResult ? '当前条件下已生成结果' : '当前条件下暂未生成结果' }}
+            </div>
+            <div class="muted">{{ majorCalculationHint }}</div>
+          </div>
+
+          <div class="status-summary-item">
+            <div class="status-summary-label">推荐下一步</div>
+            <div class="status-summary-value">{{ nextActionTitle }}</div>
+            <div class="muted">{{ nextActionDesc }}</div>
           </div>
         </div>
       </div>
@@ -480,6 +524,67 @@ const majorCalculationSummaryType = computed<'success' | 'warning' | 'info'>(() 
   return 'warning'
 })
 
+const calculationStatusTagText = computed(() => {
+  if (!selectedMajorId.value) return '待选择条件'
+  if (currentMajorHasCalculationResult.value) return '已有专业级结果'
+  if (majorCalculationDashboard.value?.canCalculate) return '可继续专业级计算'
+  return '优先补课程级前置数据'
+})
+
+const calculationStatusTagType = computed<'success' | 'warning' | 'info'>(() => {
+  if (!selectedMajorId.value) return 'info'
+  if (currentMajorHasCalculationResult.value) return 'success'
+  if (majorCalculationDashboard.value?.canCalculate) return 'info'
+  return 'warning'
+})
+
+const courseCalculationHint = computed(() => {
+  if (!allTeachingClasses.value.length) {
+    return '当前系统里还没有教学班，建议先在成绩页建立教学班并导入学生、成绩。'
+  }
+  if (!classesWithoutCalculationCount.value) {
+    return '所有教学班都已有课程级结果，可以把重点放到专业级计算和结果复核。'
+  }
+  return `还有 ${classesWithoutCalculationCount.value} 个教学班没有课程级结果，首页建议优先去成绩页和计算中心处理。`
+})
+
+const majorCalculationHint = computed(() => {
+  if (!selectedTermId.value || !selectedGrade.value.trim()) {
+    return '补齐学年学期和年级后，首页才能对应读取专业级真实结果。'
+  }
+  if (currentMajorHasCalculationResult.value) {
+    return `当前条件下已生成 ${majorCalculationResult.value?.totalRecords ?? 0} 条专业级结果，可继续查看详细结果与达标情况。`
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return '前置条件已具备，但还没有专业级结果，建议直接去计算中心执行专业级计算。'
+  }
+  return majorCalculationDashboard.value?.errorMessage || '当前条件下还没有达到专业级计算的前置条件。'
+})
+
+const nextActionTitle = computed(() => {
+  if (!selectedMajorId.value) return '先选择一个专业'
+  if (!selectedTermId.value || !selectedGrade.value.trim()) return '补齐学年学期和年级条件'
+  if (currentMajorHasCalculationResult.value) return '查看并复核专业级结果'
+  if (majorCalculationDashboard.value?.canCalculate) return '去计算中心执行专业级计算'
+  if (classesWithoutCalculationCount.value) return '先补课程级计算结果'
+  return '继续完善矩阵和教学班前置数据'
+})
+
+const nextActionDesc = computed(() => {
+  if (!selectedMajorId.value) return '首页当前还无法判断该专业的真实计算情况。'
+  if (!selectedTermId.value || !selectedGrade.value.trim()) return '专业级结果和看板都依赖条件筛选。'
+  if (currentMajorHasCalculationResult.value) {
+    return '当前首页已经能看到真实结果状态，下一步更适合去计算中心看细节。'
+  }
+  if (majorCalculationDashboard.value?.canCalculate) {
+    return '课程级结果已齐备，专业级结果还没生成，适合直接推进。'
+  }
+  if (classesWithoutCalculationCount.value) {
+    return '仍有教学班缺少课程级结果，先补这一层最划算。'
+  }
+  return '当前结果不足以支撑专业级计算，建议先补矩阵、教学班或成绩数据。'
+})
+
 function formatNumber(value?: number | string | null) {
   if (value === undefined || value === null || value === '') return '-'
   const num = Number(value)
@@ -678,5 +783,37 @@ onBeforeUnmount(() => {
 .quick-button small {
   color: #6c7b90;
   font-size: 12px;
+}
+
+.action-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.status-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.status-summary-item {
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+  padding: 16px;
+  background: #f9fbff;
+}
+
+.status-summary-label {
+  color: #6c7b90;
+  font-size: 13px;
+}
+
+.status-summary-value {
+  margin: 10px 0 8px;
+  color: #20324d;
+  font-size: 18px;
+  font-weight: 600;
 }
 </style>
