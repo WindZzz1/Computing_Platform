@@ -193,7 +193,7 @@
         <div class="toolbar">
           <div>
             <h3 class="panel-title">成绩录入预览</h3>
-            <span class="muted">按教学班查看已导入的成绩记录，可按考核点筛选并清空当前班级成绩。</span>
+            <span class="muted">按教学班查看已导入的成绩记录，可按考核点筛选、手动修改单条成绩，并清空当前班级成绩。</span>
           </div>
           <div class="toolbar-actions">
             <el-select v-model="gradeQuery.pointId" clearable placeholder="全部考核点" style="width: 220px">
@@ -224,6 +224,11 @@
           <el-table-column prop="pointName" label="考核点名称" min-width="220" />
           <el-table-column prop="score" label="得分" width="100" />
           <el-table-column prop="fullScore" label="满分" width="100" />
+          <el-table-column label="操作" width="120">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openGradeEditDialog(row)">手动修改</el-button>
+            </template>
+          </el-table-column>
         </el-table>
 
         <div class="table-footer">
@@ -311,6 +316,44 @@
         <el-button type="primary" :loading="bindingStudents" @click="submitBindStudents">绑定到当前教学班</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="gradeEditDialogVisible" title="手动修改成绩" width="520px" destroy-on-close>
+      <el-alert
+        type="info"
+        show-icon
+        :closable="false"
+        title="这里适合微调单条成绩。提交后会直接调用后端真实更新接口，并刷新当前成绩列表。"
+        style="margin-bottom: 16px"
+      />
+      <el-form label-width="92px">
+        <el-form-item label="学号">
+          <el-input :model-value="gradeEditForm.studentNo" disabled />
+        </el-form-item>
+        <el-form-item label="姓名">
+          <el-input :model-value="gradeEditForm.studentName" disabled />
+        </el-form-item>
+        <el-form-item label="考核点">
+          <el-input :model-value="gradeEditForm.pointLabel" disabled />
+        </el-form-item>
+        <el-form-item label="满分">
+          <el-input :model-value="String(gradeEditForm.fullScore ?? '-')" disabled />
+        </el-form-item>
+        <el-form-item label="得分">
+          <el-input-number
+            v-model="gradeEditForm.score"
+            :min="0"
+            :max="gradeEditForm.fullScore ?? undefined"
+            :precision="2"
+            :step="1"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="gradeEditDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingGradeEdit" @click="submitGradeEdit">保存成绩</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -321,7 +364,7 @@ import type { FormInstance, FormRules, UploadProps, UploadUserFile } from 'eleme
 import { UploadFilled } from '@element-plus/icons-vue'
 import { listUsersByRole } from '@/api/auth'
 import { listCourses } from '@/api/course'
-import { deleteClassGrades, downloadGradeTemplate, importGrades, queryGrades } from '@/api/grade-entry'
+import { deleteClassGrades, downloadGradeTemplate, importGrades, queryGrades, updateGrades } from '@/api/grade-entry'
 import { listSchoolYears } from '@/api/schoolyear'
 import {
   createTeachingClass,
@@ -369,9 +412,11 @@ const gradeTemplateLoading = ref(false)
 const gradeLoading = ref(false)
 const deletingGrades = ref(false)
 const savingClass = ref(false)
+const savingGradeEdit = ref(false)
 const unbindingStudentNo = ref<string>()
 const bindDialogVisible = ref(false)
 const classDialogVisible = ref(false)
+const gradeEditDialogVisible = ref(false)
 const classEditing = ref<TeachingClassVO>()
 const selectedClassId = ref<number>()
 const selectedClassDetail = ref<TeachingClassVO>()
@@ -395,6 +440,26 @@ const classFormRef = ref<FormInstance>()
 const gradeQuery = reactive<GradeEntryQueryRequest>({
   current: 1,
   pageSize: 20
+})
+
+const gradeEditForm = reactive<{
+  id?: number
+  studentId: number
+  studentNo: string
+  studentName: string
+  pointId: number
+  pointLabel: string
+  fullScore?: number
+  score?: number
+}>({
+  id: undefined,
+  studentId: 0,
+  studentNo: '',
+  studentName: '',
+  pointId: 0,
+  pointLabel: '',
+  fullScore: undefined,
+  score: undefined
 })
 
 const classForm = reactive<ClassFormState>({
@@ -1079,6 +1144,58 @@ const handleDeleteGrades = async () => {
     ElMessage.error(message)
   } finally {
     deletingGrades.value = false
+  }
+}
+
+const openGradeEditDialog = (row: StudentScoreVO) => {
+  gradeEditForm.id = row.id
+  gradeEditForm.studentId = row.studentId
+  gradeEditForm.studentNo = row.studentNo
+  gradeEditForm.studentName = row.name
+  gradeEditForm.pointId = row.pointId
+  gradeEditForm.pointLabel = [row.pointCode, row.pointName].filter(Boolean).join(' ').trim() || `考核点 ${row.pointId}`
+  gradeEditForm.fullScore = row.fullScore ?? undefined
+  gradeEditForm.score = row.score == null ? undefined : Number(row.score)
+  gradeEditDialogVisible.value = true
+}
+
+const submitGradeEdit = async () => {
+  if (!selectedClassId.value) {
+    ElMessage.warning('请先选择教学班')
+    return
+  }
+
+  if (gradeEditForm.score == null) {
+    ElMessage.warning('请先填写成绩')
+    return
+  }
+
+  if (gradeEditForm.fullScore != null && gradeEditForm.score > gradeEditForm.fullScore) {
+    ElMessage.warning(`得分不能超过满分 ${gradeEditForm.fullScore}`)
+    return
+  }
+
+  savingGradeEdit.value = true
+  try {
+    await updateGrades({
+      classId: selectedClassId.value,
+      scores: [
+        {
+          id: gradeEditForm.id,
+          studentId: gradeEditForm.studentId,
+          pointId: gradeEditForm.pointId,
+          score: gradeEditForm.score
+        }
+      ]
+    })
+    gradeEditDialogVisible.value = false
+    ElMessage.success('成绩已更新')
+    await loadGradeEntries(gradeQuery.current || 1)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '成绩更新失败'
+    ElMessage.error(message)
+  } finally {
+    savingGradeEdit.value = false
   }
 }
 
