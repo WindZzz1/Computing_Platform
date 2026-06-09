@@ -551,11 +551,23 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
         Map<Long, AssessmentPoint> assessmentPointMap = assessmentPoints.stream()
                 .collect(Collectors.toMap(AssessmentPoint::getId, p -> p));
 
+        // 查询当前教学班已绑定的学生，用于校验手工录分归属
+        QueryWrapper<ClassStudent> classStudentQuery = new QueryWrapper<>();
+        classStudentQuery.eq("teaching_class_id", classId);
+        Set<Long> classStudentIds = classStudentMapper.selectList(classStudentQuery).stream()
+                .map(ClassStudent::getStudentId)
+                .collect(Collectors.toSet());
+
         // 处理每个成绩项
         for (StudentScoreUpdateRequest.ScoreItem scoreItem : request.getScores()) {
             // 参数校验
             if (scoreItem.getStudentId() == null || scoreItem.getPointId() == null) {
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, "学生ID和考核点ID不能为空");
+            }
+
+            // 校验学生是否属于当前教学班
+            if (!classStudentIds.contains(scoreItem.getStudentId())) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "学生不属于当前教学班");
             }
 
             // 验证考核点是否存在
