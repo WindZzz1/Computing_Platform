@@ -118,6 +118,34 @@
                 <li>计算完成：{{ formatTime(courseCalculationResult.calcEndTime) }}</li>
               </ul>
             </el-card>
+            <el-card shadow="never" class="result-card wide-card">
+              <template #header>一级达成度明细</template>
+              <el-table :data="courseLevelOneDetails" border size="small" empty-text="当前还没有一级达成度明细">
+                <el-table-column prop="studentNo" label="学号" width="120" />
+                <el-table-column prop="name" label="姓名" width="110" />
+                <el-table-column prop="objectiveCode" label="课程目标编号" width="130" />
+                <el-table-column prop="objectiveName" label="课程目标名称" min-width="180" />
+                <el-table-column label="一级达成度" width="120">
+                  <template #default="{ row }">{{ formatNumber(row.achievement) }}</template>
+                </el-table-column>
+                <el-table-column prop="calculateTime" label="计算时间" min-width="180">
+                  <template #default="{ row }">{{ formatTime(row.calculateTime) }}</template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+            <el-card shadow="never" class="result-card wide-card">
+              <template #header>二级达成度明细</template>
+              <el-table :data="courseLevelTwoDetails" border size="small" empty-text="当前还没有二级达成度明细">
+                <el-table-column prop="indicatorCode" label="指标点编号" width="130" />
+                <el-table-column prop="indicatorName" label="指标点名称" min-width="180" />
+                <el-table-column label="二级达成度" width="120">
+                  <template #default="{ row }">{{ formatNumber(row.achievement) }}</template>
+                </el-table-column>
+                <el-table-column prop="calculateTime" label="计算时间" min-width="180">
+                  <template #default="{ row }">{{ formatTime(row.calculateTime) }}</template>
+                </el-table-column>
+              </el-table>
+            </el-card>
           </div>
         </template>
       </div>
@@ -291,6 +319,7 @@ import { useUserStore } from '@/stores/user'
 import { pageCourses } from '@/api/course'
 import {
   calculateCourseAchievement,
+  getCourseAchievementCalculationDetail,
   calculateMajorAchievement,
   deleteMajorCalculationResult,
   getCourseAchievementCalculationStatus,
@@ -301,6 +330,7 @@ import { listMajors } from '@/api/major'
 import { listSchoolYears } from '@/api/schoolyear'
 import { pageTeachingClasses } from '@/api/teaching-class'
 import type {
+  AchievementCalculationDetailVO,
   AchievementCalculationResultVO,
   AchievementCalculationStatusVO,
   MajorCalculationDashboardVO,
@@ -334,6 +364,7 @@ const majorForceRecalculate = ref(false)
 
 const courseCalculationStatus = ref<AchievementCalculationStatusVO>()
 const courseCalculationResult = ref<AchievementCalculationResultVO>()
+const courseCalculationDetail = ref<AchievementCalculationDetailVO>()
 const courseCalculationError = ref('')
 
 const majorDashboard = ref<MajorCalculationDashboardVO>()
@@ -358,6 +389,8 @@ const selectedCourseClass = computed(() =>
 )
 
 const selectedCourseClassName = computed(() => (selectedCourseClass.value ? buildClassLabel(selectedCourseClass.value) : ''))
+const courseLevelOneDetails = computed(() => courseCalculationDetail.value?.levelOneDetails ?? [])
+const courseLevelTwoDetails = computed(() => courseCalculationDetail.value?.levelTwoDetails ?? [])
 
 const courseStatusMessage = computed(() => {
   if (!courseCalculationStatus.value) return ''
@@ -446,14 +479,21 @@ async function loadCourseCalculationStatus() {
 
   if (!canViewCourseCalculation.value) {
     courseCalculationStatus.value = undefined
+    courseCalculationDetail.value = undefined
     courseCalculationError.value = '当前角色没有课程级计算状态查看权限'
     return
   }
 
   try {
     courseCalculationStatus.value = await getCourseAchievementCalculationStatus(selectedCourseClassId.value)
+    if (courseCalculationStatus.value.hasCalculationResult) {
+      courseCalculationDetail.value = await getCourseAchievementCalculationDetail(selectedCourseClassId.value)
+    } else {
+      courseCalculationDetail.value = undefined
+    }
     courseCalculationError.value = ''
   } catch (error) {
+    courseCalculationDetail.value = undefined
     courseCalculationError.value = error instanceof Error ? error.message : '课程级计算状态获取失败'
   }
 }
@@ -475,10 +515,12 @@ async function handleCourseCalculation() {
       await loadCourseCalculationStatus()
       await reloadMajorData()
     } else {
+      courseCalculationDetail.value = undefined
       courseCalculationError.value = result.errorMessage || '课程级计算失败'
       ElMessage.warning(courseCalculationError.value)
     }
   } catch (error) {
+    courseCalculationDetail.value = undefined
     courseCalculationError.value = error instanceof Error ? error.message : '课程级计算失败'
     ElMessage.error(courseCalculationError.value)
   } finally {

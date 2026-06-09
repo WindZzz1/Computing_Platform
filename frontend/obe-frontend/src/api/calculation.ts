@@ -1,4 +1,5 @@
 import {
+  type AchievementCalculationDetailVO,
   apiPost,
   type AchievementCalculationRequest,
   type AchievementCalculationResultVO,
@@ -15,6 +16,10 @@ export function calculateCourseAchievement(payload: AchievementCalculationReques
 
 export function getCourseAchievementCalculationStatus(classId: number) {
   return apiPost<AchievementCalculationStatusVO>('/achievement-calculation/status', { classId })
+}
+
+export function getCourseAchievementCalculationDetail(classId: number) {
+  return apiPost<AchievementCalculationDetailVO>('/achievement-calculation/detail', { classId })
 }
 
 export function getMajorCalculationDashboard(payload: MajorDashboardQueryRequest) {
