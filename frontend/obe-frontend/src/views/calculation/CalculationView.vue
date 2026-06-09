@@ -133,6 +133,41 @@
               </ul>
             </el-card>
             <el-card shadow="never" class="result-card wide-card">
+              <template #header>课程级结果概览</template>
+              <div class="chart-summary-grid">
+                <div class="chart-summary-card">
+                  <span class="chart-summary-label">一级结果覆盖学生</span>
+                  <strong class="chart-summary-value">{{ courseCalculationResult.levelOneStats?.totalStudents ?? 0 }}</strong>
+                  <span class="chart-summary-tip">来自真实一级达成度明细</span>
+                </div>
+                <div class="chart-summary-card">
+                  <span class="chart-summary-label">课程目标平均达成度</span>
+                  <strong class="chart-summary-value">{{ formatNumber(courseCalculationResult.levelOneStats?.averageAchievement) }}</strong>
+                  <span class="chart-summary-tip">按课程目标聚合后的整体水平</span>
+                </div>
+                <div class="chart-summary-card">
+                  <span class="chart-summary-label">指标点平均达成度</span>
+                  <strong class="chart-summary-value">{{ formatNumber(courseCalculationResult.levelTwoStats?.averageAchievement) }}</strong>
+                  <span class="chart-summary-tip">用于判断课程级结果是否适合继续进入专业级</span>
+                </div>
+                <div class="chart-summary-card">
+                  <span class="chart-summary-label">指标点结果数量</span>
+                  <strong class="chart-summary-value">{{ courseLevelTwoChartRows.length }}</strong>
+                  <span class="chart-summary-tip">当前班级已返回的二级指标点结果</span>
+                </div>
+              </div>
+            </el-card>
+            <el-card shadow="never" class="result-card wide-card">
+              <template #header>课程目标平均达成度图</template>
+              <div v-if="courseLevelOneChartRows.length" ref="courseLevelOneChartRef" class="chart-box"></div>
+              <el-empty v-else description="当前还没有足够的一级达成度数据用于绘图" />
+            </el-card>
+            <el-card shadow="never" class="result-card wide-card">
+              <template #header>指标点达成度图</template>
+              <div v-if="courseLevelTwoChartRows.length" ref="courseLevelTwoChartRef" class="chart-box"></div>
+              <el-empty v-else description="当前还没有足够的二级达成度数据用于绘图" />
+            </el-card>
+            <el-card shadow="never" class="result-card wide-card">
               <template #header>一级达成度明细</template>
               <el-table :data="courseLevelOneDetails" border size="small" empty-text="当前还没有一级达成度明细">
                 <el-table-column prop="studentNo" label="学号" width="120" />
@@ -310,6 +345,26 @@
               <li>毕业要求：{{ majorCalculationResult.meetsGraduationRequirement ? '满足' : '未全部满足' }}</li>
             </ul>
           </el-card>
+          <el-card shadow="never" class="result-card">
+            <template #header>专业级结果概览</template>
+            <div class="chart-summary-grid compact-grid">
+              <div class="chart-summary-card">
+                <span class="chart-summary-label">达标指标点</span>
+                <strong class="chart-summary-value">{{ majorPassCount }}</strong>
+                <span class="chart-summary-tip">已达到阈值的指标点数量</span>
+              </div>
+              <div class="chart-summary-card">
+                <span class="chart-summary-label">待提升指标点</span>
+                <strong class="chart-summary-value">{{ majorWarnCount }}</strong>
+                <span class="chart-summary-tip">部署演示时可重点关注这些指标点</span>
+              </div>
+            </div>
+          </el-card>
+          <el-card shadow="never" class="result-card wide-card">
+            <template #header>专业级指标点达成度图</template>
+            <div v-if="majorAchievementChartRows.length" ref="majorAchievementChartRef" class="chart-box"></div>
+            <el-empty v-else description="当前还没有足够的专业级结果用于绘图" />
+          </el-card>
           <el-card shadow="never" class="result-card wide-card">
             <template #header>指标点结果预览</template>
             <el-table :data="majorCalculationRows" border size="small" empty-text="当前筛选条件下还没有可展示的专业级结果">
@@ -335,7 +390,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import * as echarts from 'echarts'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
@@ -398,6 +454,13 @@ const lastLoadedMajorKey = ref('')
 const majorDashboard = ref<MajorCalculationDashboardVO>()
 const majorCalculationResult = ref<MajorCalculationResultVO>()
 const majorCalculationError = ref('')
+const courseLevelOneChartRef = ref<HTMLDivElement>()
+const courseLevelTwoChartRef = ref<HTMLDivElement>()
+const majorAchievementChartRef = ref<HTMLDivElement>()
+
+let courseLevelOneChart: echarts.ECharts | undefined
+let courseLevelTwoChart: echarts.ECharts | undefined
+let majorAchievementChart: echarts.ECharts | undefined
 
 const canViewCourseCalculation = computed(() => userStore.role === 'teacher' || userStore.role === 'admin')
 const canRunCourseCalculation = computed(() => userStore.role === 'teacher')
@@ -419,6 +482,43 @@ const selectedCourseClass = computed(() =>
 const selectedCourseClassName = computed(() => (selectedCourseClass.value ? buildClassLabel(selectedCourseClass.value) : ''))
 const courseLevelOneDetails = computed(() => courseCalculationDetail.value?.levelOneDetails ?? [])
 const courseLevelTwoDetails = computed(() => courseCalculationDetail.value?.levelTwoDetails ?? [])
+const courseLevelOneChartRows = computed(() => {
+  const grouped = new Map<
+    string,
+    {
+      objectiveCode: string
+      objectiveName: string
+      total: number
+      count: number
+    }
+  >()
+
+  courseLevelOneDetails.value.forEach((item) => {
+    const code = item.objectiveCode || `目标${item.objectiveId ?? '-'}`
+    const key = `${item.objectiveId ?? code}_${code}`
+    const current = grouped.get(key) ?? {
+      objectiveCode: code,
+      objectiveName: item.objectiveName || code,
+      total: 0,
+      count: 0
+    }
+    current.total += Number(item.achievement ?? 0)
+    current.count += 1
+    grouped.set(key, current)
+  })
+
+  return Array.from(grouped.values()).map((item) => ({
+    ...item,
+    averageAchievement: item.count ? item.total / item.count : 0
+  }))
+})
+const courseLevelTwoChartRows = computed(() =>
+  courseLevelTwoDetails.value.map((item) => ({
+    indicatorCode: item.indicatorCode || `指标点${item.indicatorId ?? '-'}`,
+    indicatorName: item.indicatorName || item.indicatorCode || `指标点${item.indicatorId ?? '-'}`,
+    achievement: Number(item.achievement ?? 0)
+  }))
+)
 const canExportCourseReport = computed(
   () =>
     canRunCourseCalculation.value &&
@@ -529,6 +629,17 @@ const majorGuideType = computed<'info' | 'success' | 'warning'>(() => {
   }
   return 'warning'
 })
+const majorAchievementChartRows = computed(() =>
+  majorCalculationRows.value.map((item) => ({
+    indicatorCode: item.indicatorCode || `指标点${item.indicatorId ?? '-'}`,
+    indicatorName: item.indicatorName || item.indicatorCode || `指标点${item.indicatorId ?? '-'}`,
+    requirementCode: item.requirementCode || '-',
+    achievement: Number(item.achievement ?? 0),
+    meetsThreshold: Boolean(item.meetsThreshold)
+  }))
+)
+const majorPassCount = computed(() => majorAchievementChartRows.value.filter((item) => item.meetsThreshold).length)
+const majorWarnCount = computed(() => majorAchievementChartRows.value.length - majorPassCount.value)
 
 function buildClassLabel(item: TeachingClassVO) {
   const course = item.courseName || item.courseCode || '未命名课程'
@@ -581,6 +692,201 @@ function buildMajorRequest() {
     grade: selectedGrade.value.trim(),
     forceRecalculate: majorForceRecalculate.value
   }
+}
+
+function renderCourseLevelOneChart() {
+  if (!courseLevelOneChartRef.value || !courseLevelOneChartRows.value.length) {
+    courseLevelOneChart?.dispose()
+    courseLevelOneChart = undefined
+    return
+  }
+
+  if (!courseLevelOneChart) {
+    courseLevelOneChart = echarts.init(courseLevelOneChartRef.value)
+  }
+
+  courseLevelOneChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      valueFormatter: (value: number) => formatNumber(value)
+    },
+    grid: {
+      left: 48,
+      right: 24,
+      top: 24,
+      bottom: 36
+    },
+    xAxis: {
+      type: 'category',
+      data: courseLevelOneChartRows.value.map((item) => item.objectiveCode),
+      axisLabel: {
+        color: '#4b5d79'
+      }
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      axisLabel: {
+        color: '#4b5d79'
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#e8edf5'
+        }
+      }
+    },
+    series: [
+      {
+        type: 'bar',
+        barMaxWidth: 42,
+        data: courseLevelOneChartRows.value.map((item) => Number(item.averageAchievement.toFixed(4))),
+        itemStyle: {
+          color: '#1776f2',
+          borderRadius: [8, 8, 0, 0]
+        }
+      }
+    ]
+  })
+}
+
+function renderCourseLevelTwoChart() {
+  if (!courseLevelTwoChartRef.value || !courseLevelTwoChartRows.value.length) {
+    courseLevelTwoChart?.dispose()
+    courseLevelTwoChart = undefined
+    return
+  }
+
+  if (!courseLevelTwoChart) {
+    courseLevelTwoChart = echarts.init(courseLevelTwoChartRef.value)
+  }
+
+  courseLevelTwoChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      valueFormatter: (value: number) => formatNumber(value)
+    },
+    grid: {
+      left: 48,
+      right: 24,
+      top: 24,
+      bottom: 36
+    },
+    xAxis: {
+      type: 'category',
+      data: courseLevelTwoChartRows.value.map((item) => item.indicatorCode),
+      axisLabel: {
+        color: '#4b5d79'
+      }
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      axisLabel: {
+        color: '#4b5d79'
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#e8edf5'
+        }
+      }
+    },
+    series: [
+      {
+        type: 'bar',
+        barMaxWidth: 42,
+        data: courseLevelTwoChartRows.value.map((item) => Number(item.achievement.toFixed(4))),
+        itemStyle: {
+          color: '#22c55e',
+          borderRadius: [8, 8, 0, 0]
+        }
+      }
+    ]
+  })
+}
+
+function renderMajorAchievementChart() {
+  if (!majorAchievementChartRef.value || !majorAchievementChartRows.value.length) {
+    majorAchievementChart?.dispose()
+    majorAchievementChart = undefined
+    return
+  }
+
+  if (!majorAchievementChart) {
+    majorAchievementChart = echarts.init(majorAchievementChartRef.value)
+  }
+
+  const threshold = Number(majorCalculationResult.value?.threshold ?? 0)
+
+  majorAchievementChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow'
+      },
+      formatter: (params: Array<{ data: number; name: string }>) => {
+        const target = params[0]
+        return `${target?.name || '-'}<br/>达成度：${formatNumber(target?.data)}`
+      }
+    },
+    grid: {
+      left: 56,
+      right: 28,
+      top: 28,
+      bottom: 36
+    },
+    xAxis: {
+      type: 'category',
+      data: majorAchievementChartRows.value.map((item) => item.indicatorCode),
+      axisLabel: {
+        interval: 0,
+        color: '#4b5d79'
+      }
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      axisLabel: {
+        color: '#4b5d79'
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#e8edf5'
+        }
+      }
+    },
+    series: [
+      {
+        type: 'bar',
+        barMaxWidth: 42,
+        data: majorAchievementChartRows.value.map((item) => ({
+          value: Number(item.achievement.toFixed(4)),
+          itemStyle: {
+            color: item.meetsThreshold ? '#1776f2' : '#f59e0b',
+            borderRadius: [8, 8, 0, 0]
+          }
+        })),
+        markLine: threshold
+          ? {
+              symbol: 'none',
+              label: {
+                formatter: `阈值 ${formatNumber(threshold)}`
+              },
+              lineStyle: {
+                color: '#ef4444',
+                type: 'dashed'
+              },
+              data: [{ yAxis: Number(threshold.toFixed(4)) }]
+            }
+          : undefined
+      }
+    ]
+  })
+}
+
+function resizeCharts() {
+  courseLevelOneChart?.resize()
+  courseLevelTwoChart?.resize()
+  majorAchievementChart?.resize()
 }
 
 async function loadCourseCalculationStatus() {
@@ -838,6 +1144,7 @@ async function loadBaseOptions() {
 
 onMounted(() => {
   void loadBaseOptions()
+  window.addEventListener('resize', resizeCharts)
 })
 
 watch(selectedCourseClassId, () => {
@@ -849,6 +1156,52 @@ watch(selectedCourseClassId, () => {
   if (selectedCourseClassId.value && canViewCourseCalculation.value) {
     void loadCourseCalculationStatus()
   }
+})
+
+watch(
+  () => courseLevelOneChartRows.value.length,
+  async (length) => {
+    if (!length) {
+      courseLevelOneChart?.dispose()
+      courseLevelOneChart = undefined
+      return
+    }
+    await nextTick()
+    renderCourseLevelOneChart()
+  }
+)
+
+watch(
+  () => courseLevelTwoChartRows.value.length,
+  async (length) => {
+    if (!length) {
+      courseLevelTwoChart?.dispose()
+      courseLevelTwoChart = undefined
+      return
+    }
+    await nextTick()
+    renderCourseLevelTwoChart()
+  }
+)
+
+watch(
+  () => majorAchievementChartRows.value.length,
+  async (length) => {
+    if (!length) {
+      majorAchievementChart?.dispose()
+      majorAchievementChart = undefined
+      return
+    }
+    await nextTick()
+    renderMajorAchievementChart()
+  }
+)
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeCharts)
+  courseLevelOneChart?.dispose()
+  courseLevelTwoChart?.dispose()
+  majorAchievementChart?.dispose()
 })
 </script>
 
@@ -909,6 +1262,45 @@ watch(selectedCourseClassId, () => {
 
 .result-card {
   border-radius: 14px;
+}
+
+.chart-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.compact-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.chart-summary-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.chart-summary-label,
+.chart-summary-tip {
+  color: #4b5d79;
+  font-size: 13px;
+}
+
+.chart-summary-value {
+  color: #123259;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.chart-box {
+  height: 340px;
+  margin-bottom: 8px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid #e8edf5;
 }
 
 .wide-card {
