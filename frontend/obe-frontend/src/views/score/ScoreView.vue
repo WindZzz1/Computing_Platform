@@ -67,12 +67,27 @@
             <el-icon class="upload-icon"><UploadFilled /></el-icon>
             <div class="upload-title">拖拽学生 Excel 到这里，或点击选择文件</div>
             <template #tip>
-              <div class="muted">先导入学生到系统库，再把导入成功的学号批量绑定到当前教学班。</div>
+              <div class="muted">支持先导入系统库再绑定，也支持直接导入当前教学班。</div>
             </template>
           </el-upload>
           <div class="import-actions">
-            <el-button type="primary" :loading="importingStudents" @click="submitStudentImport">导入学生</el-button>
-            <el-button :loading="downloadingTemplate" @click="handleDownloadTemplate">下载模板</el-button>
+            <el-button type="primary" :loading="importingStudents" @click="submitStudentImport">导入系统库</el-button>
+            <el-button :loading="downloadingTemplate" @click="handleDownloadTemplate">系统库模板</el-button>
+            <el-button
+              type="success"
+              :disabled="!selectedClassId"
+              :loading="importingStudentsToClass"
+              @click="submitStudentImportToClass"
+            >
+              直接导入当前教学班
+            </el-button>
+            <el-button
+              :disabled="!selectedClassId"
+              :loading="downloadingClassTemplate"
+              @click="handleDownloadClassTemplate"
+            >
+              教学班模板
+            </el-button>
           </div>
           <el-alert
             v-if="lastImportSummary"
@@ -293,9 +308,11 @@ import { listSchoolYears } from '@/api/schoolyear'
 import {
   createTeachingClass,
   deleteTeachingClass,
+  downloadClassStudentTemplate,
   downloadStudentTemplate,
   getTeachingClassStudents,
   importStudentsFromExcel,
+  importStudentsToClassFromExcel,
   importStudentsToClass,
   pageTeachingClasses,
   unbindStudentFromClass,
@@ -324,8 +341,10 @@ type ClassFormState = TeachingClassCreateRequest
 const loading = ref(false)
 const classLoading = ref(false)
 const importingStudents = ref(false)
+const importingStudentsToClass = ref(false)
 const bindingStudents = ref(false)
 const downloadingTemplate = ref(false)
+const downloadingClassTemplate = ref(false)
 const gradeImporting = ref(false)
 const gradeTemplateLoading = ref(false)
 const gradeLoading = ref(false)
@@ -758,6 +777,26 @@ const handleDownloadTemplate = async () => {
   }
 }
 
+const handleDownloadClassTemplate = async () => {
+  if (!selectedClassId.value) {
+    ElMessage.warning('请先选择教学班')
+    return
+  }
+
+  downloadingClassTemplate.value = true
+  try {
+    const blob = await downloadClassStudentTemplate()
+    const fileName = `${selectedClass.value?.className || '教学班学生'}-导入模板.xlsx`
+    downloadBlob(blob, fileName)
+    ElMessage.success('教学班学生模板已开始下载')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '教学班模板下载失败'
+    ElMessage.error(message)
+  } finally {
+    downloadingClassTemplate.value = false
+  }
+}
+
 const handleDownloadGradeTemplate = async () => {
   if (!selectedClassId.value) {
     ElMessage.warning('请先选择教学班')
@@ -797,6 +836,36 @@ const submitStudentImport = async () => {
     ElMessage.error(message)
   } finally {
     importingStudents.value = false
+  }
+}
+
+const submitStudentImportToClass = async () => {
+  if (!selectedClassId.value) {
+    ElMessage.warning('请先选择教学班')
+    return
+  }
+
+  const file = studentFileList.value[0]?.raw
+  if (!file) {
+    ElMessage.warning('请先选择学生 Excel 文件')
+    return
+  }
+
+  importingStudentsToClass.value = true
+  try {
+    const result = await importStudentsToClassFromExcel(selectedClassId.value, file)
+    lastImportResult.value = result
+    studentFileList.value = []
+    await reloadPreview()
+    await showImportResult(result, '教学班学生 Excel 导入完成')
+    if (result.successCount > 0) {
+      ElMessage.success(`当前教学班已新增 ${result.successCount} 名学生`)
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '教学班学生导入失败'
+    ElMessage.error(message)
+  } finally {
+    importingStudentsToClass.value = false
   }
 }
 
