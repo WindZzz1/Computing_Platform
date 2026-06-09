@@ -337,6 +337,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { pageCourses } from '@/api/course'
 import {
@@ -368,6 +369,7 @@ type MajorOption = {
 }
 
 const userStore = useUserStore()
+const route = useRoute()
 
 const loading = ref(false)
 const majorLoading = ref(false)
@@ -476,6 +478,29 @@ const majorFilterSyncMessage = computed(() => {
   return '你已经切换了专业级筛选条件，页面正在按新的专业、学年学期和年级重新联动结果。'
 })
 const majorCalculationRows = computed(() => majorCalculationResult.value?.achievements ?? [])
+const routeClassId = computed(() => {
+  const raw = route.query.classId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
+})
+const routeMajorId = computed(() => {
+  const raw = route.query.majorId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
+})
+const routeTermId = computed(() => {
+  const raw = route.query.termId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
+})
+const routeGrade = computed(() => {
+  const raw = route.query.grade
+  const value = Array.isArray(raw) ? raw[0] : raw
+  return typeof value === 'string' ? value.trim() : ''
+})
 
 const majorGuideMessage = computed(() => {
   if (!canMajorQueryData.value) {
@@ -778,11 +803,23 @@ async function loadBaseOptions() {
     schoolYears.value = schoolYearList
     teachingClasses.value = classPage.records
 
-    selectedCourseClassId.value = teacherTeachingClasses.value[0]?.id
-    selectedMajorId.value = selectedMajorId.value ?? majors.value[0]?.id
-    selectedTermId.value = selectedTermId.value ?? schoolYears.value[0]?.id
+    const routeMatchedClass = routeClassId.value
+      ? teacherTeachingClasses.value.find((item) => item.id === routeClassId.value)
+      : undefined
+    const routeMatchedMajor = routeMajorId.value
+      ? majors.value.find((item) => item.id === routeMajorId.value)
+      : undefined
+    const routeMatchedTerm = routeTermId.value
+      ? schoolYears.value.find((item) => item.id === routeTermId.value)
+      : undefined
 
-    if (!selectedGrade.value) {
+    selectedCourseClassId.value = routeMatchedClass?.id ?? teacherTeachingClasses.value[0]?.id
+    selectedMajorId.value = routeMatchedMajor?.id ?? selectedMajorId.value ?? majors.value[0]?.id
+    selectedTermId.value = routeMatchedTerm?.id ?? selectedTermId.value ?? schoolYears.value[0]?.id
+
+    if (routeGrade.value) {
+      selectedGrade.value = routeGrade.value
+    } else if (!selectedGrade.value) {
       const currentYear = new Date().getFullYear()
       selectedGrade.value = String(currentYear - 4)
     }

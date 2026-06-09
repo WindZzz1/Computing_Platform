@@ -59,6 +59,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRoute } from 'vue-router'
 import WeightMatrix from '@/components/WeightMatrix/WeightMatrix.vue'
 import { listMajors } from '@/api/major'
 import { checkMatrixConfig, getMatrixConfig, saveMatrixConfig } from '@/api/matrix'
@@ -71,6 +72,7 @@ type MatrixRow = {
 }
 
 const loading = ref(false)
+const route = useRoute()
 const saving = ref(false)
 const majors = ref<SysDictMajorSimpleVO[]>([])
 const selectedMajorId = ref<number>()
@@ -210,7 +212,11 @@ const saveMatrix = async () => {
 onMounted(async () => {
   try {
     majors.value = await listMajors()
-    selectedMajorId.value = majors.value[0]?.id
+    const routeMajorRaw = route.query.majorId
+    const routeMajorValue = Array.isArray(routeMajorRaw) ? routeMajorRaw[0] : routeMajorRaw
+    const routeMajorId = Number(routeMajorValue)
+    const matchedMajor = Number.isFinite(routeMajorId) ? majors.value.find((item) => item.id === routeMajorId) : undefined
+    selectedMajorId.value = matchedMajor?.id ?? majors.value[0]?.id
     await reloadMatrix()
   } catch (error) {
     const message = error instanceof Error ? error.message : '专业列表加载失败'
