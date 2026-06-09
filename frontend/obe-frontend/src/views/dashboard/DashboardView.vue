@@ -140,8 +140,8 @@
           <el-button type="primary" @click="goToCalculationWithHint(primaryCalculationAction)">
             {{ primaryCalculationAction.buttonText }}
           </el-button>
-          <el-button plain @click="$router.push('/score')">去成绩页补课程级前置数据</el-button>
-          <el-button plain @click="$router.push('/matrix')">去矩阵页检查支撑关系</el-button>
+          <el-button plain @click="navigateToScore">去成绩页补课程级前置数据</el-button>
+          <el-button plain @click="navigateToMatrix">去矩阵页检查支撑关系</el-button>
         </div>
       </div>
 
@@ -319,7 +319,7 @@
           <div class="muted">当前专业已经选定，但还缺学年学期或年级，所以首页还无法判断专业级结果。</div>
           <div class="empty-guide-actions">
             <el-button type="primary" @click="scrollToTop">回到顶部补齐筛选条件</el-button>
-            <el-button plain @click="$router.push('/calculation')">直接去计算中心查看</el-button>
+            <el-button plain @click="navigateToCalculation">直接去计算中心查看</el-button>
           </div>
         </div>
 
@@ -327,8 +327,8 @@
           <div class="empty-guide-title">还没有补齐课程级结果</div>
           <div class="muted">课程级结果还没全部形成，专业级计算暂时还推不下去，建议先补课程级这一层。</div>
           <div class="empty-guide-actions">
-            <el-button type="primary" @click="$router.push('/calculation')">去计算中心补课程级结果</el-button>
-            <el-button plain @click="$router.push('/score')">去成绩页检查前置数据</el-button>
+            <el-button type="primary" @click="navigateToCalculation">去计算中心补课程级结果</el-button>
+            <el-button plain @click="navigateToScore">去成绩页检查前置数据</el-button>
           </div>
         </div>
 
@@ -336,7 +336,7 @@
           <div class="empty-guide-title">可以生成专业级结果了</div>
           <div class="muted">课程级结果和前置条件已经具备，但当前还没有最终专业级结果，下一步最适合直接执行专业级计算。</div>
           <div class="empty-guide-actions">
-            <el-button type="primary" @click="$router.push('/calculation')">去计算中心执行专业级计算</el-button>
+            <el-button type="primary" @click="navigateToCalculation">去计算中心执行专业级计算</el-button>
           </div>
         </div>
 
@@ -373,7 +373,7 @@
         </h3>
         <p class="muted" style="margin-bottom: 12px">{{ quickEntrySummaryDesc }}</p>
         <div class="quick-grid">
-          <button v-for="entry in quickEntries" :key="entry.label" class="quick-button" @click="$router.push(entry.path)">
+          <button v-for="entry in quickEntries" :key="entry.label" class="quick-button" @click="openQuickEntry(entry)">
             <el-icon :size="24"><component :is="entry.icon" /></el-icon>
             <span>{{ entry.label }}</span>
             <small>{{ entry.desc }}</small>
@@ -386,6 +386,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import {
   Aim,
@@ -468,6 +469,7 @@ type QuickEntry = {
 }
 
 const user = useUserStore()
+const router = useRouter()
 
 const pieEl = ref<HTMLDivElement>()
 let pieChart: echarts.ECharts | undefined
@@ -528,6 +530,14 @@ const pendingCourseCalculationClasses = computed(() => {
     allCalculationStatuses.value.filter((item) => item.hasCalculationResult).map((item) => item.classId)
   )
   return allTeachingClasses.value.filter((item) => !calculatedClassIds.has(item.id))
+})
+const preferredContextClassId = computed(() => {
+  const pendingMajorClassId = pendingMajorCourseStatusList.value.find((item) => item.classId)?.classId
+  if (pendingMajorClassId) return pendingMajorClassId
+  if (pendingCourseCalculationClasses.value.length) return pendingCourseCalculationClasses.value[0].id
+  if (majorTeachingClasses.value.length) return majorTeachingClasses.value[0].id
+  if (allTeachingClasses.value.length) return allTeachingClasses.value[0].id
+  return undefined
 })
 const courseCalculationCoverageRate = computed(() => {
   if (!allTeachingClasses.value.length) return 0
@@ -1291,10 +1301,46 @@ function buildFallbackSortTime() {
   return new Date().toISOString()
 }
 
+function buildPageQuery() {
+  const query: Record<string, string> = {}
+  if (selectedMajorId.value) query.majorId = String(selectedMajorId.value)
+  if (selectedTermId.value) query.termId = String(selectedTermId.value)
+  if (selectedGrade.value.trim()) query.grade = selectedGrade.value.trim()
+  if (preferredContextClassId.value) query.classId = String(preferredContextClassId.value)
+  return query
+}
+
+function buildRouteLocation(path: string) {
+  const query = buildPageQuery()
+  if (path === '/matrix') {
+    return {
+      path,
+      query: selectedMajorId.value ? { majorId: String(selectedMajorId.value) } : {}
+    }
+  }
+  return { path, query }
+}
+
+function navigateToCalculation() {
+  void router.push(buildRouteLocation('/calculation'))
+}
+
+function navigateToScore() {
+  void router.push(buildRouteLocation('/score'))
+}
+
+function navigateToMatrix() {
+  void router.push(buildRouteLocation('/matrix'))
+}
+
+function openQuickEntry(entry: QuickEntry) {
+  void router.push(buildRouteLocation(entry.path))
+}
+
 function goToCalculationWithHint(action: CalculationEntryAction) {
   ElMessage.info(action.message)
   window.setTimeout(() => {
-    window.location.hash = '#/calculation'
+    void router.push(buildRouteLocation('/calculation'))
   }, 120)
 }
 

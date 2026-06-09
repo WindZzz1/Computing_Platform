@@ -359,6 +359,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, UploadProps, UploadUserFile } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
@@ -401,6 +402,7 @@ import type {
 type ClassFormState = TeachingClassCreateRequest
 
 const loading = ref(false)
+const route = useRoute()
 const classLoading = ref(false)
 const importingStudents = ref(false)
 const importingStudentsToClass = ref(false)
@@ -560,6 +562,13 @@ const gradeTableSummary = computed(() => {
     return '当前教学班还没有已导入的成绩记录。'
   }
   return `当前共 ${gradeTotal.value} 条成绩记录，本页展示 ${gradeRows.value.length} 条。`
+})
+
+const routeClassId = computed(() => {
+  const raw = route.query.classId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
 })
 
 const formatTerm = (row: Pick<TeachingClassVO, 'yearName' | 'semesterName'>) =>
@@ -778,6 +787,16 @@ const loadTeachingClasses = async () => {
       indicators.value = []
       gradeRows.value = []
       gradeTotal.value = 0
+    }
+
+    const routeMatchedClass = routeClassId.value
+      ? teachingClasses.value.find((item) => item.id === routeClassId.value)
+      : undefined
+
+    if (routeMatchedClass) {
+      selectedClassId.value = routeMatchedClass.id
+      await reloadPreview()
+      return
     }
 
     if (!selectedClassId.value && teachingClasses.value.length) {

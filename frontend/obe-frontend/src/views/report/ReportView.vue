@@ -394,6 +394,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRoute } from 'vue-router'
 import { getCourseAchievementCalculationStatus } from '@/api/calculation'
 import { queryGrades } from '@/api/grade-entry'
 import { pageGraduationRequirements, pageIndicators } from '@/api/indicator'
@@ -463,6 +464,7 @@ type StatusState = {
 }
 
 const user = useUserStore()
+const route = useRoute()
 
 const canUseCourseReport = computed(() => user.role === 'teacher')
 const canUseMajorReport = computed(() => user.role === 'leader' || user.role === 'edu')
@@ -627,6 +629,29 @@ const rawScoreRows = computed(() =>
       fullScoreText: formatDecimal(item.fullScore)
     }))
 )
+const routeClassId = computed(() => {
+  const raw = route.query.classId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
+})
+const routeMajorId = computed(() => {
+  const raw = route.query.majorId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
+})
+const routeTermId = computed(() => {
+  const raw = route.query.termId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
+})
+const routeGrade = computed(() => {
+  const raw = route.query.grade
+  const value = Array.isArray(raw) ? raw[0] : raw
+  return typeof value === 'string' ? value.trim() : ''
+})
 
 const roleSummary = computed<StatusState>(() => {
   if (canUseCourseReport.value) {
@@ -1288,7 +1313,10 @@ onMounted(async () => {
       loaders.push(
         pageTeachingClasses({ current: 1, pageSize: 500 }).then((page) => {
           courseClasses.value = page.records
-          selectedClassId.value = page.records[0]?.id
+          const routeMatchedClass = routeClassId.value
+            ? page.records.find((item) => item.id === routeClassId.value)
+            : undefined
+          selectedClassId.value = routeMatchedClass?.id ?? page.records[0]?.id
           if (!page.records.length) {
             setCourseStatus('当前暂无可用教学班', '请先在成绩管理页创建教学班并绑定课程、教师、学期，再继续联调课程报表。', 'info')
             setRawScoreStatus('当前暂无可用教学班', '请先在成绩管理页准备教学班和成绩数据，再查询学生原始成绩明细。', 'info')
@@ -1302,8 +1330,17 @@ onMounted(async () => {
         Promise.all([listMajors(), listSchoolYears()]).then(([majorList, termList]) => {
           majors.value = majorList
           schoolYears.value = termList
-          selectedMajorId.value = majorList[0]?.id
-          selectedTermId.value = termList[0]?.id
+          const routeMatchedMajor = routeMajorId.value
+            ? majorList.find((item) => item.id === routeMajorId.value)
+            : undefined
+          const routeMatchedTerm = routeTermId.value
+            ? termList.find((item) => item.id === routeTermId.value)
+            : undefined
+          selectedMajorId.value = routeMatchedMajor?.id ?? majorList[0]?.id
+          selectedTermId.value = routeMatchedTerm?.id ?? termList[0]?.id
+          if (routeGrade.value) {
+            selectedGrade.value = routeGrade.value
+          }
           if (!majorList.length || !termList.length) {
             setMajorStatus('专业报表联调条件未就绪', '当前还缺少专业或学期基础数据，请先补齐基础数据后再联调专业报表。', 'info')
           }
