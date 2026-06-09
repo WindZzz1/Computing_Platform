@@ -114,6 +114,27 @@
             <el-descriptions-item label="指标点结果数">{{ courseReportData.indicatorAchievements?.length ?? 0 }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
+
+        <el-card shadow="never" class="result-card wide-result-card">
+          <template #header>课程目标汇总预览</template>
+          <el-table :data="courseObjectiveSummaryRows" border empty-text="当前报表没有返回课程目标汇总数据">
+            <el-table-column prop="objectiveCode" label="课程目标编号" width="140" />
+            <el-table-column prop="objectiveName" label="课程目标名称" min-width="180" />
+            <el-table-column prop="studentCount" label="学生数" width="100" />
+            <el-table-column prop="classAverageText" label="班级平均达成度" width="140" />
+            <el-table-column prop="passRateText" label="达标率" width="120" />
+          </el-table>
+        </el-card>
+
+        <el-card shadow="never" class="result-card wide-result-card">
+          <template #header>指标点达成结果预览</template>
+          <el-table :data="courseIndicatorAchievementRows" border empty-text="当前报表没有返回指标点达成结果">
+            <el-table-column prop="indicatorCode" label="指标点编号" width="140" />
+            <el-table-column prop="indicatorName" label="指标点名称" min-width="180" />
+            <el-table-column prop="achievementText" label="达成度" width="120" />
+            <el-table-column prop="calculationTimeText" label="计算时间" min-width="180" />
+          </el-table>
+        </el-card>
       </div>
       <el-empty
         v-else-if="courseClasses.length && !courseActionLoading"
@@ -314,6 +335,23 @@ const canSubmitMajorRequest = computed(() => Boolean(selectedMajorId.value && se
 const availableReportCount = computed(() => reportCatalog.value.filter((item) => item.tagType === 'success').length)
 const pendingReportCount = computed(() => reportCatalog.value.filter((item) => item.tagType === 'warning').length)
 const readyIndicatorCount = computed(() => indicatorRows.value.filter((item) => item.ready).length)
+const courseObjectiveSummaryRows = computed(() =>
+  (courseReportData.value?.objectiveSummaries ?? []).map((item) => ({
+    objectiveCode: item.objectiveCode || '-',
+    objectiveName: item.objectiveName || '-',
+    studentCount: item.studentCount ?? 0,
+    classAverageText: formatPercent(item.classAverage),
+    passRateText: formatPercent(item.passRate)
+  }))
+)
+const courseIndicatorAchievementRows = computed(() =>
+  (courseReportData.value?.indicatorAchievements ?? []).map((item) => ({
+    indicatorCode: item.indicatorCode || '-',
+    indicatorName: item.indicatorName || '-',
+    achievementText: formatPercent(item.achievement),
+    calculationTimeText: formatDateTime(item.calculationTime)
+  }))
+)
 
 const roleSummary = computed<StatusState>(() => {
   if (canUseCourseReport.value) {
@@ -449,6 +487,20 @@ const buildClassLabel = (item: TeachingClassVO) => {
   const course = item.courseName || item.courseCode || '未命名课程'
   const className = item.className || `教学班 ${item.id}`
   return `${course} / ${className}`
+}
+
+const formatPercent = (value?: number) => {
+  if (value === undefined || value === null || Number.isNaN(Number(value))) {
+    return '-'
+  }
+  return `${(Number(value) * 100).toFixed(2)}%`
+}
+
+const formatDateTime = (value?: string) => {
+  if (!value) {
+    return '-'
+  }
+  return value.replace('T', ' ').slice(0, 19)
 }
 
 const normalizeBackendMessage = (message: string, scene: 'course' | 'major') => {
@@ -916,6 +968,10 @@ onMounted(async () => {
 
 .result-card {
   border: 1px solid var(--line);
+}
+
+.wide-result-card {
+  grid-column: 1 / -1;
 }
 
 .section-empty {
