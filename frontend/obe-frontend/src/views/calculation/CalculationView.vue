@@ -46,6 +46,20 @@
           >
             开始计算
           </el-button>
+          <el-button
+            :loading="courseExportingExcel"
+            :disabled="!canExportCourseReport"
+            @click="handleExportCourseReport('EXCEL')"
+          >
+            导出 Excel
+          </el-button>
+          <el-button
+            :loading="courseExportingPdf"
+            :disabled="!canExportCourseReport"
+            @click="handleExportCourseReport('PDF')"
+          >
+            导出 PDF
+          </el-button>
         </div>
 
         <el-empty
@@ -86,7 +100,7 @@
           <el-alert
             v-if="courseStatusMessage"
             :title="courseStatusMessage"
-            type="success"
+            :type="courseStatusType"
             show-icon
             class="block-alert"
           />
@@ -238,6 +252,14 @@
         />
 
         <el-alert
+          v-if="majorFilterSyncMessage"
+          :title="majorFilterSyncMessage"
+          type="info"
+          show-icon
+          class="block-alert"
+        />
+
+        <el-alert
           v-if="majorDashboard?.errorMessage"
           :title="majorDashboard.errorMessage"
           type="warning"
@@ -290,7 +312,7 @@
           </el-card>
           <el-card shadow="never" class="result-card wide-card">
             <template #header>指标点结果预览</template>
-            <el-table :data="majorCalculationResult.achievements.slice(0, 8)" border size="small">
+            <el-table :data="majorCalculationRows" border size="small" empty-text="当前筛选条件下还没有可展示的专业级结果">
               <el-table-column prop="requirementCode" label="毕业要求" width="120" />
               <el-table-column prop="indicatorCode" label="指标点编号" width="120" />
               <el-table-column prop="indicatorName" label="指标点名称" min-width="180" />
@@ -313,7 +335,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { pageCourses } from '@/api/course'
@@ -326,6 +348,7 @@ import {
   getMajorCalculationDashboard,
   getMajorCalculationResult
 } from '@/api/calculation'
+import { exportCourseAchievementReportExcel, exportCourseAchievementReportPdf } from '@/api/report'
 import { listMajors } from '@/api/major'
 import { listSchoolYears } from '@/api/schoolyear'
 import { pageTeachingClasses } from '@/api/teaching-class'
@@ -350,6 +373,8 @@ const loading = ref(false)
 const majorLoading = ref(false)
 const courseCalculating = ref(false)
 const majorCalculating = ref(false)
+const courseExportingExcel = ref(false)
+const courseExportingPdf = ref(false)
 
 const majors = ref<MajorOption[]>([])
 const schoolYears = ref<SysDictSchoolYearVO[]>([])
@@ -366,6 +391,7 @@ const courseCalculationStatus = ref<AchievementCalculationStatusVO>()
 const courseCalculationResult = ref<AchievementCalculationResultVO>()
 const courseCalculationDetail = ref<AchievementCalculationDetailVO>()
 const courseCalculationError = ref('')
+const lastLoadedMajorKey = ref('')
 
 const majorDashboard = ref<MajorCalculationDashboardVO>()
 const majorCalculationResult = ref<MajorCalculationResultVO>()
@@ -391,6 +417,12 @@ const selectedCourseClass = computed(() =>
 const selectedCourseClassName = computed(() => (selectedCourseClass.value ? buildClassLabel(selectedCourseClass.value) : ''))
 const courseLevelOneDetails = computed(() => courseCalculationDetail.value?.levelOneDetails ?? [])
 const courseLevelTwoDetails = computed(() => courseCalculationDetail.value?.levelTwoDetails ?? [])
+const canExportCourseReport = computed(
+  () =>
+    canRunCourseCalculation.value &&
+    Boolean(selectedCourseClassId.value) &&
+    Boolean(courseCalculationStatus.value?.hasCalculationResult)
+)
 
 const courseStatusMessage = computed(() => {
   if (!courseCalculationStatus.value) return ''
@@ -398,6 +430,10 @@ const courseStatusMessage = computed(() => {
     ? '当前教学班已经存在课程级达成度结果，可以继续重算或推进专业级计算。'
     : '当前教学班还没有课程级达成度结果，建议先执行一次课程级计算。'
 })
+
+const courseStatusType = computed<'success' | 'warning'>(() =>
+  courseCalculationStatus.value?.hasCalculationResult ? 'success' : 'warning'
+)
 
 const courseGuideMessage = computed(() => {
   if (!teacherTeachingClasses.value.length) {
@@ -409,10 +445,15 @@ const courseGuideMessage = computed(() => {
   if (courseCalculationError.value) {
     return ''
   }
-  if (!courseCalculationStatus.value?.hasCalculationResult) {
-    return '建议顺序：先确认成绩已经导入，再执行课程级计算，得到一级和二级达成度记录。'
+  if (!canRunCourseCalculation.value && courseCalculationStatus.value?.hasCalculationResult) {
+    return '当前角色可以查看这个班级的课程级结果。如果需要导出报表，请使用课程教师账号登录。'
   }
-  return '当前班级课程级结果已具备。如果后续要做专业级计算，可以切到右侧继续查看专业看板。'
+  if (!courseCalculationStatus.value?.hasCalculationResult) {
+    return '建议顺序：先确认学生、成绩和大纲配置已经准备完整，再执行课程级计算，得到一级和二级达成度记录。'
+  }
+  return canExportCourseReport.value
+    ? '当前班级课程级结果已具备，可以直接导出课程报表；如果后续要做专业级计算，也可以切到右侧继续查看专业看板。'
+    : '当前班级课程级结果已具备。如果后续要做专业级计算，可以切到右侧继续查看专业看板。'
 })
 
 const courseGuideType = computed<'info' | 'success'>(() =>
@@ -422,6 +463,19 @@ const courseGuideType = computed<'info' | 'success'>(() =>
 const canQueryMajorCalculation = computed(() => Boolean(selectedMajorId.value && selectedTermId.value && selectedGrade.value.trim()))
 const canRunMajorCalculationNow = computed(() => majorDashboard.value?.canCalculate ?? false)
 const hasMajorResult = computed(() => (majorCalculationResult.value?.totalRecords ?? 0) > 0)
+const currentMajorKey = computed(() => {
+  if (!selectedMajorId.value || !selectedTermId.value || !selectedGrade.value.trim()) {
+    return ''
+  }
+  return [selectedMajorId.value, selectedTermId.value, selectedGrade.value.trim()].join('_')
+})
+const majorFilterSyncMessage = computed(() => {
+  if (!canQueryMajorCalculation.value || !lastLoadedMajorKey.value || lastLoadedMajorKey.value === currentMajorKey.value) {
+    return ''
+  }
+  return '你已经切换了专业级筛选条件，页面正在按新的专业、学年学期和年级重新联动结果。'
+})
+const majorCalculationRows = computed(() => majorCalculationResult.value?.achievements ?? [])
 
 const majorGuideMessage = computed(() => {
   if (!canMajorQueryData.value) {
@@ -433,12 +487,15 @@ const majorGuideMessage = computed(() => {
   if (majorCalculationError.value) {
     return ''
   }
+  if (majorFilterSyncMessage.value) {
+    return '筛选条件已变化，系统会按新的专业范围刷新看板与结果，避免继续显示旧结果。'
+  }
   if (majorDashboard.value?.canCalculate) {
     return hasMajorResult.value
       ? '当前条件下已经有专业级计算结果。你可以重新查看结果，也可以在确认需要时强制重算。'
       : '当前条件下已经具备专业级计算前置条件，可以直接执行三级计算。'
   }
-  return '当前还有课程缺少课程级达成度结果，先在左侧完成课程级计算，再回来执行专业级计算。'
+  return '当前还有课程缺少课程级达成度结果，先在左侧完成课程级计算；如果仍失败，请优先检查成绩、课程目标和指标点支撑关系是否完整。'
 })
 
 const majorGuideType = computed<'info' | 'success' | 'warning'>(() => {
@@ -465,6 +522,33 @@ function formatTime(value?: string) {
   return value.replace('T', ' ').slice(0, 19)
 }
 
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  window.URL.revokeObjectURL(url)
+}
+
+function getFriendlyErrorMessage(error: unknown, fallback: string) {
+  const rawMessage = error instanceof Error ? error.message : fallback
+
+  if (rawMessage.includes('timeout')) {
+    return `${fallback}：请求超时，建议确认后端服务和数据库连接状态后再试。`
+  }
+  if (rawMessage.includes('403') || rawMessage.includes('无权') || rawMessage.includes('权限')) {
+    return `${fallback}：当前账号没有操作权限，请切换到对应角色后重试。`
+  }
+  if (rawMessage.includes('教学班级ID不能为空') || rawMessage.includes('classId')) {
+    return `${fallback}：当前教学班选择无效，请重新选择后再试。`
+  }
+  if (rawMessage.includes('专业') && rawMessage.includes('学期')) {
+    return `${fallback}：请确认专业、学年学期和年级条件已经全部选择完整。`
+  }
+  return rawMessage || fallback
+}
+
 function buildMajorRequest() {
   return {
     majorId: selectedMajorId.value!,
@@ -488,13 +572,18 @@ async function loadCourseCalculationStatus() {
     courseCalculationStatus.value = await getCourseAchievementCalculationStatus(selectedCourseClassId.value)
     if (courseCalculationStatus.value.hasCalculationResult) {
       courseCalculationDetail.value = await getCourseAchievementCalculationDetail(selectedCourseClassId.value)
+      courseCalculationResult.value = courseCalculationResult.value ?? {
+        classId: selectedCourseClassId.value
+      }
     } else {
+      courseCalculationResult.value = undefined
       courseCalculationDetail.value = undefined
     }
     courseCalculationError.value = ''
   } catch (error) {
+    courseCalculationResult.value = undefined
     courseCalculationDetail.value = undefined
-    courseCalculationError.value = error instanceof Error ? error.message : '课程级计算状态获取失败'
+    courseCalculationError.value = getFriendlyErrorMessage(error, '课程级计算状态获取失败')
   }
 }
 
@@ -516,15 +605,51 @@ async function handleCourseCalculation() {
       await reloadMajorData()
     } else {
       courseCalculationDetail.value = undefined
-      courseCalculationError.value = result.errorMessage || '课程级计算失败'
+      courseCalculationError.value = result.errorMessage
+        ? `课程级计算失败：${result.errorMessage}`
+        : '课程级计算失败：请先检查成绩、课程目标和指标点支撑关系是否已经准备完整。'
       ElMessage.warning(courseCalculationError.value)
     }
   } catch (error) {
     courseCalculationDetail.value = undefined
-    courseCalculationError.value = error instanceof Error ? error.message : '课程级计算失败'
+    courseCalculationError.value = getFriendlyErrorMessage(
+      error,
+      '课程级计算失败'
+    )
     ElMessage.error(courseCalculationError.value)
   } finally {
     courseCalculating.value = false
+  }
+}
+
+async function handleExportCourseReport(format: 'EXCEL' | 'PDF') {
+  if (!selectedCourseClassId.value || !canExportCourseReport.value) return
+
+  const loadingRef = format === 'EXCEL' ? courseExportingExcel : courseExportingPdf
+  loadingRef.value = true
+  try {
+    const blob =
+      format === 'EXCEL'
+        ? await exportCourseAchievementReportExcel({
+            classId: selectedCourseClassId.value,
+            exportFormat: 'EXCEL'
+          })
+        : await exportCourseAchievementReportPdf({
+            classId: selectedCourseClassId.value,
+            exportFormat: 'PDF'
+          })
+    const safeClassName = (selectedCourseClassName.value || `教学班_${selectedCourseClassId.value}`).replace(/[\\/:*?"<>|]/g, '_')
+    const fileName = `${safeClassName}_课程达成度报表.${format === 'EXCEL' ? 'xlsx' : 'pdf'}`
+    downloadBlob(blob, fileName)
+    ElMessage.success(`课程级${format}报表已开始下载`)
+  } catch (error) {
+    const message = getFriendlyErrorMessage(
+      error,
+      `课程级${format}报表导出失败`
+    )
+    ElMessage.error(message)
+  } finally {
+    loadingRef.value = false
   }
 }
 
@@ -542,7 +667,7 @@ async function loadMajorDashboard() {
     })
     majorCalculationError.value = ''
   } catch (error) {
-    majorCalculationError.value = error instanceof Error ? error.message : '专业级计算看板加载失败'
+    majorCalculationError.value = getFriendlyErrorMessage(error, '专业级计算看板加载失败')
   } finally {
     majorLoading.value = false
   }
@@ -555,11 +680,12 @@ async function loadMajorCalculationResult() {
   try {
     majorCalculationResult.value = await getMajorCalculationResult(buildMajorRequest())
     majorCalculationError.value = ''
+    lastLoadedMajorKey.value = currentMajorKey.value
     if ((majorCalculationResult.value.totalRecords ?? 0) === 0) {
       ElMessage.info('当前条件下还没有专业级计算结果')
     }
   } catch (error) {
-    majorCalculationError.value = error instanceof Error ? error.message : '专业级结果查询失败'
+    majorCalculationError.value = getFriendlyErrorMessage(error, '专业级结果查询失败')
   } finally {
     majorLoading.value = false
   }
@@ -579,11 +705,13 @@ async function handleMajorCalculation() {
       await loadMajorDashboard()
       await loadMajorCalculationResult()
     } else {
-      majorCalculationError.value = result.errorMessage || '专业级计算失败'
+      majorCalculationError.value = result.errorMessage
+        ? `专业级计算失败：${result.errorMessage}`
+        : '专业级计算失败：请先确认当前专业下课程级结果已经准备完整。'
       ElMessage.warning(majorCalculationError.value)
     }
   } catch (error) {
-    majorCalculationError.value = error instanceof Error ? error.message : '专业级计算失败'
+    majorCalculationError.value = getFriendlyErrorMessage(error, '专业级计算失败')
     ElMessage.error(majorCalculationError.value)
   } finally {
     majorCalculating.value = false
@@ -612,13 +740,18 @@ async function reloadMajorData() {
   if (!canQueryMajorCalculation.value) {
     majorDashboard.value = undefined
     majorCalculationResult.value = undefined
+    lastLoadedMajorKey.value = ''
     return
   }
   if (!canMajorQueryData.value) {
     majorDashboard.value = undefined
     majorCalculationResult.value = undefined
+    lastLoadedMajorKey.value = ''
     return
   }
+  majorCalculationError.value = ''
+  majorDashboard.value = undefined
+  majorCalculationResult.value = undefined
   await loadMajorDashboard()
   await loadMajorCalculationResult()
 }
@@ -668,6 +801,17 @@ async function loadBaseOptions() {
 
 onMounted(() => {
   void loadBaseOptions()
+})
+
+watch(selectedCourseClassId, () => {
+  courseCalculationStatus.value = undefined
+  courseCalculationResult.value = undefined
+  courseCalculationDetail.value = undefined
+  courseCalculationError.value = ''
+
+  if (selectedCourseClassId.value && canViewCourseCalculation.value) {
+    void loadCourseCalculationStatus()
+  }
 })
 </script>
 
