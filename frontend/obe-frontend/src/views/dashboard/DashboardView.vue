@@ -61,7 +61,7 @@
           <el-table-column prop="value" label="当前值" min-width="140" />
           <el-table-column prop="status" label="状态" width="120">
             <template #default="{ row }">
-              <el-tag :type="row.statusType">{{ row.status }}</el-tag>
+              <el-tag :type="row.statusType">{{ row.statusLabel || row.status }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="hint" label="说明" min-width="240" />
@@ -379,6 +379,7 @@ type OverviewRow = {
   label: string
   value: string
   status: string
+  statusLabel?: string
   statusType: 'success' | 'warning' | 'info'
   hint: string
 }
@@ -714,66 +715,77 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
   }
 
   return [
-    {
-      label: '课程数量',
-      value: `${majorCourseRows.value.length} 门`,
-      status: majorCourseRows.value.length ? '正常' : '缺少',
-      statusType: majorCourseRows.value.length ? 'success' : 'warning',
-      hint: majorCourseRows.value.length ? '该专业已存在课程数据' : '这个专业下还没有查到课程'
-    },
-    {
-      label: '毕业要求 / 指标点',
-      value: `${majorRequirements.value.length} / ${majorIndicators.value.length}`,
-      status: majorIndicators.value.length ? '正常' : '缺少',
-      statusType: majorIndicators.value.length ? 'success' : 'warning',
-      hint: majorIndicators.value.length ? '毕业要求与指标点接口可正常返回' : '还没有查到该专业的指标点'
-    },
-    {
-      label: '矩阵配置课程',
-      value: `${configuredCourseCount.value} 门`,
-      status: configuredCourseCount.value ? '已配置' : '未配置',
-      statusType: configuredCourseCount.value ? 'success' : 'warning',
-      hint: configuredCourseCount.value
-        ? '这些课程已经在课程-指标点矩阵中配置关系'
+      {
+        label: '课程数量',
+        value: `${majorCourseRows.value.length} 门`,
+        status: majorCourseRows.value.length ? '正常' : '缺少',
+        statusLabel: majorCourseRows.value.length ? '课程齐备' : '缺少课程',
+        statusType: majorCourseRows.value.length ? 'success' : 'warning',
+        hint: majorCourseRows.value.length ? '该专业已存在课程数据' : '这个专业下还没有查到课程'
+      },
+      {
+        label: '毕业要求 / 指标点',
+        value: `${majorRequirements.value.length} / ${majorIndicators.value.length}`,
+        status: majorIndicators.value.length ? '正常' : '缺少',
+        statusLabel: majorIndicators.value.length ? '指标点可用' : '指标点缺失',
+        statusType: majorIndicators.value.length ? 'success' : 'warning',
+        hint: majorIndicators.value.length ? '毕业要求与指标点接口可正常返回' : '还没有查到该专业的指标点'
+      },
+      {
+        label: '矩阵配置课程',
+        value: `${configuredCourseCount.value} 门`,
+        status: configuredCourseCount.value ? '已配置' : '未配置',
+        statusLabel: configuredCourseCount.value ? '矩阵已挂接' : '矩阵未挂接',
+        statusType: configuredCourseCount.value ? 'success' : 'warning',
+        hint: configuredCourseCount.value
+          ? '这些课程已经在课程-指标点矩阵中配置关系'
         : '还没有课程进入矩阵配置'
     },
-    {
-      label: '教学班覆盖',
-      value: `${majorTeachingClasses.value.length} 个班`,
-      status: majorTeachingClasses.value.length ? '已开课' : '未开课',
-      statusType: majorTeachingClasses.value.length ? 'success' : 'warning',
-      hint: majorTeachingClasses.value.length ? '该专业已有教学班与学生规模数据' : '暂时没有查到教学班'
-    },
-    {
-      label: '课程级计算',
-      value: `${majorCalculationDashboard.value?.coursesWithData ?? 0} / ${majorCalculationDashboard.value?.totalCourses ?? 0}`,
-      status: majorCalculationDashboard.value?.canCalculate ? '已具备' : '待补齐',
-      statusType: majorCalculationDashboard.value?.canCalculate ? 'success' : 'warning',
-      hint: majorCalculationDashboard.value?.errorMessage || '课程级结果齐全后，才可以继续专业级计算'
-    },
-    {
-      label: '专业级结果',
-      value: currentMajorHasCalculationResult.value ? `${majorCalculationResult.value?.totalRecords ?? 0} 条` : '暂无结果',
-      status: currentMajorHasCalculationResult.value ? '已生成' : '未生成',
-      statusType: currentMajorHasCalculationResult.value ? 'success' : 'warning',
-      hint: currentMajorHasCalculationResult.value
-        ? `平均达成度 ${formatNumber(majorCalculationResult.value?.averageAchievement)}`
+      {
+        label: '教学班覆盖',
+        value: `${majorTeachingClasses.value.length} 个班`,
+        status: majorTeachingClasses.value.length ? '已开课' : '未开课',
+        statusLabel: majorTeachingClasses.value.length ? '教学班已开' : '教学班缺失',
+        statusType: majorTeachingClasses.value.length ? 'success' : 'warning',
+        hint: majorTeachingClasses.value.length ? '该专业已有教学班与学生规模数据' : '暂时没有查到教学班'
+      },
+      {
+        label: '课程级计算',
+        value: `${majorCalculationDashboard.value?.coursesWithData ?? 0} / ${majorCalculationDashboard.value?.totalCourses ?? 0}`,
+        status: majorCalculationDashboard.value?.canCalculate ? '已具备' : '待补齐',
+        statusLabel: majorCalculationDashboard.value?.canCalculate ? '课程级已齐备' : '课程级待补齐',
+        statusType: majorCalculationDashboard.value?.canCalculate ? 'success' : 'warning',
+        hint: majorCalculationDashboard.value?.errorMessage || '课程级结果齐全后，才可以继续专业级计算'
+      },
+      {
+        label: '专业级结果',
+        value: currentMajorHasCalculationResult.value ? `${majorCalculationResult.value?.totalRecords ?? 0} 条` : '暂无结果',
+        status: currentMajorHasCalculationResult.value ? '已生成' : '未生成',
+        statusLabel: currentMajorHasCalculationResult.value ? '结果已生成' : '结果未生成',
+        statusType: currentMajorHasCalculationResult.value ? 'success' : 'warning',
+        hint: currentMajorHasCalculationResult.value
+          ? `平均达成度 ${formatNumber(majorCalculationResult.value?.averageAchievement)}`
         : '当前条件下还没有专业级计算结果'
     },
-    {
-      label: '矩阵校验',
-      value: matrixCheckValid.value ? '通过' : '未通过',
-      status: matrixCheckValid.value ? '就绪' : '待完善',
-      statusType: matrixCheckValid.value ? 'success' : 'warning',
-      hint: matrixCheckMessage.value || '已按矩阵校验接口检查权重合计'
-    },
-    {
-      label: '指标点就绪数',
-      value: `${readyIndicatorCount.value} / ${majorIndicators.value.length}`,
-      status: readyIndicatorCount.value === majorIndicators.value.length && majorIndicators.value.length ? '齐全' : '待补充',
-      statusType:
-        readyIndicatorCount.value === majorIndicators.value.length && majorIndicators.value.length ? 'success' : 'warning',
-      hint: '只有权重列和约等于 1 的指标点，才算真正可用于后续联调'
+      {
+        label: '矩阵校验',
+        value: matrixCheckValid.value ? '通过' : '未通过',
+        status: matrixCheckValid.value ? '就绪' : '待完善',
+        statusLabel: matrixCheckValid.value ? '矩阵已通过' : '矩阵待完善',
+        statusType: matrixCheckValid.value ? 'success' : 'warning',
+        hint: matrixCheckMessage.value || '已按矩阵校验接口检查权重合计'
+      },
+      {
+        label: '指标点就绪数',
+        value: `${readyIndicatorCount.value} / ${majorIndicators.value.length}`,
+        status: readyIndicatorCount.value === majorIndicators.value.length && majorIndicators.value.length ? '齐全' : '待补充',
+        statusLabel:
+          readyIndicatorCount.value === majorIndicators.value.length && majorIndicators.value.length
+            ? '指标点就绪'
+            : '指标点待补充',
+        statusType:
+          readyIndicatorCount.value === majorIndicators.value.length && majorIndicators.value.length ? 'success' : 'warning',
+        hint: '只有权重列和约等于 1 的指标点，才算真正可用于后续联调'
     }
   ]
 })
@@ -824,6 +836,31 @@ const recentRecords = computed<RecentRecord[]>(() => {
       tagType: 'success' as const
     }))
 
+  const pendingStatusRecords = pendingCourseCalculationClasses.value.slice(0, 2).map((item) => ({
+    key: `pending-class-${item.id}`,
+    time: `班级 ${item.id}`,
+    title: `${item.className} 仍待补课程级结果`,
+    detail: `${item.courseName || '未绑定课程'} · 建议优先去计算中心处理`,
+    tag: '待补齐',
+    tagType: 'warning' as const
+  }))
+
+  const overviewStatusRecords: RecentRecord[] = []
+  if (selectedMajorId.value && selectedMajorName.value) {
+    overviewStatusRecords.push({
+      key: `overview-major-${selectedMajorId.value}`,
+      time: selectedGrade.value.trim() || '当前条件',
+      title: `${selectedMajorName.value} 当前概览状态已更新`,
+      detail: currentMajorHasCalculationResult.value
+        ? `专业级结果已生成，当前平均达成度 ${formatNumber(majorCalculationResult.value?.averageAchievement)}`
+        : majorCalculationDashboard.value?.canCalculate
+          ? '当前条件下已经具备专业级计算条件'
+          : '当前条件下仍在补课程级结果或前置条件',
+      tag: '概览状态',
+      tagType: currentMajorHasCalculationResult.value ? 'success' : 'primary'
+    })
+  }
+
   const courseRecords = allCourseRows.value.slice(0, 4).map((course) => ({
     key: `course-${course.id}`,
     time: course.updateTime || course.createTime || '-',
@@ -842,7 +879,7 @@ const recentRecords = computed<RecentRecord[]>(() => {
     tagType: 'success' as const
   }))
 
-  return [...calculationRecords, ...courseStatusRecords, ...courseRecords, ...classRecords]
+  return [...calculationRecords, ...overviewStatusRecords, ...courseStatusRecords, ...pendingStatusRecords, ...courseRecords, ...classRecords]
     .sort((a, b) => String(b.time).localeCompare(String(a.time)))
     .slice(0, 6)
 })
