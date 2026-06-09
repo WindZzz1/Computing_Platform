@@ -214,6 +214,41 @@
             <el-descriptions-item label="学生数">{{ majorPenetrationData.majorInfo?.totalStudents ?? 0 }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
+
+        <el-card v-if="majorPenetrationData" shadow="never" class="result-card wide-result-card">
+          <template #header>课程层结果预览</template>
+          <el-table :data="majorPenetrationCourseRows" border empty-text="当前穿透式台账没有返回课程层数据">
+            <el-table-column prop="courseCode" label="课程编号" width="120" />
+            <el-table-column prop="courseName" label="课程名称" min-width="160" />
+            <el-table-column prop="className" label="教学班" min-width="160" />
+            <el-table-column prop="teacherName" label="教师" width="120" />
+            <el-table-column prop="studentCount" label="学生数" width="100" />
+            <el-table-column prop="achievementText" label="课程指标点达成度" width="150" />
+          </el-table>
+        </el-card>
+
+        <el-card v-if="majorPenetrationData" shadow="never" class="result-card wide-result-card">
+          <template #header>学生课程目标结果预览</template>
+          <el-table :data="majorPenetrationObjectiveRows" border empty-text="当前穿透式台账没有返回学生课程目标数据">
+            <el-table-column prop="studentNo" label="学号" width="120" />
+            <el-table-column prop="studentName" label="姓名" width="120" />
+            <el-table-column prop="courseName" label="课程名称" min-width="160" />
+            <el-table-column prop="objectiveAchievementsText" label="课程目标达成度" min-width="220" />
+            <el-table-column prop="averageAchievementText" label="平均达成度" width="130" />
+          </el-table>
+        </el-card>
+
+        <el-card v-if="majorPenetrationData" shadow="never" class="result-card wide-result-card">
+          <template #header>学生原始得分预览</template>
+          <el-table :data="majorPenetrationScoreRows" border empty-text="当前穿透式台账没有返回学生原始得分数据">
+            <el-table-column prop="studentNo" label="学号" width="120" />
+            <el-table-column prop="studentName" label="姓名" width="120" />
+            <el-table-column prop="assessmentPointCode" label="考核点编号" width="130" />
+            <el-table-column prop="assessmentPointName" label="考核点名称" min-width="160" />
+            <el-table-column prop="scoreText" label="得分" width="100" />
+            <el-table-column prop="achievementText" label="达成度" width="120" />
+          </el-table>
+        </el-card>
       </div>
       <el-empty
         v-else-if="majors.length && schoolYears.length && !majorActionLoading"
@@ -370,6 +405,44 @@ const majorRadarRows = computed(() =>
     achievementText: formatPercent(item.achievement)
   }))
 )
+const majorPenetrationCourseRows = computed(() =>
+  (majorPenetrationData.value?.courses ?? []).map((item) => {
+    const record = toPlainRecord(item)
+    return {
+      courseCode: readRecordText(record, 'courseCode'),
+      courseName: readRecordText(record, 'courseName'),
+      className: readRecordText(record, 'className'),
+      teacherName: readRecordText(record, 'teacherName'),
+      studentCount: readRecordText(record, 'studentCount'),
+      achievementText: formatPercent(record.courseIndicatorAchievement)
+    }
+  })
+)
+const majorPenetrationObjectiveRows = computed(() =>
+  (majorPenetrationData.value?.studentObjectives ?? []).map((item) => {
+    const record = toPlainRecord(item)
+    return {
+      studentNo: readRecordText(record, 'studentNo'),
+      studentName: readRecordText(record, 'studentName'),
+      courseName: readRecordText(record, 'courseName'),
+      objectiveAchievementsText: formatObjectiveAchievements(record.objectiveAchievements),
+      averageAchievementText: formatPercent(record.averageAchievement)
+    }
+  })
+)
+const majorPenetrationScoreRows = computed(() =>
+  (majorPenetrationData.value?.studentScores ?? []).map((item) => {
+    const record = toPlainRecord(item)
+    return {
+      studentNo: readRecordText(record, 'studentNo'),
+      studentName: readRecordText(record, 'studentName'),
+      assessmentPointCode: readRecordText(record, 'assessmentPointCode'),
+      assessmentPointName: readRecordText(record, 'assessmentPointName'),
+      scoreText: formatDecimal(record.score),
+      achievementText: formatPercent(record.achievement)
+    }
+  })
+)
 
 const roleSummary = computed<StatusState>(() => {
   if (canUseCourseReport.value) {
@@ -507,18 +580,47 @@ const buildClassLabel = (item: TeachingClassVO) => {
   return `${course} / ${className}`
 }
 
-const formatPercent = (value?: number) => {
+const toPlainRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+
+const readRecordText = (record: Record<string, unknown>, key: string) => {
+  const value = record[key]
+  if (value === undefined || value === null || value === '') {
+    return '-'
+  }
+  return String(value)
+}
+
+const formatPercent = (value?: unknown) => {
   if (value === undefined || value === null || Number.isNaN(Number(value))) {
     return '-'
   }
   return `${(Number(value) * 100).toFixed(2)}%`
 }
 
-const formatDateTime = (value?: string) => {
+const formatDecimal = (value?: unknown) => {
+  if (value === undefined || value === null || Number.isNaN(Number(value))) {
+    return '-'
+  }
+  return Number(value).toFixed(2)
+}
+
+const formatDateTime = (value?: unknown) => {
   if (!value) {
     return '-'
   }
-  return value.replace('T', ' ').slice(0, 19)
+  return String(value).replace('T', ' ').slice(0, 19)
+}
+
+const formatObjectiveAchievements = (value: unknown) => {
+  const record = toPlainRecord(value)
+  const entries = Object.entries(record)
+  if (!entries.length) {
+    return '-'
+  }
+  return entries
+    .map(([key, achievement]) => `${key}: ${formatPercent(achievement)}`)
+    .join(' / ')
 }
 
 const normalizeBackendMessage = (message: string, scene: 'course' | 'major') => {
