@@ -408,6 +408,14 @@ type CalculationEntryAction = {
   message: string
 }
 
+type QuickEntry = {
+  label: string
+  path: string
+  icon: typeof Document
+  desc: string
+  priority: number
+}
+
 const user = useUserStore()
 
 const pieEl = ref<HTMLDivElement>()
@@ -1012,14 +1020,60 @@ const notices = computed(() => {
     .slice(0, 4)
 })
 
-const quickEntries = [
-  { label: '基础数据', path: '/basic-data', icon: Document, desc: '课程、毕业要求、指标点' },
-  { label: '支撑矩阵', path: '/matrix', icon: Grid, desc: '课程与指标点权重矩阵' },
-  { label: '课程大纲', path: '/syllabus', icon: Notebook, desc: '课程目标与考核点' },
-  { label: '成绩导入', path: '/score', icon: DataAnalysis, desc: '学生与教学班数据' },
-  { label: '计算中心', path: '/calculation', icon: Aim, desc: '课程级与专业级计算入口' },
-  { label: '报表准备', path: '/report', icon: Memo, desc: '报表导出能力现状' }
-]
+const quickEntries = computed<QuickEntry[]>(() => {
+  const entries: QuickEntry[] = [
+    {
+      label: '计算中心',
+      path: '/calculation',
+      icon: Aim,
+      desc: currentMajorHasCalculationResult.value
+        ? '当前优先查看专业级结果细节'
+        : classesWithoutCalculationCount.value
+          ? '当前优先补课程级计算结果'
+          : majorCalculationDashboard.value?.canCalculate
+            ? '当前可直接推进专业级计算'
+            : '课程级与专业级计算入口',
+      priority: 0
+    },
+    {
+      label: '成绩导入',
+      path: '/score',
+      icon: DataAnalysis,
+      desc: classesWithoutCalculationCount.value ? '当前仍需补课程级前置数据' : '学生与教学班数据',
+      priority: classesWithoutCalculationCount.value ? 1 : 4
+    },
+    {
+      label: '支撑矩阵',
+      path: '/matrix',
+      icon: Grid,
+      desc: matrixCheckValid.value ? '当前矩阵校验已通过' : '当前仍需检查矩阵权重',
+      priority: matrixCheckValid.value ? 5 : 2
+    },
+    {
+      label: '基础数据',
+      path: '/basic-data',
+      icon: Document,
+      desc: selectedMajorId.value ? `当前查看 ${selectedMajorName.value || '专业数据'}` : '课程、毕业要求、指标点',
+      priority: selectedMajorId.value ? 3 : 1
+    },
+    {
+      label: '课程大纲',
+      path: '/syllabus',
+      icon: Notebook,
+      desc: '课程目标与考核点',
+      priority: 6
+    },
+    {
+      label: '报表准备',
+      path: '/report',
+      icon: Memo,
+      desc: currentMajorHasCalculationResult.value ? '当前已更适合继续准备报表' : '报表导出能力现状',
+      priority: currentMajorHasCalculationResult.value ? 2 : 7
+    }
+  ]
+
+  return entries.sort((a, b) => a.priority - b.priority)
+})
 
 const majorCalculationSummaryMessage = computed(() => {
   if (!selectedMajorId.value) {
