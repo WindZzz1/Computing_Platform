@@ -320,8 +320,10 @@
       <div class="panel span-12">
         <h3 class="panel-title">
           快捷入口
+          <el-tag style="margin-left: 8px" type="info" effect="light">{{ quickEntrySummaryTag }}</el-tag>
           <el-button link type="primary" @click="openDoc">查看接口文档</el-button>
         </h3>
+        <p class="muted" style="margin-bottom: 12px">{{ quickEntrySummaryDesc }}</p>
         <div class="quick-grid">
           <button v-for="entry in quickEntries" :key="entry.label" class="quick-button" @click="$router.push(entry.path)">
             <el-icon :size="24"><component :is="entry.icon" /></el-icon>
@@ -406,6 +408,15 @@ type NoticeItem = {
 type CalculationEntryAction = {
   buttonText: string
   message: string
+}
+
+type QuickEntry = {
+  label: string
+  path: string
+  icon: typeof Document
+  desc: string
+  priority: number
+  recommended?: boolean
 }
 
 const user = useUserStore()
@@ -1012,14 +1023,83 @@ const notices = computed(() => {
     .slice(0, 4)
 })
 
-const quickEntries = [
-  { label: '基础数据', path: '/basic-data', icon: Document, desc: '课程、毕业要求、指标点' },
-  { label: '支撑矩阵', path: '/matrix', icon: Grid, desc: '课程与指标点权重矩阵' },
-  { label: '课程大纲', path: '/syllabus', icon: Notebook, desc: '课程目标与考核点' },
-  { label: '成绩导入', path: '/score', icon: DataAnalysis, desc: '学生与教学班数据' },
-  { label: '计算中心', path: '/calculation', icon: Aim, desc: '课程级与专业级计算入口' },
-  { label: '报表准备', path: '/report', icon: Memo, desc: '报表导出能力现状' }
-]
+const quickEntries = computed<QuickEntry[]>(() => {
+  const entries: QuickEntry[] = [
+    {
+      label: '计算中心',
+      path: '/calculation',
+      icon: Aim,
+      desc: currentMajorHasCalculationResult.value
+          ? '当前优先查看专业级结果细节'
+          : classesWithoutCalculationCount.value
+            ? '当前优先补课程级计算结果'
+            : majorCalculationDashboard.value?.canCalculate
+              ? '当前可直接推进专业级计算'
+              : '课程级与专业级计算入口',
+      priority: 0,
+      recommended: true
+    },
+    {
+      label: '成绩导入',
+      path: '/score',
+      icon: DataAnalysis,
+      desc: classesWithoutCalculationCount.value ? '建议优先回填课程级前置数据' : '学生与教学班数据',
+      priority: classesWithoutCalculationCount.value ? 1 : 4
+    },
+    {
+      label: '支撑矩阵',
+      path: '/matrix',
+      icon: Grid,
+      desc: matrixCheckValid.value ? '当前矩阵校验已通过' : '建议优先检查矩阵权重',
+      priority: matrixCheckValid.value ? 5 : 2
+    },
+    {
+      label: '基础数据',
+      path: '/basic-data',
+      icon: Document,
+      desc: selectedMajorId.value ? `当前聚焦 ${selectedMajorName.value || '专业数据'}` : '课程、毕业要求、指标点',
+      priority: selectedMajorId.value ? 3 : 1
+    },
+    {
+      label: '课程大纲',
+      path: '/syllabus',
+      icon: Notebook,
+      desc: '课程目标与考核点',
+      priority: 6
+    },
+    {
+      label: '报表准备',
+      path: '/report',
+      icon: Memo,
+      desc: currentMajorHasCalculationResult.value ? '当前已更适合继续准备报表' : '报表导出能力现状',
+      priority: currentMajorHasCalculationResult.value ? 2 : 7
+    }
+  ]
+
+  return entries.sort((a, b) => a.priority - b.priority)
+})
+const quickEntrySummaryTag = computed(() => {
+  if (classesWithoutCalculationCount.value) return '优先补课程级'
+  if (majorCalculationDashboard.value?.canCalculate && !currentMajorHasCalculationResult.value) return '可推进专业级'
+  if (currentMajorHasCalculationResult.value) return '可复核结果'
+  if (!matrixCheckValid.value) return '先检查矩阵'
+  return '按当前状态推荐'
+})
+const quickEntrySummaryDesc = computed(() => {
+  if (classesWithoutCalculationCount.value) {
+    return '首页已把“成绩导入、计算中心、基础数据”排在更前面，方便先补课程级结果。'
+  }
+  if (majorCalculationDashboard.value?.canCalculate && !currentMajorHasCalculationResult.value) {
+    return '首页已把“计算中心、报表准备、基础数据”排在更前面，方便直接推进专业级计算。'
+  }
+  if (currentMajorHasCalculationResult.value) {
+    return '首页已把“计算中心、报表准备、基础数据”排在更前面，方便继续复核结果和准备报表。'
+  }
+  if (!matrixCheckValid.value) {
+    return '首页已把“支撑矩阵、基础数据、计算中心”排在更前面，方便先补矩阵前置条件。'
+  }
+  return '快捷入口会按当前首页状态自动重排，把更值得优先进入的页面放在前面。'
+})
 
 const majorCalculationSummaryMessage = computed(() => {
   if (!selectedMajorId.value) {
