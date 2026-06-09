@@ -254,7 +254,43 @@
         <el-empty
           v-if="!selectedMajorId"
           description="先选择专业，再结合学年学期和年级查看当前首页可读取到的真实计算结果。"
-        />
+        >
+          <template #image>
+            <div class="empty-guide-box">
+              <div class="empty-guide-title">还没有专业上下文</div>
+              <div class="muted">首页暂时无法判断课程级和专业级结果，要先明确查看哪个专业。</div>
+              <div class="empty-guide-actions">
+                <el-button type="primary" @click="scrollToTop">回到顶部先选专业</el-button>
+              </div>
+            </div>
+          </template>
+        </el-empty>
+
+        <div v-else-if="summaryGuideState === 'need-filters'" class="empty-guide-box">
+          <div class="empty-guide-title">还缺专业级筛选条件</div>
+          <div class="muted">当前专业已经选定，但还缺学年学期或年级，所以首页还无法判断专业级结果。</div>
+          <div class="empty-guide-actions">
+            <el-button type="primary" @click="scrollToTop">回到顶部补齐筛选条件</el-button>
+            <el-button plain @click="$router.push('/calculation')">直接去计算中心查看</el-button>
+          </div>
+        </div>
+
+        <div v-else-if="summaryGuideState === 'need-course-results'" class="empty-guide-box">
+          <div class="empty-guide-title">还没有补齐课程级结果</div>
+          <div class="muted">课程级结果还没全部形成，专业级计算暂时还推不下去，建议先补课程级这一层。</div>
+          <div class="empty-guide-actions">
+            <el-button type="primary" @click="$router.push('/calculation')">去计算中心补课程级结果</el-button>
+            <el-button plain @click="$router.push('/score')">去成绩页检查前置数据</el-button>
+          </div>
+        </div>
+
+        <div v-else-if="summaryGuideState === 'need-major-result'" class="empty-guide-box">
+          <div class="empty-guide-title">可以生成专业级结果了</div>
+          <div class="muted">课程级结果和前置条件已经具备，但当前还没有最终专业级结果，下一步最适合直接执行专业级计算。</div>
+          <div class="empty-guide-actions">
+            <el-button type="primary" @click="$router.push('/calculation')">去计算中心执行专业级计算</el-button>
+          </div>
+        </div>
 
         <div v-else class="status-summary">
           <div class="status-summary-item">
@@ -526,6 +562,12 @@ const noticeSummaryType = computed<'success' | 'warning' | 'info'>(() => {
   if (currentMajorHasCalculationResult.value) return 'success'
   if (!matrixCheckValid.value) return 'warning'
   return 'info'
+})
+const summaryGuideState = computed<'ready' | 'need-filters' | 'need-course-results' | 'need-major-result'>(() => {
+  if (!selectedTermId.value || !selectedGrade.value.trim()) return 'need-filters'
+  if (classesWithoutCalculationCount.value) return 'need-course-results'
+  if (!currentMajorHasCalculationResult.value) return 'need-major-result'
+  return 'ready'
 })
 const courseCalculationAction = computed<CalculationEntryAction>(() => {
   if (!allTeachingClasses.value.length) {
@@ -1042,6 +1084,10 @@ function goToCalculationWithHint(action: CalculationEntryAction) {
   }, 120)
 }
 
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 const openDoc = () => {
   window.open(apiDocUrl, '_blank')
 }
@@ -1318,5 +1364,26 @@ onBeforeUnmount(() => {
 
 .pending-class-item small {
   color: #9a7d47;
+}
+
+.empty-guide-box {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 16px;
+  background: #f8fbff;
+  border: 1px solid #e6eef8;
+}
+
+.empty-guide-title {
+  color: #20324d;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.empty-guide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 </style>
