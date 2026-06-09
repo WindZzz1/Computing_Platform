@@ -112,6 +112,7 @@
             <el-descriptions-item label="成绩记录数">{{ courseReportPrep.scoreRecordCount }}</el-descriptions-item>
             <el-descriptions-item label="课程目标数">{{ courseReportPrep.objectiveCount }}</el-descriptions-item>
             <el-descriptions-item label="考核点数">{{ courseReportPrep.assessmentCount }}</el-descriptions-item>
+            <el-descriptions-item label="课程级结果">{{ courseReportPrep.calculationStatusText }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
 
@@ -393,6 +394,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { getCourseAchievementCalculationStatus } from '@/api/calculation'
 import { queryGrades } from '@/api/grade-entry'
 import { pageGraduationRequirements, pageIndicators } from '@/api/indicator'
 import { listMajors } from '@/api/major'
@@ -412,6 +414,7 @@ import { pageTeachingClasses } from '@/api/teaching-class'
 import { useUserStore } from '@/stores/user'
 import type {
   AssessmentPointVO,
+  AchievementCalculationStatusVO,
   CourseAchievementReportVO,
   CourseObjectiveVO,
   GraduationRequirementVO,
@@ -477,6 +480,7 @@ const schoolYears = ref<SysDictSchoolYearVO[]>([])
 const courseClasses = ref<TeachingClassVO[]>([])
 const rawScoreAssessmentPoints = ref<AssessmentPointVO[]>([])
 const courseObjectives = ref<CourseObjectiveVO[]>([])
+const courseCalculationStatus = ref<AchievementCalculationStatusVO>()
 
 const selectedMajorId = ref<number>()
 const selectedTermId = ref<number>()
@@ -518,7 +522,9 @@ const readyIndicatorCount = computed(() => indicatorRows.value.filter((item) => 
 const courseReportPrep = computed(() => ({
   objectiveCount: courseObjectives.value.length,
   assessmentCount: rawScoreAssessmentPoints.value.length,
-  scoreRecordCount: rawScorePage.value.total || 0
+  scoreRecordCount: rawScorePage.value.total || 0,
+  hasCalculationResult: courseCalculationStatus.value?.hasCalculationResult ?? false,
+  calculationStatusText: courseCalculationStatus.value?.hasCalculationResult ? '已生成' : '未生成'
 }))
 const courseReportPrepHints = computed(() => {
   const items: Array<{ title: string; desc: string; tag: string; type: 'success' | 'warning' | 'info' }> = []
@@ -539,6 +545,12 @@ const courseReportPrepHints = computed(() => {
     courseReportPrep.value.scoreRecordCount > 0
       ? { title: '成绩记录已存在', desc: `当前教学班已查询到 ${courseReportPrep.value.scoreRecordCount} 条成绩记录。`, tag: '可联调', type: 'success' }
       : { title: '还没有成绩记录', desc: '建议先去成绩页导入或检查当前教学班成绩，再回来验证课程报表。', tag: '待导入', type: 'info' }
+  )
+
+  items.push(
+    courseReportPrep.value.hasCalculationResult
+      ? { title: '课程级结果已生成', desc: '当前教学班已经形成课程级达成度结果，后续联调课程报表和计算结果展示会更顺。', tag: '已生成', type: 'success' }
+      : { title: '课程级结果未生成', desc: '建议先去计算中心补课程级计算结果，再回来联调课程报表闭环。', tag: '待计算', type: 'info' }
   )
 
   return items
@@ -861,6 +873,7 @@ const loadRawScoreAssessmentPoints = async () => {
   rawScoreAssessmentPoints.value = []
   courseObjectives.value = []
   rawScorePointId.value = undefined
+  courseCalculationStatus.value = undefined
 
   if (!selectedClassId.value) {
     return
@@ -872,11 +885,13 @@ const loadRawScoreAssessmentPoints = async () => {
   }
 
   try {
-    const [assessmentPage, objectivePage] = await Promise.all([
+    const [assessmentPage, objectivePage, calculationStatus] = await Promise.all([
       listAssessmentPoints(selectedClass.courseId),
-      listCourseObjectives(selectedClass.courseId)
+      listCourseObjectives(selectedClass.courseId),
+      getCourseAchievementCalculationStatus(selectedClassId.value)
     ])
     courseObjectives.value = objectivePage.records
+    courseCalculationStatus.value = calculationStatus
     const page = assessmentPage
     rawScoreAssessmentPoints.value = page.records
   } catch (error) {
