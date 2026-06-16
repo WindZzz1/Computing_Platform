@@ -183,6 +183,8 @@ import {
   createCourseObjective,
   deleteAssessmentPoint,
   deleteCourseObjective,
+  getAssessmentPoint,
+  getCourseObjective,
   listAssessmentPoints,
   listAvailableIndicators,
   listCourseObjectives,
@@ -390,13 +392,19 @@ const openObjectiveCreateDialog = () => {
   objectiveDialogVisible.value = true
 }
 
-const openObjectiveEditDialog = (objective: CourseObjectiveVO) => {
-  objectiveEditing.value = objective
-  objectiveForm.courseId = objective.courseId
-  objectiveForm.objCode = objective.objCode
-  objectiveForm.objName = objective.objName || ''
-  objectiveForm.objDesc = objective.objDesc || ''
-  objectiveDialogVisible.value = true
+const openObjectiveEditDialog = async (objective: CourseObjectiveVO) => {
+  try {
+    const detail = await getCourseObjective(objective.id)
+    objectiveEditing.value = detail
+    objectiveForm.courseId = detail.courseId
+    objectiveForm.objCode = detail.objCode
+    objectiveForm.objName = detail.objName || ''
+    objectiveForm.objDesc = detail.objDesc || ''
+    objectiveDialogVisible.value = true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '课程目标详情加载失败'
+    ElMessage.error(message)
+  }
 }
 
 const openAssessmentCreateDialog = () => {
@@ -405,18 +413,24 @@ const openAssessmentCreateDialog = () => {
   assessmentDialogVisible.value = true
 }
 
-const openAssessmentEditDialog = (assessment: AssessmentPointVO) => {
-  assessmentEditing.value = assessment
-  assessmentForm.courseId = assessment.courseId
-  assessmentForm.pointCode = assessment.pointCode
-  assessmentForm.pointName = assessment.pointName
-  assessmentForm.fullScore = Number(assessment.fullScore ?? 100)
-  assessmentForm.objectiveIds = assessment.objectiveIds?.length
-    ? [...assessment.objectiveIds]
-    : assessment.objectiveId
-      ? [assessment.objectiveId]
-      : []
-  assessmentDialogVisible.value = true
+const openAssessmentEditDialog = async (assessment: AssessmentPointVO) => {
+  try {
+    const detail = await getAssessmentPoint(assessment.id)
+    assessmentEditing.value = detail
+    assessmentForm.courseId = detail.courseId
+    assessmentForm.pointCode = detail.pointCode
+    assessmentForm.pointName = detail.pointName
+    assessmentForm.fullScore = Number(detail.fullScore ?? 100)
+    assessmentForm.objectiveIds = detail.objectiveIds?.length
+      ? [...detail.objectiveIds]
+      : detail.objectiveId
+        ? [detail.objectiveId]
+        : []
+    assessmentDialogVisible.value = true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '考核点详情加载失败'
+    ElMessage.error(message)
+  }
 }
 
 const reloadCourseData = async () => {

@@ -16,6 +16,10 @@ export function listCourseObjectives(courseId: number) {
   return apiPost<PageResponse<CourseObjectiveVO>>('/course/objective/list', { courseId })
 }
 
+export function getCourseObjective(id: number) {
+  return apiPost<CourseObjectiveVO>('/course/objective/get', { id })
+}
+
 export function createCourseObjective(payload: CourseObjectiveCreateRequest) {
   return apiPost<number>('/course/objective/add', payload)
 }
@@ -30,6 +34,10 @@ export function deleteCourseObjective(id: number) {
 
 export function listAssessmentPoints(courseId: number) {
   return apiPost<PageResponse<AssessmentPointVO>>('/assessment/point/list', { courseId })
+}
+
+export function getAssessmentPoint(id: number) {
+  return apiPost<AssessmentPointVO>('/assessment/point/get', { id })
 }
 
 export function createAssessmentPoint(payload: AssessmentPointCreateRequest) {
