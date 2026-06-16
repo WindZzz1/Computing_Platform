@@ -18,7 +18,7 @@ const featureRoles: Record<FeatureKey, Role[]> = {
   indicatorLibrary: ['admin', 'leader'],
   matrix: ['admin', 'edu'],
   syllabus: ['admin', 'teacher'],
-  score: ['admin', 'edu'],
+  score: ['admin', 'edu', 'teacher'],
   calculation: ['admin', 'edu', 'leader', 'teacher'],
   report: ['admin', 'edu', 'leader', 'teacher']
 }
