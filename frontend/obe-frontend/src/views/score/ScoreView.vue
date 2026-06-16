@@ -8,10 +8,11 @@
         <div class="toolbar">
           <div>
             <h3 class="panel-title">教学班管理</h3>
-            <span class="muted">先维护教学班，再导入学生并绑定到当前班级。</span>
+            <span class="muted">{{ classPanelHint }}</span>
           </div>
           <div class="toolbar-actions">
             <el-input
+              v-if="canManageClassSection"
               v-model="classKeyword"
               placeholder="按教学班名称搜索"
               style="width: 220px"
@@ -19,9 +20,39 @@
               @keyup.enter="loadTeachingClasses"
             />
             <el-button @click="loadTeachingClasses">刷新</el-button>
+            <el-input-number
+              v-if="isTeacherScoreDirectMode"
+              v-model="selectedClassId"
+              :min="1"
+              :step="1"
+              controls-position="right"
+              style="width: 180px"
+              placeholder="教学班 ID"
+            />
+            <el-input-number
+              v-if="isTeacherScoreDirectMode"
+              v-model="directCourseId"
+              :min="1"
+              :step="1"
+              controls-position="right"
+              style="width: 180px"
+              placeholder="课程 ID"
+            />
+            <el-button v-if="isTeacherScoreDirectMode" type="primary" :disabled="!selectedClassId" @click="reloadPreview">
+              按当前 ID 联调
+            </el-button>
             <el-button v-if="canManageClassSection" type="primary" @click="openClassCreateDialog">新增教学班</el-button>
           </div>
         </div>
+
+        <el-alert
+          v-if="isTeacherScoreDirectMode"
+          title="教师端当前没有教学班列表接口，改为按 classId / courseId 直达联调"
+          type="info"
+          show-icon
+          :closable="false"
+          style="margin-bottom: 12px"
+        />
 
         <el-table v-loading="classLoading" :data="teachingClasses" border @row-click="handleSelectClass">
           <el-table-column prop="className" label="教学班名称" min-width="180" />
@@ -51,6 +82,19 @@
             type="primary"
             link
             :disabled="!selectedClass.courseId"
+            @click="navigateToSyllabus"
+          >
+            去当前课程大纲
+          </el-button>
+        </div>
+        <div v-else-if="isTeacherScoreDirectMode && selectedClassId" class="selected-class-bar">
+          <el-tag type="success">当前联调教学班 ID：{{ selectedClassId }}</el-tag>
+          <span>{{ directCourseId ? `课程 ID：${directCourseId}` : '当前未填写课程 ID' }}</span>
+          <el-button
+            v-if="canNavigateToSyllabus"
+            type="primary"
+            link
+            :disabled="!resolvedCourseId"
             @click="navigateToSyllabus"
           >
             去当前课程大纲
@@ -88,6 +132,7 @@
           </el-upload>
           <div class="import-actions">
             <el-button type="primary" :loading="importingStudents" @click="submitStudentImport">导入系统库</el-button>
+            <el-button plain :loading="importingStudentJson" @click="openStudentJsonDialog">JSON 导入</el-button>
             <el-button :loading="downloadingTemplate" @click="handleDownloadTemplate">系统库模板</el-button>
             <el-button
               type="success"
@@ -211,7 +256,7 @@
         <div class="toolbar">
           <div>
             <h3 class="panel-title">成绩录入预览</h3>
-            <span class="muted">按教学班查看已导入的成绩记录，可按考核点筛选、手动修改单条成绩，并清空当前班级成绩。</span>
+            <span class="muted">{{ gradePanelHint }}</span>
           </div>
           <div class="toolbar-actions">
             <el-select v-model="gradeQuery.pointId" clearable placeholder="全部考核点" style="width: 220px">
@@ -335,6 +380,30 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="studentJsonDialogVisible" title="JSON 导入系统学生库" width="720px" destroy-on-close>
+      <el-alert
+        type="info"
+        show-icon
+        :closable="false"
+        title="支持直接粘贴学生 JSON 数据，适合把别处整理好的学生名单快速导入到系统学生库。"
+        style="margin-bottom: 12px"
+      />
+      <p class="muted dialog-tip">
+        可粘贴 `[{...}]` 或 `{ "students": [{...}] }` 两种格式。每条至少需要 `studentNo`、`studentName`、`majorCode`。
+      </p>
+      <el-input
+        v-model="studentJsonText"
+        type="textarea"
+        :rows="14"
+        placeholder='例如：&#10;[&#10;  {&#10;    "studentNo": "20230001",&#10;    "studentName": "张三",&#10;    "majorCode": "CS",&#10;    "grade": "2023",&#10;    "className": "计科 2301"&#10;  }&#10;]'
+      />
+      <div class="muted bind-preview">当前识别 {{ studentJsonPreviewCount }} 条记录，提交后会写入系统学生库。</div>
+      <template #footer>
+        <el-button @click="studentJsonDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="importingStudentJson" @click="submitStudentJsonImport">导入系统库</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="studentPickerVisible" title="从系统学生库选择学生" width="980px" destroy-on-close>
       <el-alert
         type="info"
@@ -452,7 +521,7 @@ import { listUsersByRole } from '@/api/auth'
 import { listCourses } from '@/api/course'
 import { deleteClassGrades, downloadGradeTemplate, importGrades, queryGrades, updateGrades } from '@/api/grade-entry'
 import { listSchoolYears } from '@/api/schoolyear'
-import { pageStudents } from '@/api/student'
+import { importStudents, pageStudents } from '@/api/student'
 import {
   bindStudentsToClass,
   createTeachingClass,
@@ -496,6 +565,7 @@ const route = useRoute()
 const router = useRouter()
 const classLoading = ref(false)
 const importingStudents = ref(false)
+const importingStudentJson = ref(false)
 const importingStudentsToClass = ref(false)
 const bindingStudents = ref(false)
 const downloadingTemplate = ref(false)
@@ -508,6 +578,7 @@ const savingClass = ref(false)
 const savingGradeEdit = ref(false)
 const unbindingStudentNo = ref<string>()
 const bindDialogVisible = ref(false)
+const studentJsonDialogVisible = ref(false)
 const studentPickerVisible = ref(false)
 const classDialogVisible = ref(false)
 const gradeEditDialogVisible = ref(false)
@@ -528,6 +599,7 @@ const gradeFileList = ref<UploadUserFile[]>([])
 const lastImportResult = ref<StudentImportResult>()
 const lastGradeImportResult = ref<GradeImportResultVO>()
 const bindStudentText = ref('')
+const studentJsonText = ref('')
 const studentPickerLoading = ref(false)
 const bindingSelectedStudents = ref(false)
 const studentPickerRows = ref<StudentVO[]>([])
@@ -584,11 +656,24 @@ const classRules: FormRules<ClassFormState> = {
 
 const canManageClassSection = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
 const canManageStudentSection = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
-const canManageGradeSection = computed(() => userStore.role === 'admin')
+const canManageGradeSection = computed(() => userStore.role === 'admin' || userStore.role === 'teacher')
 const canNavigateToSyllabus = computed(() => userStore.role === 'admin' || userStore.role === 'teacher')
 const canViewPreparationStatus = computed(() => userStore.role === 'admin' || userStore.role === 'teacher')
+const isTeacherScoreDirectMode = computed(() => userStore.role === 'teacher')
 
 const selectedClass = computed(() => selectedClassDetail.value ?? teachingClasses.value.find((item) => item.id === selectedClassId.value))
+const directCourseId = ref<number>()
+const resolvedCourseId = computed(() => Number(selectedClass.value?.courseId || directCourseId.value || 0) || undefined)
+const classPanelHint = computed(() =>
+  isTeacherScoreDirectMode.value
+    ? '教师角色当前改为按教学班 ID 直达联调，不再请求教师无权访问的教学班列表接口。'
+    : '先维护教学班，再导入学生并绑定到当前班级。'
+)
+const gradePanelHint = computed(() =>
+  isTeacherScoreDirectMode.value
+    ? '教师可按教学班直接下载模板、导入成绩、查询成绩并手动修改；如果要显示考核点筛选，请同时填写课程 ID。'
+    : '按教学班查看已导入的成绩记录，可按考核点筛选、手动修改单条成绩，并清空当前班级成绩。'
+)
 const boundStudentIdSet = computed(() => new Set(students.value.map((student) => student.id)))
 
 const lastImportSummary = computed(() => {
@@ -627,6 +712,59 @@ const bindStudentPreviewCount = computed(() =>
     .map((line) => line.trim())
     .filter(Boolean).length
 )
+
+const parseStudentJsonPayload = () => {
+  const source = studentJsonText.value.trim()
+  if (!source) {
+    throw new Error('请先粘贴学生 JSON 数据')
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(source)
+  } catch {
+    throw new Error('JSON 格式不正确，请检查逗号、引号和括号')
+  }
+
+  const students = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === 'object' && Array.isArray((parsed as { students?: unknown[] }).students)
+      ? (parsed as { students: unknown[] }).students
+      : undefined
+
+  if (!students?.length) {
+    throw new Error('未识别到学生列表，请使用数组或 { students: [] } 格式')
+  }
+
+  const normalized = students.map((item, index) => {
+    if (!item || typeof item !== 'object') {
+      throw new Error(`第 ${index + 1} 条不是有效对象`)
+    }
+
+    const record = item as Record<string, unknown>
+    return {
+      studentNo: String(record.studentNo ?? '').trim(),
+      studentName: String(record.studentName ?? '').trim(),
+      majorCode: String(record.majorCode ?? '').trim(),
+      grade: record.grade == null ? undefined : String(record.grade).trim(),
+      className: record.className == null ? undefined : String(record.className).trim()
+    }
+  })
+
+  if (normalized.some((item) => !item.studentNo || !item.studentName || !item.majorCode)) {
+    throw new Error('每条记录至少需要 studentNo、studentName、majorCode')
+  }
+
+  return normalized
+}
+
+const studentJsonPreviewCount = computed(() => {
+  try {
+    return parseStudentJsonPayload().length
+  } catch {
+    return 0
+  }
+})
 
 const selectedStudentCount = computed(() =>
   studentPickerSelection.value.filter((student) => !boundStudentIdSet.value.has(student.id)).length
@@ -699,9 +837,15 @@ const routeClassId = computed(() => {
   const numeric = Number(value)
   return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
 })
+const routeCourseId = computed(() => {
+  const raw = route.query.courseId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
+})
 
 const navigateToSyllabus = () => {
-  if (!selectedClass.value?.courseId) {
+  if (!resolvedCourseId.value) {
     ElMessage.warning('当前教学班还没有绑定课程')
     return
   }
@@ -709,8 +853,8 @@ const navigateToSyllabus = () => {
   void router.push({
     path: '/syllabus',
     query: {
-      courseId: String(selectedClass.value.courseId),
-      classId: String(selectedClass.value.id)
+      courseId: String(resolvedCourseId.value),
+      ...(selectedClassId.value ? { classId: String(selectedClassId.value) } : {})
     }
   })
 }
@@ -913,6 +1057,17 @@ const loadCourseDetails = async (courseId?: number) => {
 }
 
 const loadTeachingClasses = async () => {
+  if (!canManageClassSection.value) {
+    classLoading.value = false
+    teachingClasses.value = []
+    if (routeClassId.value) {
+      selectedClassId.value = routeClassId.value
+      directCourseId.value = routeCourseId.value
+      await reloadPreview()
+    }
+    return
+  }
+
   classLoading.value = true
   try {
     const page = await pageTeachingClasses({
@@ -1166,6 +1321,11 @@ const openBindDialog = () => {
   bindDialogVisible.value = true
 }
 
+const openStudentJsonDialog = () => {
+  studentJsonText.value = ''
+  studentJsonDialogVisible.value = true
+}
+
 const resetStudentQuery = async () => {
   studentQuery.studentNo = ''
   studentQuery.studentName = ''
@@ -1303,6 +1463,41 @@ const submitBindStudents = async () => {
     ElMessage.error(message)
   } finally {
     bindingStudents.value = false
+  }
+}
+
+const submitStudentJsonImport = async () => {
+  let studentsPayload: Array<{
+    studentNo: string
+    studentName: string
+    majorCode: string
+    grade?: string
+    className?: string
+  }>
+
+  try {
+    studentsPayload = parseStudentJsonPayload()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'JSON 数据校验失败'
+    ElMessage.warning(message)
+    return
+  }
+
+  importingStudentJson.value = true
+  try {
+    const result = await importStudents({
+      students: studentsPayload
+    })
+    lastImportResult.value = result
+    studentJsonDialogVisible.value = false
+    studentJsonText.value = ''
+    ElMessage.success('JSON 学生数据已导入系统库，可继续绑定到教学班')
+    await showImportResult(result, 'JSON 学生导入系统库完成')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'JSON 学生导入失败'
+    ElMessage.error(message)
+  } finally {
+    importingStudentJson.value = false
   }
 }
 
@@ -1463,15 +1658,27 @@ const reloadPreview = async () => {
 
   loading.value = true
   try {
-    selectedClassDetail.value = await getTeachingClass(classId)
-    const current = selectedClassDetail.value
-    students.value = await getTeachingClassStudents(current.id)
-    if (canViewPreparationStatus.value || canManageGradeSection.value) {
-      await loadCourseDetails(current.courseId)
+    if (canManageClassSection.value) {
+      selectedClassDetail.value = await getTeachingClass(classId)
+      const current = selectedClassDetail.value
+      students.value = await getTeachingClassStudents(current.id)
+      if (canViewPreparationStatus.value || canManageGradeSection.value) {
+        await loadCourseDetails(current.courseId)
+      } else {
+        objectives.value = []
+        assessments.value = []
+        indicators.value = []
+      }
     } else {
-      objectives.value = []
-      assessments.value = []
-      indicators.value = []
+      selectedClassDetail.value = undefined
+      students.value = []
+      if (canViewPreparationStatus.value || canManageGradeSection.value) {
+        await loadCourseDetails(resolvedCourseId.value)
+      } else {
+        objectives.value = []
+        assessments.value = []
+        indicators.value = []
+      }
     }
 
     if (canManageGradeSection.value) {
@@ -1494,17 +1701,25 @@ const reloadPreview = async () => {
 }
 
 onMounted(async () => {
-  await Promise.allSettled([
-    listCourses().then((result) => {
-      courses.value = result
-    }),
-    listUsersByRole('teacher').then((result) => {
-      teachers.value = result
-    }),
-    listSchoolYears().then((result) => {
-      schoolYears.value = result
-    })
-  ])
+  directCourseId.value = routeCourseId.value
+  selectedClassId.value = routeClassId.value
+
+  const startupTasks: Promise<unknown>[] = []
+  if (canManageClassSection.value) {
+    startupTasks.push(
+      listCourses().then((result) => {
+        courses.value = result
+      }),
+      listUsersByRole('teacher').then((result) => {
+        teachers.value = result
+      }),
+      listSchoolYears().then((result) => {
+        schoolYears.value = result
+      })
+    )
+  }
+
+  await Promise.allSettled(startupTasks)
 
   await loadTeachingClasses()
 })

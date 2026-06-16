@@ -83,6 +83,32 @@
         >
           <el-option v-for="item in courseClasses" :key="item.id" :label="buildClassLabel(item)" :value="item.id" />
         </el-select>
+        <el-input-number
+          v-if="needsTeacherDirectClassInput"
+          v-model="selectedClassId"
+          :min="1"
+          :step="1"
+          controls-position="right"
+          style="width: 180px"
+          placeholder="教学班 ID"
+        />
+        <el-input-number
+          v-if="needsTeacherDirectClassInput"
+          v-model="directCourseId"
+          :min="1"
+          :step="1"
+          controls-position="right"
+          style="width: 180px"
+          placeholder="课程 ID"
+        />
+        <el-button
+          v-if="needsTeacherDirectClassInput"
+          :loading="courseActionLoading || rawScoreLoading"
+          :disabled="!selectedClassId"
+          @click="handleApplyTeacherDirectContext"
+        >
+          按当前 ID 联调
+        </el-button>
         <el-button :loading="courseActionLoading" @click="handleDownloadCourseTemplate">下载报表模板</el-button>
         <el-button type="primary" :loading="courseActionLoading" :disabled="!selectedClassId" @click="handleLoadCourseReport">查询报表数据</el-button>
         <el-button :loading="courseActionLoading" :disabled="!selectedClassId" @click="handleExportCourseReport('EXCEL')">导出 Excel</el-button>
@@ -90,9 +116,13 @@
       </div>
       <el-alert
         v-if="!hasCourseClassContext"
-        title="当前账号下还没有可联调的教学班"
+        :title="needsTeacherDirectClassInput ? '教师端请手动输入教学班 ID 联调' : '当前账号下还没有可联调的教学班'"
         type="info"
-        description="请先在成绩管理页创建教学班并完成课程、教师、学期绑定，再回来联调课程报表接口。"
+        :description="
+          needsTeacherDirectClassInput
+            ? '当前教师账号没有教学班列表读取接口。可直接填写 classId；如果还要自动加载课程目标和考核点，请同时填写 courseId。'
+            : '请先在成绩管理页创建教学班并完成课程、教师、学期绑定，再回来联调课程报表接口。'
+        "
         show-icon
         :closable="false"
         class="section-alert"
@@ -187,7 +217,7 @@
         <el-select v-model="selectedMajorId" placeholder="选择专业" style="width: 220px" :disabled="!majors.length" @change="reloadMajorSupportData">
           <el-option v-for="major in majors" :key="major.id" :label="major.majorName" :value="major.id" />
         </el-select>
-        <el-select v-model="selectedTermId" placeholder="选择学期" style="width: 220px" :disabled="!schoolYears.length">
+        <el-select v-if="schoolYears.length" v-model="selectedTermId" placeholder="选择学期" style="width: 220px">
           <el-option
             v-for="term in schoolYears"
             :key="term.id"
@@ -195,16 +225,34 @@
             :value="term.id"
           />
         </el-select>
+        <el-input-number
+          v-else
+          v-model="selectedTermId"
+          :min="1"
+          :step="1"
+          controls-position="right"
+          style="width: 220px"
+          placeholder="输入学期 ID"
+        />
         <el-input v-model.trim="selectedGrade" placeholder="输入年级，例如 2021" style="width: 200px" />
         <el-button type="primary" :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleLoadMajorRadar">查询雷达图数据</el-button>
         <el-button :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleLoadPenetrationAccount">查询穿透式台账</el-button>
         <el-button :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleExportMajorAccount">导出台账 Excel</el-button>
       </div>
       <el-alert
-        v-if="!majors.length || !schoolYears.length"
+        v-if="!majors.length || (!schoolYears.length && !canUseManualTermInput)"
         title="当前还缺少专业或学期基础数据"
         type="info"
         description="请先在基础数据管理中补齐专业、毕业要求、学期信息，再进行专业报表联调。"
+        show-icon
+        :closable="false"
+        class="section-alert"
+      />
+      <el-alert
+        v-else-if="canUseManualTermInput"
+        title="当前角色没有学期下拉目录，改为手动输入 termId 联调"
+        type="info"
+        description="后端专业报表接口仍可调用，只是当前账号拿不到学期列表。请输入目标学期的 termId 后继续测试。"
         show-icon
         :closable="false"
         class="section-alert"
@@ -530,9 +578,10 @@ let courseObjectiveChart: echarts.ECharts | undefined
 let courseIndicatorChart: echarts.ECharts | undefined
 
 const canUseCourseReport = computed(() => user.role === 'teacher' || user.role === 'admin')
-const canUseMajorReport = computed(() => user.role === 'leader' || user.role === 'edu')
+const canUseMajorReport = computed(() => user.role === 'leader' || user.role === 'edu' || user.role === 'admin')
 const canUseMajorPrep = computed(() => user.role === 'admin')
 const canUseMatrixLedger = computed(() => user.role === 'admin')
+const canUseManualTermInput = computed(() => canUseMajorReport.value && !schoolYears.value.length)
 
 const supportLoading = ref(false)
 const courseActionLoading = ref(false)
@@ -551,6 +600,7 @@ const selectedMajorId = ref<number>()
 const selectedTermId = ref<number>()
 const selectedGrade = ref('')
 const selectedClassId = ref<number>()
+const directCourseId = ref<number>()
 const rawScorePointId = ref<number>()
 const rawScoreStudentNo = ref('')
 
@@ -581,13 +631,15 @@ const rawScoreStatus = ref<StatusState>()
 const selectedMajor = computed(() => majors.value.find((item) => item.id === selectedMajorId.value))
 const selectedCourseClass = computed(() => courseClasses.value.find((item) => item.id === selectedClassId.value))
 const hasCourseClassContext = computed(() => Boolean(selectedClassId.value || courseClasses.value.length))
+const needsTeacherDirectClassInput = computed(() => user.role === 'teacher' && !courseClasses.value.length)
 const isTeacherDirectClassMode = computed(
-  () => user.role === 'teacher' && !courseClasses.value.length && Boolean(selectedClassId.value)
+  () => needsTeacherDirectClassInput.value && Boolean(selectedClassId.value)
 )
-const canLoadRawScoreMetadata = computed(() => Boolean(selectedCourseClass.value?.courseId))
-const courseClassSelectorDisabled = computed(() => user.role === 'teacher' && !courseClasses.value.length)
+const resolvedCourseId = computed(() => Number(selectedCourseClass.value?.courseId || directCourseId.value || 0) || undefined)
+const canLoadRawScoreMetadata = computed(() => Boolean(resolvedCourseId.value))
+const courseClassSelectorDisabled = computed(() => needsTeacherDirectClassInput.value)
 const courseClassSelectPlaceholder = computed(() =>
-  isTeacherDirectClassMode.value ? '当前按 classId 直达单个教学班' : '选择教学班'
+  needsTeacherDirectClassInput.value ? '教师端改为手动输入 classId' : '选择教学班'
 )
 const selectedCourseClassLabel = computed(() => {
   if (selectedCourseClass.value) {
@@ -757,6 +809,12 @@ const routeClassId = computed(() => {
   const numeric = Number(value)
   return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
 })
+const routeCourseId = computed(() => {
+  const raw = route.query.courseId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
+})
 const routeMajorId = computed(() => {
   const raw = route.query.majorId
   const value = Array.isArray(raw) ? raw[0] : raw
@@ -792,6 +850,15 @@ const mergeMajorOptions = (items: Array<{ id?: number | null; majorId?: number |
 }
 
 const roleSummary = computed<StatusState>(() => {
+  if (user.role === 'admin') {
+    return {
+      title: '当前角色可联调课程报表与专业报表两条链路',
+      description:
+        '管理员会同时显示课程报表、专业报表和矩阵台账准备能力；其中专业报表如果没有学期目录，会自动切换为手动输入 termId 的联调方式。',
+      type: 'success'
+    }
+  }
+
   if (canUseCourseReport.value) {
     return {
       title: '当前角色可直接联调课程报表接口',
@@ -1032,6 +1099,29 @@ const ensureRawScoreClassSelected = () => {
   return true
 }
 
+const handleApplyTeacherDirectContext = async () => {
+  if (!selectedClassId.value) {
+    ElMessage.warning('请先输入教学班 ID')
+    return
+  }
+
+  courseReportData.value = undefined
+  rawScorePage.value = {
+    records: [],
+    total: 0,
+    size: rawScoreQuery.value.pageSize,
+    current: 1,
+    pages: 0
+  }
+  rawScoreStudentNo.value = ''
+  await loadRawScoreAssessmentPoints()
+  ElMessage.success(
+    directCourseId.value
+      ? `已切换到 classId=${selectedClassId.value} / courseId=${directCourseId.value} 联调模式`
+      : `已切换到 classId=${selectedClassId.value} 联调模式`
+  )
+}
+
 const loadRawScoreAssessmentPoints = async () => {
   rawScoreAssessmentPoints.value = []
   courseObjectives.value = []
@@ -1050,11 +1140,11 @@ const loadRawScoreAssessmentPoints = async () => {
   }
 
   const selectedClass = courseClasses.value.find((item) => item.id === selectedClassId.value)
-  if (!selectedClass?.courseId) {
+  if (!resolvedCourseId.value) {
     if (isTeacherDirectClassMode.value) {
       setRawScoreStatus(
         '当前为单班直达联调模式',
-        `当前教师账号可继续按 classId=${selectedClassId.value} 查询原始成绩，但因为拿不到课程详情，考核点筛选列表暂时不会自动加载。`,
+        `当前教师账号可继续按 classId=${selectedClassId.value} 查询原始成绩，但因为还没填写 courseId，考核点筛选列表暂时不会自动加载。`,
         'info'
       )
     }
@@ -1063,8 +1153,8 @@ const loadRawScoreAssessmentPoints = async () => {
 
   try {
     const [assessmentPage, objectivePage, calculationStatus] = await Promise.all([
-      listAssessmentPoints(selectedClass.courseId),
-      listCourseObjectives(selectedClass.courseId),
+      listAssessmentPoints(resolvedCourseId.value),
+      listCourseObjectives(resolvedCourseId.value),
       getCourseAchievementCalculationStatus(selectedClassId.value)
     ])
     courseObjectives.value = objectivePage.records
@@ -1695,14 +1785,15 @@ onMounted(async () => {
         )
       } else {
         selectedClassId.value = routeClassId.value
+        directCourseId.value = routeCourseId.value
         setCourseStatus(
           '教师端缺少教学班列表接口',
-          '当前后端没有给教师开放教学班列表读取接口，所以页面不会再自动请求这组接口；如果已有 classId 参数，可继续针对单个教学班联调。',
+          '当前后端没有给教师开放教学班列表读取接口，所以页面不会再自动请求这组接口；请直接填写 classId，如需自动加载考核点和课程目标，请同时填写 courseId。',
           'info'
         )
         setRawScoreStatus(
           '教师端缺少教学班列表接口',
-          '当前后端没有给教师开放教学班列表读取接口，页面暂不再自动拉取教学班列表。',
+          '当前后端没有给教师开放教学班列表接口。你可以手动输入 classId 查询原始成绩，若要自动加载考核点筛选，请同时填写 courseId。',
           'info'
         )
       }
@@ -1713,7 +1804,7 @@ onMounted(async () => {
         Promise.all([
           user.role === 'admin' ? listMajors() : Promise.resolve([]),
           user.role === 'admin' || user.role === 'edu' ? listSchoolYears() : Promise.resolve([]),
-          user.role === 'edu' ? pageCourses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
+          user.role === 'admin' || user.role === 'edu' ? pageCourses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
           user.role === 'leader' ? pageGraduationRequirements({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any)
         ]).then(([majorList, termList, coursePage, requirementPage]) => {
           majors.value = majorList

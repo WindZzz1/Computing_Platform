@@ -232,7 +232,7 @@
           <el-select v-model="selectedMajorId" placeholder="请选择专业" style="width: 240px" filterable @change="reloadMajorData">
             <el-option v-for="major in majors" :key="major.id" :label="major.name" :value="major.id" />
           </el-select>
-          <el-select v-model="selectedTermId" placeholder="请选择学年学期" style="width: 220px" filterable @change="reloadMajorData">
+          <el-select v-if="schoolYears.length" v-model="selectedTermId" placeholder="请选择学年学期" style="width: 220px" filterable @change="reloadMajorData">
             <el-option
               v-for="term in schoolYears"
               :key="term.id"
@@ -240,9 +240,27 @@
               :value="term.id"
             />
           </el-select>
+          <el-input-number
+            v-else
+            v-model="selectedTermId"
+            :min="1"
+            :step="1"
+            controls-position="right"
+            style="width: 220px"
+            placeholder="请输入 termId"
+            @change="reloadMajorData"
+          />
           <el-input v-model="selectedGrade" placeholder="请输入年级，例如 2022" style="width: 180px" @change="reloadMajorData" />
           <el-switch v-model="majorForceRecalculate" active-text="强制重算" />
         </div>
+
+        <el-alert
+          v-if="canUseManualMajorTermInput"
+          title="当前角色没有学年学期下拉目录，改为手动输入 termId"
+          type="info"
+          show-icon
+          class="block-alert"
+        />
 
         <div class="run-bar">
           <el-button :disabled="!canQueryMajorCalculation" @click="reloadMajorData">刷新看板</el-button>
@@ -413,6 +431,7 @@ import {
 } from '@/api/calculation'
 import { exportCourseAchievementReportExcel, exportCourseAchievementReportPdf } from '@/api/report'
 import { listMajors } from '@/api/major'
+import { pageGraduationRequirements } from '@/api/indicator'
 import { listSchoolYears } from '@/api/schoolyear'
 import { pageTeachingClasses } from '@/api/teaching-class'
 import type {
@@ -474,10 +493,11 @@ const canRunCourseCalculation = computed(() => userStore.role === 'teacher' || u
 const canMajorQueryData = computed(() => userStore.role === 'admin' || userStore.role === 'edu' || userStore.role === 'leader')
 const canRunMajorCalculation = computed(() => userStore.role === 'admin' || userStore.role === 'edu' || userStore.role === 'leader')
 const canDeleteMajorCalculation = computed(() => userStore.role === 'admin')
-const canLoadMajorOptions = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canLoadMajorOptions = computed(() => userStore.role === 'admin' || userStore.role === 'edu' || userStore.role === 'leader')
 const canLoadSchoolYearOptions = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
 const canLoadTeachingClasses = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
 const canLoadCourseCatalog = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canUseManualMajorTermInput = computed(() => canMajorQueryData.value && !schoolYears.value.length)
 
 const teacherTeachingClasses = computed(() => {
   if (userStore.role === 'teacher') {
@@ -1135,11 +1155,12 @@ async function reloadMajorData() {
 async function loadBaseOptions() {
   loading.value = true
   try {
-    const [majorList, schoolYearList, classPage, coursePage] = await Promise.all([
+    const [majorList, schoolYearList, classPage, coursePage, requirementPage] = await Promise.all([
       userStore.role === 'admin' ? listMajors() : Promise.resolve([]),
       canLoadSchoolYearOptions.value ? listSchoolYears() : Promise.resolve([]),
       canLoadTeachingClasses.value ? pageTeachingClasses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
-      canLoadCourseCatalog.value ? pageCourses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any)
+      canLoadCourseCatalog.value ? pageCourses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
+      userStore.role === 'leader' ? pageGraduationRequirements({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any)
     ])
 
     const majorMap = new Map<number, string>()
@@ -1149,11 +1170,17 @@ async function loadBaseOptions() {
         majorMap.set(course.majorId, course.majorName)
       }
     })
+    requirementPage.records.forEach((requirement: { majorId?: number; majorName?: string }) => {
+      if (requirement.majorId && requirement.majorName) {
+        majorMap.set(requirement.majorId, requirement.majorName)
+      }
+    })
 
     majors.value = Array.from(majorMap.entries()).map(([id, name]) => ({ id, name }))
     schoolYears.value = schoolYearList
     teachingClasses.value = classPage.records
     mergeMajorOptions(coursePage.records)
+    mergeMajorOptions(requirementPage.records)
 
     const routeMatchedClass = routeClassId.value
       ? teacherTeachingClasses.value.find((item) => item.id === routeClassId.value)

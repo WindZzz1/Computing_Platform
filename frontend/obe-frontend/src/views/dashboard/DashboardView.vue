@@ -33,6 +33,7 @@
               <el-option v-for="major in majors" :key="major.id" :label="major.majorName" :value="major.id" />
             </el-select>
             <el-select
+              v-if="schoolYears.length"
               v-model="selectedTermId"
               style="width: 220px"
               clearable
@@ -46,6 +47,16 @@
                 :value="term.id"
               />
             </el-select>
+            <el-input-number
+              v-else-if="canUseManualMajorTermInput"
+              v-model="selectedTermId"
+              :min="1"
+              :step="1"
+              controls-position="right"
+              style="width: 220px"
+              placeholder="输入 termId"
+              @change="reloadMajorBoard"
+            />
             <el-input
               v-model="selectedGrade"
               style="width: 150px"
@@ -483,6 +494,7 @@ const canLoadSchoolYearCatalog = computed(() => user.role === 'admin' || user.ro
 const canLoadMatrixData = computed(() => user.role === 'admin' || user.role === 'edu')
 const canLoadMajorCalculation = computed(() => user.role === 'admin' || user.role === 'edu' || user.role === 'leader')
 const canLoadGlobalCourseStatus = computed(() => user.role === 'admin' || user.role === 'teacher')
+const canUseManualMajorTermInput = computed(() => canLoadMajorCalculation.value && !canLoadSchoolYearCatalog.value)
 
 const pieEl = ref<HTMLDivElement>()
 let pieChart: echarts.ECharts | undefined
