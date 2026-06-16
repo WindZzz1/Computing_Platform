@@ -10,6 +10,10 @@ export function listSchoolYears() {
   return apiPost<SysDictSchoolYearVO[]>('/dict/schoolyear/list')
 }
 
+export function getSchoolYear(id: number) {
+  return apiPost<SysDictSchoolYearVO>('/dict/schoolyear/get', { id })
+}
+
 export function pageSchoolYears(payload: { current?: number; pageSize?: number; yearName?: string; semesterName?: string }) {
   return apiPost<PageResponse<SysDictSchoolYearVO>>('/dict/schoolyear/page', payload)
 }

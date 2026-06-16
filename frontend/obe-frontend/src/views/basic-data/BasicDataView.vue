@@ -352,20 +352,22 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, UploadProps, UploadUserFile } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { createSysUser, listUsersByRole } from '@/api/auth'
-import { createCollege, deleteCollege, listColleges, pageColleges, updateCollege } from '@/api/college'
-import { createCourse, deleteCourse, downloadCourseTemplate, importCoursesFromExcel, pageCourses, updateCourse } from '@/api/course'
+import { createCollege, deleteCollege, getCollege, listColleges, pageColleges, updateCollege } from '@/api/college'
+import { createCourse, deleteCourse, downloadCourseTemplate, getCourse, importCoursesFromExcel, pageCourses, updateCourse } from '@/api/course'
 import {
   createGraduationRequirement,
   createIndicator,
   deleteGraduationRequirement,
   deleteIndicator,
+  getGraduationRequirement,
+  getIndicator,
   pageGraduationRequirements,
   pageIndicators,
   updateGraduationRequirement,
   updateIndicator
 } from '@/api/indicator'
-import { createMajor, deleteMajor, listMajors, pageMajors, updateMajor } from '@/api/major'
-import { createSchoolYear, deleteSchoolYear, pageSchoolYears, updateSchoolYear } from '@/api/schoolyear'
+import { createMajor, deleteMajor, getMajor, listMajors, pageMajors, updateMajor } from '@/api/major'
+import { createSchoolYear, deleteSchoolYear, getSchoolYear, pageSchoolYears, updateSchoolYear } from '@/api/schoolyear'
 import { pageTeachingClasses } from '@/api/teaching-class'
 import StatusTag from '@/components/StatusTag/StatusTag.vue'
 import { useUserStore } from '@/stores/user'
@@ -750,14 +752,20 @@ const openCreateDialog = () => {
   createDialogVisible.value = true
 }
 
-const openEditDialog = (course: CourseVO) => {
-  editingCourse.value = course
-  createForm.courseCode = course.courseCode
-  createForm.courseName = course.courseName
-  createForm.courseNature = course.courseNature || '必修'
-  createForm.credit = Number(course.credit ?? 3)
-  createForm.majorId = course.majorId
-  createDialogVisible.value = true
+const openEditDialog = async (course: CourseVO) => {
+  try {
+    const detail = await getCourse(course.id)
+    editingCourse.value = detail
+    createForm.courseCode = detail.courseCode
+    createForm.courseName = detail.courseName
+    createForm.courseNature = detail.courseNature || '必修'
+    createForm.credit = Number(detail.credit ?? 3)
+    createForm.majorId = detail.majorId
+    createDialogVisible.value = true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '课程详情加载失败'
+    ElMessage.error(message)
+  }
 }
 
 const openImportDialog = () => {
@@ -771,12 +779,18 @@ const openMajorCreateDialog = () => {
   majorDialogVisible.value = true
 }
 
-const openMajorEditDialog = (major: SysDictMajorVO) => {
-  editingMajor.value = major
-  majorForm.majorCode = major.majorCode
-  majorForm.majorName = major.majorName
-  majorForm.collegeId = Number(major.collegeId || 0)
-  majorDialogVisible.value = true
+const openMajorEditDialog = async (major: SysDictMajorVO) => {
+  try {
+    const detail = await getMajor(major.id)
+    editingMajor.value = detail
+    majorForm.majorCode = detail.majorCode
+    majorForm.majorName = detail.majorName
+    majorForm.collegeId = Number(detail.collegeId || 0)
+    majorDialogVisible.value = true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '专业详情加载失败'
+    ElMessage.error(message)
+  }
 }
 
 const openCollegeCreateDialog = () => {
@@ -785,10 +799,16 @@ const openCollegeCreateDialog = () => {
   collegeDialogVisible.value = true
 }
 
-const openCollegeEditDialog = (college: SysDictCollegeVO) => {
-  editingCollege.value = college
-  collegeForm.collegeName = college.collegeName
-  collegeDialogVisible.value = true
+const openCollegeEditDialog = async (college: SysDictCollegeVO) => {
+  try {
+    const detail = await getCollege(college.id)
+    editingCollege.value = detail
+    collegeForm.collegeName = detail.collegeName
+    collegeDialogVisible.value = true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '学院详情加载失败'
+    ElMessage.error(message)
+  }
 }
 
 const openSchoolYearCreateDialog = () => {
@@ -797,11 +817,17 @@ const openSchoolYearCreateDialog = () => {
   schoolYearDialogVisible.value = true
 }
 
-const openSchoolYearEditDialog = (schoolYear: SysDictSchoolYearVO) => {
-  editingSchoolYear.value = schoolYear
-  schoolYearForm.yearName = schoolYear.yearName
-  schoolYearForm.semesterName = schoolYear.semesterName
-  schoolYearDialogVisible.value = true
+const openSchoolYearEditDialog = async (schoolYear: SysDictSchoolYearVO) => {
+  try {
+    const detail = await getSchoolYear(schoolYear.id)
+    editingSchoolYear.value = detail
+    schoolYearForm.yearName = detail.yearName
+    schoolYearForm.semesterName = detail.semesterName
+    schoolYearDialogVisible.value = true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '学年学期详情加载失败'
+    ElMessage.error(message)
+  }
 }
 
 const openRequirementCreateDialog = () => {
@@ -810,13 +836,19 @@ const openRequirementCreateDialog = () => {
   requirementDialogVisible.value = true
 }
 
-const openRequirementEditDialog = (requirement: GraduationRequirementVO) => {
-  editingRequirement.value = requirement
-  requirementForm.requirementCode = requirement.requirementCode
-  requirementForm.requirementName = requirement.requirementName
-  requirementForm.description = requirement.description || ''
-  requirementForm.majorId = requirement.majorId
-  requirementDialogVisible.value = true
+const openRequirementEditDialog = async (requirement: GraduationRequirementVO) => {
+  try {
+    const detail = await getGraduationRequirement(requirement.id)
+    editingRequirement.value = detail
+    requirementForm.requirementCode = detail.requirementCode
+    requirementForm.requirementName = detail.requirementName
+    requirementForm.description = detail.description || ''
+    requirementForm.majorId = detail.majorId
+    requirementDialogVisible.value = true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '毕业要求详情加载失败'
+    ElMessage.error(message)
+  }
 }
 
 const openIndicatorCreateDialog = () => {
@@ -825,13 +857,19 @@ const openIndicatorCreateDialog = () => {
   indicatorDialogVisible.value = true
 }
 
-const openIndicatorEditDialog = (indicator: IndicatorPointVO) => {
-  editingIndicator.value = indicator
-  indicatorForm.indicatorCode = indicator.indicatorCode
-  indicatorForm.indicatorName = indicator.indicatorName
-  indicatorForm.description = indicator.description || ''
-  indicatorForm.requirementId = indicator.requirementId || requirements.value[0]?.id || 0
-  indicatorDialogVisible.value = true
+const openIndicatorEditDialog = async (indicator: IndicatorPointVO) => {
+  try {
+    const detail = await getIndicator(indicator.id)
+    editingIndicator.value = detail
+    indicatorForm.indicatorCode = detail.indicatorCode
+    indicatorForm.indicatorName = detail.indicatorName
+    indicatorForm.description = detail.description || ''
+    indicatorForm.requirementId = detail.requirementId || requirements.value[0]?.id || 0
+    indicatorDialogVisible.value = true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '指标点详情加载失败'
+    ElMessage.error(message)
+  }
 }
 
 const openUserCreateDialog = () => {

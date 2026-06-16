@@ -15,6 +15,10 @@ export function pageIndicators(payload: IndicatorPageQuery) {
   return apiPost<PageResponse<IndicatorPointVO>>('/requirement/indicator/page', payload)
 }
 
+export function getIndicator(id: number) {
+  return apiPost<IndicatorPointVO>('/requirement/indicator/get', { id })
+}
+
 export function createIndicator(payload: IndicatorPointCreateRequest) {
   return apiPost<number>('/requirement/indicator/add', payload)
 }
@@ -29,6 +33,10 @@ export function deleteIndicator(id: number) {
 
 export function pageGraduationRequirements(payload: GraduationRequirementPageQuery) {
   return apiPost<PageResponse<GraduationRequirementVO>>('/requirement/graduation/page', payload)
+}
+
+export function getGraduationRequirement(id: number) {
+  return apiPost<GraduationRequirementVO>('/requirement/graduation/get', { id })
 }
 
 export function createGraduationRequirement(payload: GraduationRequirementCreateRequest) {

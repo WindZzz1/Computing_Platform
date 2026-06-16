@@ -11,6 +11,10 @@ export function listColleges() {
   return apiPost<SysDictCollegeSimpleVO[]>('/dict/college/list')
 }
 
+export function getCollege(id: number) {
+  return apiPost<SysDictCollegeVO>('/dict/college/get', { id })
+}
+
 export function pageColleges(payload: { current?: number; pageSize?: number; collegeName?: string }) {
   return apiPost<PageResponse<SysDictCollegeVO>>('/dict/college/page', payload)
 }

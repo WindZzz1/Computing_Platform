@@ -11,6 +11,10 @@ export function listMajors() {
   return apiPost<SysDictMajorSimpleVO[]>('/dict/major/list')
 }
 
+export function getMajor(id: number) {
+  return apiPost<SysDictMajorVO>('/dict/major/get', { id })
+}
+
 export function pageMajors(payload: { current?: number; pageSize?: number; majorCode?: string; majorName?: string; collegeId?: number | null }) {
   return apiPost<PageResponse<SysDictMajorVO>>('/dict/major/page', payload)
 }

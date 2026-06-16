@@ -15,6 +15,10 @@ export function pageCourses(payload: CoursePageQuery) {
   return apiPost<PageResponse<CourseVO>>('/course/page', payload)
 }
 
+export function getCourse(id: number) {
+  return apiPost<CourseVO>('/course/get', { id })
+}
+
 export function listCourses() {
   return apiPost<CourseSimpleVO[]>('/course/list')
 }
