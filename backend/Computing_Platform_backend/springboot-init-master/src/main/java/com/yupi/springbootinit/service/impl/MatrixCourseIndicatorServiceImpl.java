@@ -5,11 +5,13 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.mapper.CourseMapper;
+import com.yupi.springbootinit.mapper.GraduationRequirementMapper;
 import com.yupi.springbootinit.mapper.IndicatorPointMapper;
 import com.yupi.springbootinit.mapper.MatrixCourseIndicatorMapper;
 import com.yupi.springbootinit.mapper.SysDictMajorMapper;
 import com.yupi.springbootinit.model.dto.matrix.MatrixCourseIndicatorSaveRequest;
 import com.yupi.springbootinit.model.entity.Course;
+import com.yupi.springbootinit.model.entity.GraduationRequirement;
 import com.yupi.springbootinit.model.entity.IndicatorPoint;
 import com.yupi.springbootinit.model.entity.MatrixCourseIndicator;
 import com.yupi.springbootinit.model.entity.SysDictMajor;
@@ -47,6 +49,9 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
     private IndicatorPointMapper indicatorPointMapper;
 
     @Resource
+    private GraduationRequirementMapper graduationRequirementMapper;
+
+    @Resource
     private SysDictMajorMapper sysDictMajorMapper;
 
     @Override
@@ -81,10 +86,8 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
         }).collect(Collectors.toList());
         configVO.setCourses(courseSimpleVOList);
 
-        // 获取所有指标点
-        QueryWrapper<IndicatorPoint> indicatorQueryWrapper = new QueryWrapper<>();
-        indicatorQueryWrapper.orderByAsc("indicator_code");
-        List<IndicatorPoint> indicators = indicatorPointMapper.selectList(indicatorQueryWrapper);
+        // 获取当前专业下的所有指标点
+        List<IndicatorPoint> indicators = listIndicatorsByMajorId(majorId);
 
         List<MatrixConfigVO.IndicatorPointSimpleVO> indicatorSimpleVOList = indicators.stream().map(indicator -> {
             MatrixConfigVO.IndicatorPointSimpleVO simpleVO = new MatrixConfigVO.IndicatorPointSimpleVO();
@@ -126,8 +129,10 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "专业不存在");
         }
 
+        Map<Long, IndicatorPoint> availableIndicatorMap = getIndicatorMapByMajorId(majorId);
+
         // 先进行权重校验
-        WeightCheckResult checkResult = checkMatrixWeights(saveRequest);
+        WeightCheckResult checkResult = checkMatrixWeights(saveRequest, availableIndicatorMap);
         if (!checkResult.isValid()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, checkResult.getMessage());
         }
@@ -154,10 +159,11 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
                                 "课程 " + course.getCourseName() + " 不属于该专业");
                     }
 
-                    // 验证指标点是否存在
-                    IndicatorPoint indicator = indicatorPointMapper.selectById(item.getIndicatorId());
+                    // 验证指标点是否属于当前专业
+                    IndicatorPoint indicator = availableIndicatorMap.get(item.getIndicatorId());
                     if (indicator == null) {
-                        throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "指标点不存在: " + item.getIndicatorId());
+                        throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                                "指标点不属于该专业: " + item.getIndicatorId());
                     }
 
                     MatrixCourseIndicator matrix = new MatrixCourseIndicator();
@@ -189,6 +195,15 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
 
     @Override
     public WeightCheckResult checkMatrixWeights(MatrixCourseIndicatorSaveRequest saveRequest) {
+        if (saveRequest == null || saveRequest.getMajorId() == null) {
+            return new WeightCheckResult(false, "专业ID不能为空", new HashMap<>());
+        }
+        Map<Long, IndicatorPoint> availableIndicatorMap = getIndicatorMapByMajorId(saveRequest.getMajorId());
+        return checkMatrixWeights(saveRequest, availableIndicatorMap);
+    }
+
+    private WeightCheckResult checkMatrixWeights(MatrixCourseIndicatorSaveRequest saveRequest,
+                                                 Map<Long, IndicatorPoint> availableIndicatorMap) {
         if (saveRequest == null || saveRequest.getMatrixItems() == null) {
             return new WeightCheckResult(false, "数据不能为空", new HashMap<>());
         }
@@ -197,24 +212,28 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
         Map<Long, BigDecimal> columnSums = new HashMap<>();
         // 指标点ID -> 指标点名称的映射（用于错误提示）
         Map<Long, String> indicatorNames = new HashMap<>();
+        List<String> errorMessages = new ArrayList<>();
 
         for (MatrixCourseIndicatorSaveRequest.MatrixItem item : saveRequest.getMatrixItems()) {
             if (item.getTotalWeight() != null && item.getTotalWeight().compareTo(BigDecimal.ZERO) > 0) {
-                columnSums.merge(item.getIndicatorId(), item.getTotalWeight(), BigDecimal::add);
-
-                // 获取指标点名称
-                if (!indicatorNames.containsKey(item.getIndicatorId())) {
-                    IndicatorPoint indicator = indicatorPointMapper.selectById(item.getIndicatorId());
-                    if (indicator != null) {
-                        indicatorNames.put(item.getIndicatorId(),
-                            indicator.getIndicatorCode() + " " + indicator.getIndicatorName());
-                    }
+                if (item.getIndicatorId() == null) {
+                    errorMessages.add("指标点ID不能为空");
+                    continue;
                 }
+
+                IndicatorPoint indicator = availableIndicatorMap.get(item.getIndicatorId());
+                if (indicator == null) {
+                    errorMessages.add("指标点不属于当前专业: " + item.getIndicatorId());
+                    continue;
+                }
+
+                columnSums.merge(item.getIndicatorId(), item.getTotalWeight(), BigDecimal::add);
+                indicatorNames.putIfAbsent(item.getIndicatorId(),
+                        indicator.getIndicatorCode() + " " + indicator.getIndicatorName());
             }
         }
 
         // 检查每个指标点的权重总和是否为1.0
-        List<String> errorMessages = new ArrayList<>();
         for (Map.Entry<Long, BigDecimal> entry : columnSums.entrySet()) {
             Long indicatorId = entry.getKey();
             BigDecimal sum = entry.getValue().setScale(4, RoundingMode.HALF_UP);
@@ -230,18 +249,12 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
         }
 
         // 检查是否所有指标点都配置了权重
-        if (saveRequest.getMajorId() != null) {
-            QueryWrapper<IndicatorPoint> indicatorQueryWrapper = new QueryWrapper<>();
-            indicatorQueryWrapper.orderByAsc("indicator_code");
-            List<IndicatorPoint> allIndicators = indicatorPointMapper.selectList(indicatorQueryWrapper);
-
-            for (IndicatorPoint indicator : allIndicators) {
-                if (!columnSums.containsKey(indicator.getId())) {
-                    errorMessages.add(String.format(
-                        "指标点[%s %s]未配置任何支撑课程，权重总和为0，要求必须为1.0",
-                        indicator.getIndicatorCode(), indicator.getIndicatorName()
-                    ));
-                }
+        for (IndicatorPoint indicator : availableIndicatorMap.values()) {
+            if (!columnSums.containsKey(indicator.getId())) {
+                errorMessages.add(String.format(
+                    "指标点[%s %s]未配置任何支撑课程，权重总和为0，要求必须为1.0",
+                    indicator.getIndicatorCode(), indicator.getIndicatorName()
+                ));
             }
         }
 
@@ -250,6 +263,36 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
         }
 
         return new WeightCheckResult(true, "校验通过：所有指标点的支撑权重总和均为1.0", columnSums);
+    }
+
+    private List<IndicatorPoint> listIndicatorsByMajorId(Long majorId) {
+        QueryWrapper<GraduationRequirement> requirementQueryWrapper = new QueryWrapper<>();
+        requirementQueryWrapper.select("id");
+        requirementQueryWrapper.eq("major_id", majorId);
+        requirementQueryWrapper.orderByAsc("requirement_code");
+        List<GraduationRequirement> requirements = graduationRequirementMapper.selectList(requirementQueryWrapper);
+        if (requirements.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Long> requirementIds = requirements.stream()
+                .map(GraduationRequirement::getId)
+                .collect(Collectors.toList());
+
+        QueryWrapper<IndicatorPoint> indicatorQueryWrapper = new QueryWrapper<>();
+        indicatorQueryWrapper.in("requirement_id", requirementIds);
+        indicatorQueryWrapper.orderByAsc("indicator_code");
+        return indicatorPointMapper.selectList(indicatorQueryWrapper);
+    }
+
+    private Map<Long, IndicatorPoint> getIndicatorMapByMajorId(Long majorId) {
+        return listIndicatorsByMajorId(majorId).stream()
+                .collect(Collectors.toMap(
+                        IndicatorPoint::getId,
+                        indicator -> indicator,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
     }
 
     /**
