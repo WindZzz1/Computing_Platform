@@ -242,7 +242,7 @@ CREATE TABLE student_score (
                                create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                                update_time DATETIME ON UPDATE CURRENT_TIMESTAMP,
                                is_deleted TINYINT DEFAULT 0,
-                               UNIQUE KEY uk_student_point (student_id, point_id),
+                               UNIQUE KEY uk_class_student_point (teaching_class_id, student_id, point_id),
                                INDEX idx_class_id (teaching_class_id),
                                INDEX idx_point_id (point_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '学生考核点原始成绩表';
