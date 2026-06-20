@@ -291,7 +291,8 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>2.22.2</version>
                 <configuration>
-                    <argLine>-Xmx1024m -XX:MaxPermSize=256m</argLine>
+                    <!-- 移除 -XX:MaxPermSize：该选项自 JDK 8 起已移除，会导致 JDK 17+ 下 surefire fork 的 JVM 拒绝启动、全部测试无法运行 -->
+                    <argLine>-Xmx1024m</argLine>
                 </configuration>
             </plugin>
         </plugins>
