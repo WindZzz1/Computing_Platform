@@ -34,7 +34,7 @@ public class MatrixCourseIndicatorController {
      * @return 矩阵配置
      */
     @GetMapping("/config/{majorId}")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    @AuthCheck(mustRole = SysUserConstant.ROLE_LEADER)
     public BaseResponse<MatrixConfigVO> getMatrixConfig(@PathVariable Long majorId) {
         MatrixConfigVO config = matrixCourseIndicatorService.getMatrixConfigByMajorId(majorId);
         return ResultUtils.success(config);
@@ -48,7 +48,7 @@ public class MatrixCourseIndicatorController {
      * @return 是否成功
      */
     @PostMapping("/save")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    @AuthCheck(mustRole = SysUserConstant.ROLE_LEADER)
     public BaseResponse<Boolean> saveMatrixConfig(@RequestBody MatrixCourseIndicatorSaveRequest saveRequest) {
         log.info("保存矩阵配置，专业ID: {}, 矩阵项数量: {}",
                 saveRequest.getMajorId(),
@@ -66,7 +66,7 @@ public class MatrixCourseIndicatorController {
      * @return 校验结果
      */
     @PostMapping("/check")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    @AuthCheck(mustRole = SysUserConstant.ROLE_LEADER)
     public BaseResponse<WeightCheckResultVO> checkMatrixWeights(@RequestBody MatrixCourseIndicatorSaveRequest saveRequest) {
         MatrixCourseIndicatorService.WeightCheckResult result =
                 matrixCourseIndicatorService.checkMatrixWeights(saveRequest);
