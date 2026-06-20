@@ -12,6 +12,7 @@ import com.yupi.springbootinit.service.MajorCalculationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import javax.annotation.Resource;
 import java.math.BigDecimal;
@@ -207,6 +208,11 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
 
         } catch (Exception e) {
             log.error("专业级达成度计算失败：专业ID=" + request.getMajorId(), e);
+            // 显式标记事务回滚：try-catch 会吞掉异常，导致 @Transactional 无法自动回滚。
+            // 三级计算流程为"先物理删除旧三级数据（deleteByMajorTermGradePhysically），
+            // 再逐条插入新数据"，若插入阶段失败必须回滚，否则旧数据已被物理删除且无法恢复，
+            // 造成专业级达成度永久丢失或残缺，而接口仅返回 success=false，极具破坏性且隐蔽。
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
 
             result.put("success", false);
             result.put("calcStatus", 3);
