@@ -545,6 +545,12 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
                 }
             }
 
+            // 原子导入：任一行失败则整批回滚
+            if (failCount > 0) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                        "Excel导入存在 " + failCount + " 条失败，已整体回滚，请修正后重新导入");
+            }
+
             Map<String, Object> result = new HashMap<>();
             result.put("total", studentExcels.size());
             result.put("successCount", successCount);

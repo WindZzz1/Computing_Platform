@@ -419,6 +419,12 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
                 }
             }
 
+            // 原子导入：任一行失败则整批回滚，避免部分成功导致 successCount/failCount 与真实库不一致
+            if (failCount > 0) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                        "Excel导入存在 " + failCount + " 条失败，已整体回滚，请修正后重新导入（详见返回的错误明细）");
+            }
+
             Map<String, Object> result = new HashMap<>();
             result.put("total", courseExcels.size());
             result.put("successCount", successCount);
