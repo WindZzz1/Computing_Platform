@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import javax.annotation.Resource;
 import java.math.BigDecimal;
@@ -102,6 +103,10 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
 
         } catch (Exception e) {
             log.error("达成度计算失败：班级ID=" + request.getClassId(), e);
+            // 显式标记事务回滚：try-catch 会吞掉异常，导致 @Transactional 无法自动回滚。
+            // 计算流程为"先物理删除旧一/二级数据，再插入新数据"，若中途失败必须回滚，
+            // 否则旧数据已删、新数据未写完，造成达成度数据丢失或前后不一致。
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             result.put("success", false);
             result.put("errorMessage", "计算失败：" + e.getMessage());
         }
