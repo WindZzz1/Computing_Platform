@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.OwnershipHelper;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
 import com.yupi.springbootinit.mapper.RelPointObjectiveMapper;
 import com.yupi.springbootinit.mapper.WeightObjectiveIndicatorMapper;
@@ -35,6 +36,9 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
     @Resource
     private WeightObjectiveIndicatorMapper weightObjectiveIndicatorMapper;
 
+    @Resource
+    private OwnershipHelper ownershipHelper;
+
     @Override
     public Long createCourseObjective(CourseObjectiveAddRequest request) {
         if (request == null) {
@@ -46,6 +50,8 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         if (courseId == null || courseId <= 0 || StringUtils.isAnyBlank(objCode, objName)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "课程ID、目标编号和目标名称不能为空");
         }
+        // 归属校验：仅该课程主讲教师（admin 放行）可创建课程目标
+        ownershipHelper.checkCourseOwnership(courseId);
         validateDuplicateObjCode(courseId, objCode, null);
         baseMapper.deleteDeletedByCourseIdAndObjCode(courseId, objCode);
 
@@ -67,6 +73,8 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         if (exist == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "课程目标不存在");
         }
+        // 归属校验：以课程目标实际所属课程为准（防 request 伪造 courseId 越权）
+        ownershipHelper.checkCourseOwnership(exist.getCourseId());
         Long courseId = request.getCourseId() == null ? exist.getCourseId() : request.getCourseId();
         String objCode = StringUtils.isBlank(request.getObjCode()) ? exist.getObjCode() : request.getObjCode();
         if (courseId == null || courseId <= 0) {
@@ -88,6 +96,8 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         if (exist == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "课程目标不存在");
         }
+        // 归属校验：仅该课程主讲教师（admin 放行）可删除
+        ownershipHelper.checkCourseOwnership(exist.getCourseId());
         validateObjectiveNotReferenced(id);
         return this.removeById(id);
     }

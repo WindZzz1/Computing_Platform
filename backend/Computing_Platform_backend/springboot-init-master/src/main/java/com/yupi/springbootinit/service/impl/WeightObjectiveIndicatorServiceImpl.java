@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.OwnershipHelper;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
 import com.yupi.springbootinit.mapper.GraduationRequirementMapper;
 import com.yupi.springbootinit.mapper.IndicatorPointMapper;
@@ -62,6 +63,9 @@ public class WeightObjectiveIndicatorServiceImpl
     private MatrixCourseIndicatorMapper matrixCourseIndicatorMapper;
 
     @Resource
+    private OwnershipHelper ownershipHelper;
+
+    @Resource
     private IndicatorPointMapper indicatorPointMapper;
 
     @Resource
@@ -89,6 +93,8 @@ public class WeightObjectiveIndicatorServiceImpl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Boolean saveWeights(WeightObjectiveIndicatorSaveRequest request) {
+        // 归属校验：仅该课程主讲教师（admin 放行）可保存内部权重
+        ownershipHelper.checkCourseOwnership(request.getCourseId());
         WeightCheckVO checkVO = checkWeights(request);
         if (!Boolean.TRUE.equals(checkVO.getValid())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "同一指标点下内部权重合计必须为1.0");

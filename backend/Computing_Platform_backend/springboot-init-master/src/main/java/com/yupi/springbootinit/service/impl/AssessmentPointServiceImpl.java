@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.OwnershipHelper;
 import com.yupi.springbootinit.mapper.AssessmentPointMapper;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
 import com.yupi.springbootinit.mapper.RelPointObjectiveMapper;
@@ -48,12 +49,17 @@ public class AssessmentPointServiceImpl extends ServiceImpl<AssessmentPointMappe
     @Resource
     private RelPointObjectiveMapper relPointObjectiveMapper;
 
+    @Resource
+    private OwnershipHelper ownershipHelper;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createAssessmentPoint(AssessmentPointAddRequest request) {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+        // 归属校验：仅该课程主讲教师（admin 放行）可创建考核点
+        ownershipHelper.checkCourseOwnership(request.getCourseId());
         List<ObjectiveRelationParam> relations = resolveObjectiveRelations(request.getObjectiveId(),
                 request.getObjectiveIds(), true);
         validateAssessmentPoint(request.getCourseId(), request.getPointCode(), request.getPointName(),
@@ -80,6 +86,8 @@ public class AssessmentPointServiceImpl extends ServiceImpl<AssessmentPointMappe
         if (exist == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "考核点不存在");
         }
+        // 归属校验：以考核点实际所属课程为准（防 request 伪造 courseId 越权）
+        ownershipHelper.checkCourseOwnership(exist.getCourseId());
         Long courseId = request.getCourseId() == null ? exist.getCourseId() : request.getCourseId();
         String pointCode = StringUtils.isBlank(request.getPointCode()) ? exist.getPointCode() : request.getPointCode();
         String pointName = StringUtils.isBlank(request.getPointName()) ? exist.getPointName() : request.getPointName();
@@ -109,6 +117,8 @@ public class AssessmentPointServiceImpl extends ServiceImpl<AssessmentPointMappe
         if (exist == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "考核点不存在");
         }
+        // 归属校验：仅该课程主讲教师（admin 放行）可删除
+        ownershipHelper.checkCourseOwnership(exist.getCourseId());
         validateAssessmentPointNotReferenced(id);
         boolean removeResult = this.removeById(id);
         if (removeResult) {
