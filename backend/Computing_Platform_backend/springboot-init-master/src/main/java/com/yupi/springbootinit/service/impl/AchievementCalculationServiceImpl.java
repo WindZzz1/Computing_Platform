@@ -192,27 +192,17 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
                         .collect(Collectors.toList());
 
                 if (!objectiveRelations.isEmpty()) {
-                    // 计算达成度：Σ(考核点得分/考核点满分 × 支撑权重) / Σ(支撑权重)
-                    BigDecimal numerator = BigDecimal.ZERO;
-                    BigDecimal denominator = BigDecimal.ZERO;
+                    // 规约 3.1：C_ij = Σ(支撑目标 j 的考核点实际得分) / Σ(支撑目标 j 的考核点目标满分)
+                    // 不再使用 rel_point_objective.weight 加权；某考核点无成绩则实际得分按 0 计入（分子不计、分母计满分）。
+                    List<AssessmentPoint> objectivePoints = objectiveRelations.stream()
+                            .map(RelPointObjective::getPointId)
+                            .map(assessmentPointMap::get)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toList());
+                    Map<Long, StudentScore> studentScoreMap = scoreMap.getOrDefault(studentId, Collections.emptyMap());
+                    BigDecimal achievement = computeObjectiveAchievement(objectivePoints, studentScoreMap);
 
-                    for (RelPointObjective relation : objectiveRelations) {
-                        AssessmentPoint point = assessmentPointMap.get(relation.getPointId());
-                        if (point != null && scoreMap.containsKey(studentId)) {
-                            StudentScore score = scoreMap.get(studentId).get(point.getId());
-                            if (score != null && score.getActualScore() != null) {
-                                // 考核点得分/考核点满分 × 支撑权重
-                                BigDecimal scoreRatio = score.getActualScore().divide(point.getFullScore(), SCALE, ROUNDING_MODE);
-                                BigDecimal contribution = scoreRatio.multiply(relation.getWeight());
-                                numerator = numerator.add(contribution);
-                            }
-                        }
-                        denominator = denominator.add(relation.getWeight());
-                    }
-
-                    if (denominator.compareTo(BigDecimal.ZERO) > 0) {
-                        BigDecimal achievement = numerator.divide(denominator, SCALE, ROUNDING_MODE);
-
+                    if (achievement != null) {
                         StudentObjectiveAchievement studentAchievement = new StudentObjectiveAchievement();
                         studentAchievement.setClassId(classId);
                         studentAchievement.setStudentId(studentId);
@@ -374,6 +364,41 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
         log.info("二级达成度计算完成：指标点数={}, 记录数={}", indicatorMap.size(), indicatorAchievements.size());
 
         return stats;
+    }
+
+    /**
+     * 课程目标达成度（一级）C_ij = Σ(支撑该目标的考核点实际得分) / Σ(支撑该目标的考核点目标满分)。
+     * <p>
+     * 规约 3.1 的严格实现：某考核点无成绩时，其分值不计入分子（等价于实际得分 0），但仍计入分母的满分，
+     * 因此缺考会拉低该生该目标的达成度。无任何满分时返回 null（不生成达成度记录）。
+     * <p>
+     * 包级可见 + 静态，以便单元测试直接覆盖公式（AchievementLevelOneFormulaTest）。
+     *
+     * @param objectivePoints  支撑该课程目标的考核点列表
+     * @param studentScoreMap  该学生的 pointId -> 成绩 映射（可为空）
+     * @return 达成度（0~1，4 位小数），或 null（无满分）
+     */
+    static BigDecimal computeObjectiveAchievement(List<AssessmentPoint> objectivePoints,
+                                                  Map<Long, StudentScore> studentScoreMap) {
+        if (objectivePoints == null || objectivePoints.isEmpty()) {
+            return null;
+        }
+        BigDecimal sumActualScore = BigDecimal.ZERO;
+        BigDecimal sumFullScore = BigDecimal.ZERO;
+        for (AssessmentPoint point : objectivePoints) {
+            if (point == null || point.getId() == null || point.getFullScore() == null) {
+                continue;
+            }
+            StudentScore score = studentScoreMap == null ? null : studentScoreMap.get(point.getId());
+            if (score != null && score.getActualScore() != null) {
+                sumActualScore = sumActualScore.add(score.getActualScore());
+            }
+            sumFullScore = sumFullScore.add(point.getFullScore());
+        }
+        if (sumFullScore.compareTo(BigDecimal.ZERO) == 0) {
+            return null;
+        }
+        return sumActualScore.divide(sumFullScore, SCALE, ROUNDING_MODE);
     }
 
     /**
