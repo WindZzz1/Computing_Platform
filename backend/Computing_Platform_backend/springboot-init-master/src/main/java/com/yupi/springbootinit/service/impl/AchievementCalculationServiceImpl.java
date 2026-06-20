@@ -3,6 +3,7 @@ package com.yupi.springbootinit.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.GradesheetStatusHelper;
 import com.yupi.springbootinit.mapper.*;
 import com.yupi.springbootinit.model.dto.gradeEntry.AchievementCalculationRequest;
 import com.yupi.springbootinit.model.entity.*;
@@ -64,6 +65,9 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
     @Resource
     private StudentMapper studentMapper;
 
+    @Resource
+    private GradesheetStatusHelper gradesheetStatusHelper;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> calculateAchievement(AchievementCalculationRequest request) {
@@ -81,6 +85,14 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
             TeachingClass teachingClass = teachingClassMapper.selectById(classId);
             if (teachingClass == null) {
                 throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "教学班级不存在");
+            }
+
+            // 防重算：已锁定（已计算达成度）的教学班默认拒绝重复计算，避免误触覆盖；
+            // 如确需用最新成绩重算，须显式传 forceRecalculate=true。
+            if (gradesheetStatusHelper.isLocked(classId)
+                    && !Boolean.TRUE.equals(request.getForceRecalculate())) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                        "该教学班成绩单已计算并锁定，重复计算请使用强制重算（forceRecalculate=true）");
             }
 
             log.info("开始计算达成度：班级ID={}", classId);
