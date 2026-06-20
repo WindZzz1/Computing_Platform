@@ -259,6 +259,12 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
                 }
             }
 
+            // 原子导入：任一行失败则整批回滚
+            if (failCount > 0) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                        "Excel导入存在 " + failCount + " 条失败，已整体回滚，请修正后重新导入");
+            }
+
             Map<String, Object> result = new HashMap<>();
             result.put("total", studentExcels.size());
             result.put("successCount", successCount);
@@ -266,6 +272,9 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
             result.put("failDetails", failDetails);
             return result;
 
+        } catch (BusinessException e) {
+            // 业务异常（含原子导入的整批回滚）原样抛出，避免被下面的"文件读取失败"误包装
+            throw e;
         } catch (Exception e) {
             log.error("文件读取失败", e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件读取失败: " + e.getMessage());
