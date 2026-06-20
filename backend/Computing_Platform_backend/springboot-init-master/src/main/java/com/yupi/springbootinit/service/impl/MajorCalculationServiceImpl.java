@@ -475,25 +475,66 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
     }
 
     /**
-     * 获取教学班级列表
+     * 获取某专业 / 学年学期 / 年级涉及的教学班级。
+     * <p>
+     * 专业过滤：教学班本身不挂专业（teaching_class 无 major_id），通过其所属课程的
+     * major_id 关联（course.major_id = majorId）。
+     * 年级过滤：教学班无 grade 字段，经 班级学生 → 学生.grade 关联。
+     * <p>
+     * 修复前 majorId / grade 均未生效（只写了注释、空实现），导致 C-4 看板和专业级
+     * 计算基于"全校该学期所有教学班"，跨专业串数据、canCalculate 永远误判。
+     *
+     * 包级可见以便单元测试直接覆盖（MajorCalculationScopeTest）。
      */
-    private List<TeachingClass> getTeachingClasses(Long majorId, Long termId, String grade) {
-        QueryWrapper<TeachingClass> query = new QueryWrapper<>();
-
-        // 通过学生信息筛选专业和年级
-        if (majorId != null || grade != null) {
-            // 查询该专业该年级的学生班级
-            QueryWrapper<ClassStudent> studentQuery = new QueryWrapper<>();
-            // 这里需要根据实际的业务逻辑来筛选
-            // 暂时返回所有教学班级
+    List<TeachingClass> getTeachingClasses(Long majorId, Long termId, String grade) {
+        // 1. 专业过滤：取该专业下的所有课程 id（course.major_id）
+        List<Long> courseIds = null;
+        if (majorId != null) {
+            QueryWrapper<Course> courseQuery = new QueryWrapper<>();
+            courseQuery.eq("major_id", majorId).select("id");
+            courseIds = courseMapper.selectList(courseQuery).stream()
+                    .map(Course::getId).collect(Collectors.toList());
+            if (courseIds.isEmpty()) {
+                // 该专业无课程 → 无教学班
+                return Collections.emptyList();
+            }
         }
 
+        // 2. 按课程 + 学年学期筛选教学班
+        QueryWrapper<TeachingClass> query = new QueryWrapper<>();
+        if (courseIds != null) {
+            query.in("course_id", courseIds);
+        }
         if (termId != null) {
             query.eq("term_id", termId);
         }
+        List<TeachingClass> classes = teachingClassMapper.selectList(query);
+        if (classes.isEmpty()) {
+            return classes;
+        }
 
-        query.orderByAsc("id");
-        return teachingClassMapper.selectList(query);
+        // 3. 年级过滤：教学班无 grade，取该专业该年级学生所在教学班，与上一步取交集
+        if (grade != null && !grade.isEmpty()) {
+            QueryWrapper<Student> studentQuery = new QueryWrapper<>();
+            if (majorId != null) {
+                studentQuery.eq("major_id", majorId);
+            }
+            studentQuery.eq("grade", grade).select("id");
+            List<Long> studentIds = studentMapper.selectList(studentQuery).stream()
+                    .map(Student::getId).collect(Collectors.toList());
+            if (studentIds.isEmpty()) {
+                return Collections.emptyList();
+            }
+            QueryWrapper<ClassStudent> classStudentQuery = new QueryWrapper<>();
+            classStudentQuery.in("student_id", studentIds);
+            Set<Long> classIdsOfGrade = classStudentMapper.selectList(classStudentQuery).stream()
+                    .map(ClassStudent::getClassId).collect(Collectors.toSet());
+            classes = classes.stream()
+                    .filter(tc -> classIdsOfGrade.contains(tc.getId()))
+                    .collect(Collectors.toList());
+        }
+
+        return classes;
     }
 
     /**
