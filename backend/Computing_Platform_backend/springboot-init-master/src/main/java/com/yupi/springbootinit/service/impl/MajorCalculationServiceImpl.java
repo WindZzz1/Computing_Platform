@@ -64,6 +64,9 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
     private MajorIndicatorAchievementMapper majorIndicatorAchievementMapper;
 
     @Resource
+    private StudentMapper studentMapper;
+
+    @Resource
     private GradesheetStatusHelper gradesheetStatusHelper;
 
     private static final int SCALE = 4; // 计算精度：4位小数
