@@ -23,9 +23,9 @@ public interface IndicatorPointMapper extends BaseMapper<IndicatorPoint> {
     @Select("select count(1) from weight_objective_indicator where indicator_id = #{indicatorId} and is_deleted = 0")
     Long countWeightByIndicatorId(@Param("indicatorId") Long indicatorId);
 
-    @Select("select count(1) from result_course_indicator where indicator_id = #{indicatorId} and is_deleted = 0")
+    @Select("select count(1) from course_indicator_achievement where indicator_id = #{indicatorId} and is_deleted = 0")
     Long countCourseResultByIndicatorId(@Param("indicatorId") Long indicatorId);
 
-    @Select("select count(1) from result_major_indicator where indicator_id = #{indicatorId} and is_deleted = 0")
+    @Select("select count(1) from major_indicator_achievement where indicator_id = #{indicatorId} and is_deleted = 0")
     Long countMajorResultByIndicatorId(@Param("indicatorId") Long indicatorId);
 }
