@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.GradesheetStatusHelper;
 import com.yupi.springbootinit.mapper.*;
 import com.yupi.springbootinit.model.dto.majorCalculation.MajorCalculationRequest;
 import com.yupi.springbootinit.model.dto.majorCalculation.MajorDashboardQueryRequest;
@@ -61,6 +62,9 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
 
     @Resource
     private MajorIndicatorAchievementMapper majorIndicatorAchievementMapper;
+
+    @Resource
+    private GradesheetStatusHelper gradesheetStatusHelper;
 
     private static final int SCALE = 4; // 计算精度：4位小数
     private static final BigDecimal THRESHOLD = new BigDecimal("0.7"); // 达成度阈值
@@ -121,6 +125,9 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
 
             courseStatus.put("hasAchievementData", hasData);
             courseStatus.put("achievementDataCount", achievementCount);
+            // 三态状态（不改表推断）：LOCKED 已锁定 / SUBMITTED 已提交未计算 / NOT_SUBMITTED 未提交，
+            // 供 C-4 看板展示"已锁定/未提交"；hasAchievementData 保留以兼容前端旧字段
+            courseStatus.put("status", gradesheetStatusHelper.getStatus(teachingClass.getId()).name());
             courseStatusList.add(courseStatus);
         }
 
