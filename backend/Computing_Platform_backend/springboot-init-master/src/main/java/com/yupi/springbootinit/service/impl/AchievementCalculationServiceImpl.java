@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.manager.GradesheetStatusHelper;
+import com.yupi.springbootinit.manager.OwnershipHelper;
 import com.yupi.springbootinit.mapper.*;
 import com.yupi.springbootinit.model.dto.gradeEntry.AchievementCalculationRequest;
 import com.yupi.springbootinit.model.entity.*;
@@ -68,6 +69,9 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
     @Resource
     private GradesheetStatusHelper gradesheetStatusHelper;
 
+    @Resource
+    private OwnershipHelper ownershipHelper;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> calculateAchievement(AchievementCalculationRequest request) {
@@ -86,6 +90,9 @@ public class AchievementCalculationServiceImpl implements AchievementCalculation
             if (teachingClass == null) {
                 throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "教学班级不存在");
             }
+
+            // 归属校验：仅本班主讲教师（admin 放行）可触发计算
+            ownershipHelper.checkClassOwnership(classId);
 
             // 防重算：已锁定（已计算达成度）的教学班默认拒绝重复计算，避免误触覆盖；
             // 如确需用最新成绩重算，须显式传 forceRecalculate=true。

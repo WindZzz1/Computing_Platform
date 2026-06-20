@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.OwnershipHelper;
 import com.yupi.springbootinit.mapper.*;
 import com.yupi.springbootinit.model.dto.gradeEntry.*;
 import com.yupi.springbootinit.model.entity.*;
@@ -57,6 +58,9 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
 
     @Resource
     private StudentMapper studentMapper;
+
+    @Resource
+    private OwnershipHelper ownershipHelper;
 
     @Resource
     private AssessmentPointMapper assessmentPointMapper;
@@ -268,6 +272,9 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
             }
 
             Long classId = request.getClassId();
+
+            // 归属校验：仅本班主讲教师（admin 放行）可导入成绩
+            ownershipHelper.checkClassOwnership(classId);
 
             // 查询教学班级信息
             TeachingClass teachingClass = teachingClassMapper.selectById(classId);
@@ -531,6 +538,9 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
 
         Long classId = request.getClassId();
 
+        // 归属校验：仅本班主讲教师（admin 放行）可修改成绩
+        ownershipHelper.checkClassOwnership(classId);
+
         // 查询教学班级和课程信息
         TeachingClass teachingClass = teachingClassMapper.selectById(classId);
         if (teachingClass == null) {
@@ -622,6 +632,9 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
         if (classId == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "教学班级ID不能为空");
         }
+
+        // 归属校验：仅本班主讲教师（admin 放行）可清空成绩
+        ownershipHelper.checkClassOwnership(classId);
 
         TeachingClass teachingClass = teachingClassMapper.selectById(classId);
         if (teachingClass == null) {
