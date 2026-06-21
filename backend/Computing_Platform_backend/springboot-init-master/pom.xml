@@ -144,10 +144,12 @@
             <resource>
                 <directory>src/main/resources</directory>
                 <filtering>true</filtering>
-                <!-- 排除所有 Excel 文件，不进行变量替换 -->
+                <!-- 排除所有 Excel / 字体文件，不进行变量替换 -->
                 <excludes>
                     <exclude>**/*.xlsx</exclude>
                     <exclude>**/*.xls</exclude>
+                    <exclude>**/*.ttf</exclude>
+                    <exclude>**/*.otf</exclude>
                 </excludes>
             </resource>
             <resource>
@@ -156,6 +158,8 @@
                 <includes>
                     <include>**/*.xlsx</include>
                     <include>**/*.xls</include>
+                    <include>**/*.ttf</include>
+                    <include>**/*.otf</include>
                 </includes>
             </resource>
         </resources>
