@@ -1,6 +1,10 @@
 package com.yupi.springbootinit.service.impl;
 
 import com.alibaba.excel.EasyExcel;
+import com.yupi.springbootinit.manager.PdfTableRenderer;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
+import org.springframework.core.io.ClassPathResource;
 import com.alibaba.excel.ExcelWriter;
 import com.alibaba.excel.write.metadata.WriteSheet;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -31,10 +35,13 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -203,10 +210,100 @@ public class CourseAchievementReportServiceImpl
 
     @Override
     public byte[] exportPdfReport(Long classId) {
-        // PDF 导出需嵌入 CJK 字体（PDFBox 内置字体不支持中文），独立 PR 处理。
-        // 在此之前引导用户使用 Excel 导出。
-        throw new BusinessException(ErrorCode.OPERATION_ERROR,
-                "PDF导出暂未实现，请使用Excel导出（PDF将在后续PR支持中文字体嵌入）");
+        CourseAchievementReportVO vo = generateReportData(classId);
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (PDDocument doc = new PDDocument()) {
+            PDType0Font font = loadCjkFont(doc);
+            PdfTableRenderer renderer = new PdfTableRenderer(doc, font);
+            try {
+                // 标题
+                renderer.drawCenteredText("课程目标达成情况评价表", 16f, 4f);
+                renderer.drawCenteredText(
+                        joinNonEmpty(" ", vo.getCourseName(), vo.getClassName()), 10f, 10f);
+
+                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+
+                // 课程信息表
+                List<String[]> infoRows = Arrays.asList(
+                        new String[]{"课程编号", nullToEmpty(vo.getCourseCode())},
+                        new String[]{"课程名称", nullToEmpty(vo.getCourseName())},
+                        new String[]{"教学班级", nullToEmpty(vo.getClassName())},
+                        new String[]{"主讲教师", nullToEmpty(vo.getTeacherName())},
+                        new String[]{"学年学期", joinNonEmpty(" ", vo.getYearName(), vo.getSemesterName())},
+                        new String[]{"学生人数", vo.getStudentCount() == null ? "" : String.valueOf(vo.getStudentCount())},
+                        new String[]{"计算时间", vo.getCalculationTime() == null ? "" : dateFormat.format(vo.getCalculationTime())}
+                );
+                renderer.drawTable("课程信息", new String[]{"项目", "内容"}, infoRows, new float[]{1.5f, 4f});
+
+                // 课程目标达成度汇总
+                List<ObjectiveAchievementSummaryVO> summaries = vo.getObjectiveSummaries() == null
+                        ? Collections.emptyList() : vo.getObjectiveSummaries();
+                List<String[]> summaryRows = summaries.stream()
+                        .map(s -> new String[]{nullToEmpty(s.getObjectiveCode()), nullToEmpty(s.getObjectiveName()),
+                                fmt(s.getClassAverage()), fmt(s.getPassRate())})
+                        .collect(Collectors.toList());
+                renderer.drawTable("课程目标达成度汇总",
+                        new String[]{"目标编号", "目标名称", "班级平均达成度", "达成率"},
+                        summaryRows, new float[]{1.2f, 3f, 2f, 1.2f});
+
+                // 课程指标点达成度
+                List<CourseIndicatorAchievementVO> indicators = vo.getIndicatorAchievements() == null
+                        ? Collections.emptyList() : vo.getIndicatorAchievements();
+                List<String[]> indicatorRows = indicators.stream()
+                        .map(i -> new String[]{nullToEmpty(i.getIndicatorCode()), nullToEmpty(i.getIndicatorName()),
+                                fmt(i.getAchievement())})
+                        .collect(Collectors.toList());
+                renderer.drawTable("课程指标点达成度",
+                        new String[]{"指标点编号", "指标点名称", "课程级达成度"},
+                        indicatorRows, new float[]{1.2f, 3.5f, 2f});
+
+                // 学生达成度明细（按课程目标编号动态列）
+                List<String> objectiveCodes = summaries.stream()
+                        .map(ObjectiveAchievementSummaryVO::getObjectiveCode)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
+                List<String> detailHeaders = new ArrayList<>();
+                detailHeaders.add("学号");
+                detailHeaders.add("姓名");
+                detailHeaders.addAll(objectiveCodes);
+                detailHeaders.add("平均达成度");
+
+                List<StudentAchievementDetailVO> details = vo.getStudentDetails() == null
+                        ? Collections.emptyList() : vo.getStudentDetails();
+                List<String[]> detailRows = details.stream().map(d -> {
+                    List<String> row = new ArrayList<>();
+                    row.add(nullToEmpty(d.getStudentNo()));
+                    row.add(nullToEmpty(d.getStudentName()));
+                    Map<String, BigDecimal> map = d.getObjectiveAchievements();
+                    for (String code : objectiveCodes) {
+                        row.add(fmt(map == null ? null : map.get(code)));
+                    }
+                    row.add(fmt(d.getAverageAchievement()));
+                    return row.toArray(new String[0]);
+                }).collect(Collectors.toList());
+
+                float[] detailRatios = new float[detailHeaders.size()];
+                detailRatios[0] = 1.5f;
+                if (detailRatios.length > 1) {
+                    detailRatios[1] = 1.5f;
+                }
+                for (int i = 2; i < detailRatios.length - 1; i++) {
+                    detailRatios[i] = 1.2f;
+                }
+                if (detailRatios.length > 0) {
+                    detailRatios[detailRatios.length - 1] = 1.5f;
+                }
+                renderer.drawTable("学生达成度明细",
+                        detailHeaders.toArray(new String[0]), detailRows, detailRatios);
+            } finally {
+                renderer.close();
+            }
+            doc.save(baos);
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "PDF生成失败: " + e.getMessage());
+        }
+        return baos.toByteArray();
     }
 
     @Override
@@ -289,6 +386,44 @@ public class CourseAchievementReportServiceImpl
             vo.setCalculationTime(e.getCalculateTime() == null ? null : dateFormat.format(e.getCalculateTime()));
             return vo;
         }).collect(Collectors.toList());
+    }
+
+    /**
+     * 加载嵌入的 CJK 字体（PDFBox 内置字体不支持中文）。
+     * 字体来源：resources/fonts/LXGWWenKai-Regular.ttf（霞鹜文楷，OFL 许可）。
+     * PDType0Font.load 第三参 true = 仅嵌入文档实际使用字形的子集。
+     */
+    private PDType0Font loadCjkFont(PDDocument doc) {
+        try {
+            ClassPathResource resource = new ClassPathResource("fonts/LXGWWenKai-Regular.ttf");
+            try (InputStream is = resource.getInputStream()) {
+                return PDType0Font.load(doc, is, true);
+            }
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                    "PDF中文字体加载失败，请联系管理员检查 resources/fonts/LXGWWenKai-Regular.ttf");
+        }
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s;
+    }
+
+    private static String fmt(BigDecimal v) {
+        return v == null ? "" : v.stripTrailingZeros().toPlainString();
+    }
+
+    private static String joinNonEmpty(String sep, String... parts) {
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (p != null && !p.isEmpty()) {
+                if (sb.length() > 0) {
+                    sb.append(sep);
+                }
+                sb.append(p);
+            }
+        }
+        return sb.toString();
     }
 
     private BigDecimal average(List<BigDecimal> values) {
