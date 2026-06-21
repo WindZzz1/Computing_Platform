@@ -242,66 +242,39 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         }
 
         List<CourseAddRequest> courses = courseImportRequest.getCourses();
+        // 原子导入：任一行校验/保存失败 → 抛异常触发整批回滚（与 Excel 导入一致，避免部分成功落库）
         int successCount = 0;
-        int failCount = 0;
-        List<Map<String, String>> failDetails = new ArrayList<>();
-
         for (int i = 0; i < courses.size(); i++) {
             CourseAddRequest request = courses.get(i);
-            try {
-                // 检查必填字段
-                if (StringUtils.isAnyBlank(request.getCourseCode(), request.getCourseName(), request.getCourseNature())) {
-                    failCount++;
-                    Map<String, String> detail = new HashMap<>();
-                    detail.put("row", String.valueOf(i + 1));
-                    detail.put("courseCode", request.getCourseCode() != null ? request.getCourseCode() : "");
-                    detail.put("reason", "必填字段为空");
-                    failDetails.add(detail);
-                    continue;
-                }
+            int rowNum = i + 1;
 
-                // 检查课程代码是否已存在
-                QueryWrapper<Course> queryWrapper = new QueryWrapper<>();
-                queryWrapper.eq("course_code", request.getCourseCode());
-                long count = this.baseMapper.selectCount(queryWrapper);
-                if (count > 0) {
-                    failCount++;
-                    Map<String, String> detail = new HashMap<>();
-                    detail.put("row", String.valueOf(i + 1));
-                    detail.put("courseCode", request.getCourseCode());
-                    detail.put("reason", "课程代码已存在");
-                    failDetails.add(detail);
-                    continue;
-                }
-
-                // 创建课程
-                Course course = new Course();
-                BeanUtils.copyProperties(request, course);
-                if (this.save(course)) {
-                    successCount++;
-                } else {
-                    failCount++;
-                    Map<String, String> detail = new HashMap<>();
-                    detail.put("row", String.valueOf(i + 1));
-                    detail.put("courseCode", request.getCourseCode());
-                    detail.put("reason", "保存失败");
-                    failDetails.add(detail);
-                }
-            } catch (Exception e) {
-                failCount++;
-                Map<String, String> detail = new HashMap<>();
-                detail.put("row", String.valueOf(i + 1));
-                detail.put("courseCode", request.getCourseCode() != null ? request.getCourseCode() : "");
-                detail.put("reason", e.getMessage());
-                failDetails.add(detail);
+            // 检查必填字段
+            if (StringUtils.isAnyBlank(request.getCourseCode(), request.getCourseName(), request.getCourseNature())) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "第" + rowNum + "行必填字段为空，已回滚整批导入");
             }
+
+            // 检查课程代码是否已存在
+            QueryWrapper<Course> queryWrapper = new QueryWrapper<>();
+            queryWrapper.eq("course_code", request.getCourseCode());
+            long count = this.baseMapper.selectCount(queryWrapper);
+            if (count > 0) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                        "第" + rowNum + "行课程代码已存在: " + request.getCourseCode() + "，已回滚整批导入");
+            }
+
+            // 创建课程
+            Course course = new Course();
+            BeanUtils.copyProperties(request, course);
+            if (!this.save(course)) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "第" + rowNum + "行保存失败，已回滚整批导入");
+            }
+            successCount++;
         }
 
         Map<String, Object> result = new HashMap<>();
         result.put("total", courses.size());
         result.put("successCount", successCount);
-        result.put("failCount", failCount);
-        result.put("failDetails", failDetails);
+        result.put("failCount", 0);
         return result;
     }
 
