@@ -36,6 +36,22 @@ public interface MajorReportService {
     byte[] exportPenetrationAccountExcel(MajorReportRequest request);
 
     /**
+     * 导出专业指标点达成度（三级）Excel
+     *
+     * @param request 查询请求
+     * @return Excel 文件字节数组
+     */
+    byte[] exportIndicatorAchievementExcel(MajorReportRequest request);
+
+    /**
+     * 导出专业指标点达成度（三级）PDF
+     *
+     * @param request 查询请求
+     * @return PDF 文件字节数组
+     */
+    byte[] exportIndicatorAchievementPdf(MajorReportRequest request);
+
+    /**
      * 验证用户权限
      *
      * @param majorId 专业ID

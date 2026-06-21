@@ -103,3 +103,27 @@ export async function exportMajorPenetrationAccountExcel(payload: MajorReportReq
     throw error
   }
 }
+
+export async function exportMajorIndicatorAchievementExcel(payload: MajorReportRequest) {
+  try {
+    const response = await request.post('/major-report/export/indicator-excel', payload, {
+      responseType: 'blob'
+    })
+    return response.data as Blob
+  } catch (error) {
+    await normalizeBlobRequestError(error, '专业指标点达成度导出失败')
+    throw error
+  }
+}
+
+export async function exportMajorIndicatorAchievementPdf(payload: MajorReportRequest) {
+  try {
+    const response = await request.post('/major-report/export/indicator-pdf', payload, {
+      responseType: 'blob'
+    })
+    return response.data as Blob
+  } catch (error) {
+    await normalizeBlobRequestError(error, '专业指标点达成度导出失败')
+    throw error
+  }
+}

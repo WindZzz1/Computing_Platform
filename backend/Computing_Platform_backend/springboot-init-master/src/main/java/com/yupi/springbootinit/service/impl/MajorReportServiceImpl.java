@@ -7,6 +7,7 @@ import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.constant.SysUserConstant;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.manager.MajorScopeHelper;
+import com.yupi.springbootinit.manager.PdfTableRenderer;
 import com.yupi.springbootinit.mapper.AssessmentPointMapper;
 import com.yupi.springbootinit.mapper.ClassStudentMapper;
 import com.yupi.springbootinit.mapper.CourseIndicatorAchievementMapper;
@@ -46,12 +47,18 @@ import com.yupi.springbootinit.model.vo.report.StudentObjectiveAccount;
 import com.yupi.springbootinit.model.vo.report.StudentScoreAccount;
 import com.yupi.springbootinit.service.MajorReportService;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -508,8 +515,101 @@ public class MajorReportServiceImpl implements MajorReportService {
         return outputStream.toByteArray();
     }
 
+    // ==================== 专业指标点达成度导出（三级） ====================
+
+    @Override
+    public byte[] exportIndicatorAchievementExcel(MajorReportRequest request) {
+        MajorAchievementRadarVO vo = getRadarChartData(request);
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        ExcelWriter writer = EasyExcel.write(outputStream).build();
+        try {
+            List<IndicatorPointAchievementVO> points = vo.getIndicatorPoints() == null
+                    ? Collections.emptyList() : vo.getIndicatorPoints();
+
+            List<List<Object>> data = points.stream()
+                    .map(p -> rowOf(p.getRequirementCode(), p.getRequirementName(),
+                            p.getIndicatorCode(), p.getIndicatorName(), p.getAchievement()))
+                    .collect(Collectors.toList());
+
+            // 整体达成度汇总行
+            BigDecimal overall = average(points.stream()
+                    .map(IndicatorPointAchievementVO::getAchievement)
+                    .collect(Collectors.toList()));
+            data.add(rowOf("整体达成度", "", "", "", overall));
+
+            writer.write(data, EasyExcel.writerSheet(0, "专业毕业要求达成度")
+                    .head(headOf("毕业要求编号", "毕业要求名称", "指标点编号",
+                            "指标点名称", "达成度")).build());
+        } finally {
+            writer.finish();
+        }
+        return outputStream.toByteArray();
+    }
+
+    @Override
+    public byte[] exportIndicatorAchievementPdf(MajorReportRequest request) {
+        MajorAchievementRadarVO vo = getRadarChartData(request);
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (PDDocument doc = new PDDocument()) {
+            PDType0Font font = loadCjkFont(doc);
+            PdfTableRenderer renderer = new PdfTableRenderer(doc, font);
+            try {
+                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+
+                List<IndicatorPointAchievementVO> points = vo.getIndicatorPoints() == null
+                        ? Collections.emptyList() : vo.getIndicatorPoints();
+                BigDecimal overall = average(points.stream()
+                        .map(IndicatorPointAchievementVO::getAchievement)
+                        .collect(Collectors.toList()));
+
+                // 标题 + 副标题
+                renderer.drawCenteredText("专业毕业要求达成度报告", 16f, 4f);
+                renderer.drawCenteredText(
+                        joinNonEmpty(vo.getMajorName(), vo.getGrade()), 10f, 10f);
+
+                // 报表信息表
+                List<String[]> infoRows = Arrays.asList(
+                        new String[]{"专业", nullToEmpty(vo.getMajorName())},
+                        new String[]{"专业代码", nullToEmpty(vo.getMajorCode())},
+                        new String[]{"学年学期", joinNonEmpty(vo.getYearName(), vo.getSemesterName())},
+                        new String[]{"年级", nullToEmpty(vo.getGrade())},
+                        new String[]{"指标点数", String.valueOf(points.size())},
+                        new String[]{"整体达成度", fmt(overall)},
+                        new String[]{"生成时间",
+                                vo.getGeneratedTime() == null ? "" : dateFormat.format(vo.getGeneratedTime())}
+                );
+                renderer.drawTable("报表信息", new String[]{"项目", "内容"},
+                        infoRows, new float[]{1.5f, 4f});
+
+                // 指标点达成度表
+                List<String[]> rows = points.stream()
+                        .map(p -> new String[]{nullToEmpty(p.getRequirementCode()),
+                                nullToEmpty(p.getIndicatorCode()),
+                                nullToEmpty(p.getIndicatorName()),
+                                fmt(p.getAchievement())})
+                        .collect(Collectors.toList());
+                renderer.drawTable("指标点达成度",
+                        new String[]{"毕业要求", "指标点编号", "指标点名称", "达成度"},
+                        rows, new float[]{1.2f, 1.2f, 3f, 1.2f});
+            } finally {
+                renderer.close();
+            }
+            doc.save(baos);
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                    "PDF生成失败: " + e.getMessage());
+        }
+        return baos.toByteArray();
+    }
+
     @Override
     public boolean validateMajorPermission(Long majorId, Long userId, String userRole) {
+        // 管理员视为超级管理员，放行全部专业（与 AuthInterceptor 的 admin 放行保持一致）
+        if (SysUserConstant.ROLE_ADMIN.equals(userRole)) {
+            return true;
+        }
         // 教务管理员可以查看所有专业
         if (SysUserConstant.ROLE_EDU.equals(userRole)) {
             return true;
@@ -579,5 +679,30 @@ public class MajorReportServiceImpl implements MajorReportService {
 
     private <T> Map<Long, T> batchToMap(List<T> list, Function<T, Long> keyFn) {
         return list.stream().collect(Collectors.toMap(keyFn, t -> t, (a, b) -> a));
+    }
+
+    /**
+     * 加载嵌入的 CJK 字体（PDFBox 内置字体不支持中文）。
+     * 字体来源：resources/fonts/LXGWWenKai-Regular.ttf（霞鹜文楷，OFL 许可）。
+     * PDType0Font.load 第三参 true = 仅嵌入文档实际使用字形的子集。
+     */
+    private PDType0Font loadCjkFont(PDDocument doc) {
+        try {
+            ClassPathResource resource = new ClassPathResource("fonts/LXGWWenKai-Regular.ttf");
+            try (InputStream is = resource.getInputStream()) {
+                return PDType0Font.load(doc, is, true);
+            }
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                    "PDF中文字体加载失败，请联系管理员检查 resources/fonts/LXGWWenKai-Regular.ttf");
+        }
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s;
+    }
+
+    private static String fmt(BigDecimal v) {
+        return v == null ? "" : v.stripTrailingZeros().toPlainString();
     }
 }
