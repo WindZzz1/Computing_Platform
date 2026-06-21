@@ -47,6 +47,31 @@ public class AssessmentPointAccount implements Serializable {
     private Long objectiveId;
 
     /**
+     * 考核点编号（前端契约字段，等同 pointCode）
+     */
+    private String assessmentPointCode;
+
+    /**
+     * 考核点名称（前端契约字段，等同 pointName）
+     */
+    private String assessmentPointName;
+
+    /**
+     * 所属课程名称
+     */
+    private String courseName;
+
+    /**
+     * 关联的课程目标编号（来自 course_objective.obj_code）
+     */
+    private String objectiveCode;
+
+    /**
+     * 考核点对该课程目标的支撑权重（来自 rel_point_objective.weight）
+     */
+    private BigDecimal weight;
+
+    /**
      * 学生成绩列表
      */
     private List<StudentScoreAccount> studentScores;
