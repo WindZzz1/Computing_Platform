@@ -1,8 +1,6 @@
 package com.yupi.springbootinit.service;
 
-import com.baomidou.mybatisplus.extension.service.IService;
 import com.yupi.springbootinit.model.dto.report.MajorReportRequest;
-import com.yupi.springbootinit.model.entity.Course;
 import com.yupi.springbootinit.model.vo.report.MajorAchievementRadarVO;
 import com.yupi.springbootinit.model.vo.report.PenetrationAccountVO;
 
@@ -11,7 +9,7 @@ import com.yupi.springbootinit.model.vo.report.PenetrationAccountVO;
  *
  * @author YU
  */
-public interface MajorReportService extends IService<Course> {
+public interface MajorReportService {
 
     /**
      * 获取专业达成度雷达图数据

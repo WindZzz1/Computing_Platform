@@ -1,4 +1,4 @@
-package com.yupi.springbootinit.service.impl;
+package com.yupi.springbootinit.manager;
 
 import com.yupi.springbootinit.mapper.ClassStudentMapper;
 import com.yupi.springbootinit.mapper.CourseMapper;
@@ -26,17 +26,16 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * {@link MajorCalculationServiceImpl#getTeachingClasses} 专业/年级过滤回归测试。
+ * {@link MajorScopeHelper#getTeachingClasses} 专业/年级过滤回归测试。
  * <p>
- * 修复前该方法对 majorId/grade 只写了注释、空实现，始终返回全校该学期所有教学班，
- * 导致专业级计算/看板跨专业串数据。这里用 mock 验证过滤控制流；
- * QueryWrapper 的实际过滤语义由 E2E 验证。
+ * 该逻辑原在 MajorCalculationServiceImpl（修复前对 majorId/grade 空实现，导致跨专业串数据），
+ * 抽取到 MajorScopeHelper 后由本测试覆盖；QueryWrapper 的实际过滤语义由 E2E 验证。
  */
 @ExtendWith(MockitoExtension.class)
-class MajorCalculationScopeTest {
+class MajorScopeHelperTest {
 
     @InjectMocks
-    private MajorCalculationServiceImpl service;
+    private MajorScopeHelper majorScopeHelper;
 
     @Mock
     private CourseMapper courseMapper;
@@ -85,7 +84,7 @@ class MajorCalculationScopeTest {
         when(teachingClassMapper.selectList(any()))
                 .thenReturn(Collections.singletonList(tc(1L, 10L)));
 
-        List<TeachingClass> result = service.getTeachingClasses(1L, null, null);
+        List<TeachingClass> result = majorScopeHelper.getTeachingClasses(1L, null, null);
 
         // 关键：courseMapper 被调用（旧 bug 完全不查课程）
         verify(courseMapper).selectList(any());
@@ -99,7 +98,7 @@ class MajorCalculationScopeTest {
     void majorIdGiven_noCourses_shouldReturnEmptyAndSkipClassQuery() {
         when(courseMapper.selectList(any())).thenReturn(Collections.emptyList());
 
-        assertTrue(service.getTeachingClasses(999L, null, null).isEmpty());
+        assertTrue(majorScopeHelper.getTeachingClasses(999L, null, null).isEmpty());
         verifyNoInteractions(teachingClassMapper);
     }
 
@@ -114,7 +113,7 @@ class MajorCalculationScopeTest {
         when(studentMapper.selectList(any())).thenReturn(Collections.singletonList(student(100L, "2023")));
         when(classStudentMapper.selectList(any())).thenReturn(Collections.singletonList(cs(1L, 100L)));
 
-        List<TeachingClass> result = service.getTeachingClasses(1L, null, "2023");
+        List<TeachingClass> result = majorScopeHelper.getTeachingClasses(1L, null, "2023");
 
         verify(studentMapper).selectList(any());
         assertEquals(1, result.size());
@@ -130,7 +129,7 @@ class MajorCalculationScopeTest {
         when(teachingClassMapper.selectList(any())).thenReturn(Collections.singletonList(tc(1L, 10L)));
         when(studentMapper.selectList(any())).thenReturn(Collections.emptyList());
 
-        assertTrue(service.getTeachingClasses(1L, null, "2099").isEmpty());
+        assertTrue(majorScopeHelper.getTeachingClasses(1L, null, "2099").isEmpty());
         // 学生为空时不应再查班级学生关联
         verifyNoInteractions(classStudentMapper);
     }
@@ -143,7 +142,7 @@ class MajorCalculationScopeTest {
         when(teachingClassMapper.selectList(any()))
                 .thenReturn(Arrays.asList(tc(1L, 10L), tc(2L, 20L)));
 
-        List<TeachingClass> result = service.getTeachingClasses(null, null, null);
+        List<TeachingClass> result = majorScopeHelper.getTeachingClasses(null, null, null);
 
         assertEquals(2, result.size());
         verifyNoInteractions(courseMapper);
