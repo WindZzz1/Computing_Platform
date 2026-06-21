@@ -66,7 +66,7 @@ export function saveObjectiveIndicatorWeights(
 ) {
   return apiPost<boolean>('/weight/objective-indicator/save', {
     courseId,
-    items
+    weightList: items
   })
 }
 
