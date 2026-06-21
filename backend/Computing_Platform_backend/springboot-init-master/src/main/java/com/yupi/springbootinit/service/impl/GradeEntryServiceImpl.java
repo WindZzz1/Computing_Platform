@@ -646,23 +646,4 @@ public class GradeEntryServiceImpl extends ServiceImpl<TeachingClassMapper, Teac
 
         return true;
     }
-
-    /**
-     * 获取当前登录用户ID
-     */
-    private Long getCurrentUserId() {
-        try {
-            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-            if (attributes != null) {
-                javax.servlet.http.HttpServletRequest request = attributes.getRequest();
-                Object userObj = request.getAttribute("currentUser");
-                if (userObj instanceof SysUser) {
-                    return ((SysUser) userObj).getId();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("获取当前用户ID失败", e);
-        }
-        return null;
-    }
 }
