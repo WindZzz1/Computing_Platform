@@ -238,6 +238,8 @@
         <el-button type="primary" :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleLoadMajorRadar">查询雷达图数据</el-button>
         <el-button :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleLoadPenetrationAccount">查询穿透式台账</el-button>
         <el-button :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleExportMajorAccount">导出台账 Excel</el-button>
+        <el-button :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleExportMajorIndicator('EXCEL')">导出达成度 Excel</el-button>
+        <el-button :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleExportMajorIndicator('PDF')">导出达成度 PDF</el-button>
       </div>
       <el-alert
         v-if="!majors.length || (!schoolYears.length && !canUseManualTermInput)"
@@ -509,6 +511,8 @@ import {
   downloadCourseAchievementTemplate,
   exportCourseAchievementReportExcel,
   exportCourseAchievementReportPdf,
+  exportMajorIndicatorAchievementExcel,
+  exportMajorIndicatorAchievementPdf,
   exportMajorPenetrationAccountExcel,
   getCourseAchievementReportData,
   getMajorPenetrationAccount,
@@ -1571,6 +1575,35 @@ const handleExportMajorAccount = async () => {
     const message = error instanceof Error ? error.message : '专业台账导出失败'
     const normalized = normalizeBackendMessage(message, 'major')
     setMajorStatus('专业台账导出失败', normalized, 'warning')
+    ElMessage.warning(normalized)
+  } finally {
+    majorActionLoading.value = false
+  }
+}
+
+const handleExportMajorIndicator = async (format: 'EXCEL' | 'PDF') => {
+  if (!ensureMajorRequestReady()) {
+    return
+  }
+
+  majorActionLoading.value = true
+  try {
+    const blob =
+      format === 'EXCEL'
+        ? await exportMajorIndicatorAchievementExcel(buildMajorRequest())
+        : await exportMajorIndicatorAchievementPdf(buildMajorRequest())
+    const suffix = format === 'EXCEL' ? 'xlsx' : 'pdf'
+    const fileName = `${selectedMajor.value?.majorName || '专业'}_${selectedGrade.value}_专业达成度.${suffix}`
+    downloadBlob(blob, fileName)
+    setMajorStatus(
+      `${format === 'EXCEL' ? 'Excel' : 'PDF'} 导出成功`,
+      '后端已返回专业指标点达成度文件流，可直接下载使用。',
+      'success'
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '专业指标点达成度导出失败'
+    const normalized = normalizeBackendMessage(message, 'major')
+    setMajorStatus('专业指标点达成度导出失败', normalized, 'warning')
     ElMessage.warning(normalized)
   } finally {
     majorActionLoading.value = false

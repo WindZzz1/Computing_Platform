@@ -357,6 +357,11 @@
           description="当前专业条件下暂时没有课程看板数据。可以先确认学年学期、年级和课程级计算结果。"
         />
 
+        <div v-if="canMajorQueryData" class="run-bar">
+          <el-button :loading="majorExporting" :disabled="!canQueryMajorCalculation" @click="handleExportMajorIndicator('EXCEL')">导出达成度 Excel</el-button>
+          <el-button :loading="majorExporting" :disabled="!canQueryMajorCalculation" @click="handleExportMajorIndicator('PDF')">导出达成度 PDF</el-button>
+        </div>
+
         <div v-if="majorCalculationResult?.achievements?.length" class="result-grid">
           <el-card shadow="never" class="result-card">
             <template #header>专业级结果摘要</template>
@@ -429,7 +434,7 @@ import {
   getMajorCalculationDashboard,
   getMajorCalculationResult
 } from '@/api/calculation'
-import { exportCourseAchievementReportExcel, exportCourseAchievementReportPdf } from '@/api/report'
+import { exportCourseAchievementReportExcel, exportCourseAchievementReportPdf, exportMajorIndicatorAchievementExcel, exportMajorIndicatorAchievementPdf } from '@/api/report'
 import { listMajors } from '@/api/major'
 import { pageGraduationRequirements } from '@/api/indicator'
 import { listSchoolYears } from '@/api/schoolyear'
@@ -459,6 +464,7 @@ const courseCalculating = ref(false)
 const majorCalculating = ref(false)
 const courseExportingExcel = ref(false)
 const courseExportingPdf = ref(false)
+const majorExporting = ref(false)
 
 const majors = ref<MajorOption[]>([])
 const schoolYears = ref<SysDictSchoolYearVO[]>([])
@@ -1046,6 +1052,34 @@ async function handleExportCourseReport(format: 'EXCEL' | 'PDF') {
     ElMessage.error(message)
   } finally {
     loadingRef.value = false
+  }
+}
+
+async function handleExportMajorIndicator(format: 'EXCEL' | 'PDF') {
+  if (!canQueryMajorCalculation.value) {
+    ElMessage.warning('请先选择专业、学年学期和年级')
+    return
+  }
+  majorExporting.value = true
+  try {
+    const payload = {
+      majorId: Number(selectedMajorId.value),
+      termId: Number(selectedTermId.value),
+      grade: selectedGrade.value
+    }
+    const blob =
+      format === 'EXCEL'
+        ? await exportMajorIndicatorAchievementExcel(payload)
+        : await exportMajorIndicatorAchievementPdf(payload)
+    const suffix = format === 'EXCEL' ? 'xlsx' : 'pdf'
+    const majorName = majors.value.find((m) => m.id === selectedMajorId.value)?.name || '专业'
+    const fileName = `${majorName}_${selectedGrade.value}_专业达成度.${suffix}`
+    downloadBlob(blob, fileName)
+    ElMessage.success(`专业达成度 ${format} 已开始下载`)
+  } catch (error) {
+    ElMessage.error(getFriendlyErrorMessage(error, '专业达成度导出失败'))
+  } finally {
+    majorExporting.value = false
   }
 }
 
