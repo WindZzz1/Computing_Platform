@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <h1 class="page-title">报表与导出</h1>
-    <p class="page-desc">本页按当前登录角色展示真实可调用的报表接口，并对后端尚未完整实现的能力给出明确提示。</p>
+    <p class="page-desc">本页按当前登录角色展示真实可调用的报表接口，并对各报表接口的就绪状态与前置条件给出明确提示。</p>
 
     <el-alert
       :title="roleSummary.title"
@@ -17,11 +17,6 @@
         <span class="metric-label">可继续联调的能力</span>
         <strong class="metric-value">{{ availableReportCount }}</strong>
         <span class="metric-tip">当前角色可直接继续接的接口或导出能力</span>
-      </el-card>
-      <el-card shadow="never" class="metric-card">
-        <span class="metric-label">待后端补完</span>
-        <strong class="metric-value">{{ pendingReportCount }}</strong>
-        <span class="metric-tip">接口已开放但服务层仍可能返回未完成提示</span>
       </el-card>
       <el-card shadow="never" class="metric-card">
         <span class="metric-label">矩阵准备度</span>
@@ -211,7 +206,7 @@
     <section v-if="canUseMajorReport" class="panel action-panel">
       <div class="toolbar">
         <h3 class="panel-title">专业报表联调</h3>
-        <el-tag type="warning">接口已开放，服务层待完整实现</el-tag>
+        <el-tag type="success">接口已开放，服务层已实现</el-tag>
       </div>
       <div class="form-grid">
         <el-select v-model="selectedMajorId" placeholder="选择专业" style="width: 220px" :disabled="!majors.length" @change="reloadMajorSupportData">
@@ -268,6 +263,9 @@
         :closable="false"
         class="section-alert"
       />
+      <div v-if="majorStatus?.action === 'goCalculation'" class="section-action">
+        <el-button type="primary" @click="goCalculation">前往计算中心</el-button>
+      </div>
 
       <div v-if="majorRadarData || majorPenetrationData" class="result-grid">
         <el-card v-if="majorRadarData" shadow="never" class="result-card">
@@ -500,7 +498,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getCourseAchievementCalculationStatus } from '@/api/calculation'
 import { pageCourses } from '@/api/course'
 import { queryGrades } from '@/api/grade-entry'
@@ -570,10 +568,12 @@ type StatusState = {
   title: string
   description: string
   type: 'success' | 'warning' | 'info' | 'error'
+  action?: 'goCalculation'
 }
 
 const user = useUserStore()
 const route = useRoute()
+const router = useRouter()
 const majorRadarChartRef = ref<HTMLDivElement>()
 const courseObjectiveChartRef = ref<HTMLDivElement>()
 const courseIndicatorChartRef = ref<HTMLDivElement>()
@@ -653,7 +653,6 @@ const selectedCourseClassLabel = computed(() => {
 })
 const canSubmitMajorRequest = computed(() => Boolean(selectedMajorId.value && selectedTermId.value && selectedGrade.value))
 const availableReportCount = computed(() => reportCatalog.value.filter((item) => item.tagType === 'success').length)
-const pendingReportCount = computed(() => reportCatalog.value.filter((item) => item.tagType === 'warning').length)
 const readyIndicatorCount = computed(() => indicatorRows.value.filter((item) => item.ready).length)
 const courseReportPrep = computed(() => ({
   objectiveCount: courseObjectives.value.length,
@@ -866,7 +865,7 @@ const roleSummary = computed<StatusState>(() => {
   if (canUseCourseReport.value) {
     return {
       title: '当前角色可直接联调课程报表接口',
-      description: '课程报表模板下载、原始成绩明细查询都可以直接使用；课程报表数据和导出接口虽然已开放，但服务层目前仍可能返回“待完整实现”。',
+      description: '课程报表模板下载、原始成绩明细查询、课程报表数据与 Excel/PDF 导出均已实现，可直接联调使用。',
       type: 'success'
     }
   }
@@ -874,8 +873,8 @@ const roleSummary = computed<StatusState>(() => {
   if (canUseMajorReport.value) {
     return {
       title: '当前角色可直接联调专业报表接口',
-      description: '专业雷达图、穿透式台账、台账 Excel 导出接口都已开放，但服务层仍处于未完整实现状态，页面会保留真实报错提示。',
-      type: 'warning'
+      description: '专业雷达图、穿透式台账、达成度 Excel/PDF 导出均已实现可直接联调；若提示需先计算三级达成度，请先到「计算中心」执行专业级计算。',
+      type: 'success'
     }
   }
 
@@ -893,16 +892,16 @@ const reportCatalog = computed<ReportCatalogRow[]>(() => [
     statusText: canUseCourseReport.value ? '可调用' : '当前角色不可调',
     tagType: canUseCourseReport.value ? 'success' : 'info',
     tip: canUseCourseReport.value
-      ? '模板下载可直接使用，数据/导出接口已开放，服务层待完整实现。'
+      ? '模板下载、报表数据、Excel/PDF 导出均已实现，可直接联调。'
       : '当前角色暂时不能直接联调这组接口。'
   },
   {
     name: '专业毕业要求达成度报告',
     targetRole: '专业负责人、教务',
     statusText: canUseMajorReport.value ? '可调用' : '当前角色不可调',
-    tagType: canUseMajorReport.value ? 'warning' : 'info',
+    tagType: canUseMajorReport.value ? 'success' : 'info',
     tip: canUseMajorReport.value
-      ? '雷达图、穿透式台账、Excel 导出入口都已开放，但后端服务层当前仍可能返回未完成提示。'
+      ? '雷达图、穿透式台账、达成度 Excel/PDF 导出均已实现，可直接联调。'
       : '当前角色可先看准备状态，不建议直接调用该接口。'
   },
   {
@@ -1044,10 +1043,17 @@ const formatObjectiveAchievements = (value: unknown) => {
 }
 
 const normalizeBackendMessage = (message: string, scene: 'course' | 'major') => {
-  if (message.includes('待完整实现')) {
-    return scene === 'course'
-      ? '后端已开放课程报表接口，但当前服务层仍返回“待完整实现”，这说明联调入口已接通，正式报表结果还要继续补后端。'
-      : '后端已开放专业报表接口，但当前服务层仍返回“待完整实现”，这说明页面已经接上真实接口，后续重点是补后端服务能力。'
+  // 专业报表前置：三级达成度尚未计算（当前唯一真实会出现的“未完成”类提示）
+  if (message.includes('尚未计算三级达成度')) {
+    return '该专业本学期本年级尚未计算三级达成度，请先到「计算中心」执行专业级计算后再查询。'
+  }
+  // 专业报表前置：scope 内无教学班
+  if (message.includes('无教学班级数据')) {
+    return '该专业本学期本年级暂无教学班级数据，请先在成绩管理页创建教学班并绑定课程/学期。'
+  }
+  // 课程报表前置：教学班不存在
+  if (scene === 'course' && message.includes('教学班不存在')) {
+    return '当前教学班不存在，请确认教学班 ID 后重试。'
   }
 
   if (message.includes('无权') || message.includes('403')) {
@@ -1063,9 +1069,16 @@ const setCourseStatus = (title: string, description: string, type: StatusState['
   courseStatus.value = { title, description, type }
 }
 
-const setMajorStatus = (title: string, description: string, type: StatusState['type']) => {
-  majorStatus.value = { title, description, type }
+const setMajorStatus = (
+  title: string,
+  description: string,
+  type: StatusState['type'],
+  action?: StatusState['action']
+) => {
+  majorStatus.value = { title, description, type, action }
 }
+
+const goCalculation = () => router.push('/calculation')
 
 const setRawScoreStatus = (title: string, description: string, type: StatusState['type']) => {
   rawScoreStatus.value = { title, description, type }
@@ -1320,7 +1333,8 @@ const handleLoadMajorRadar = async () => {
   } catch (error) {
     const message = error instanceof Error ? error.message : '雷达图接口查询失败'
     const normalized = normalizeBackendMessage(message, 'major')
-    setMajorStatus('雷达图接口查询失败', normalized, 'warning')
+    const needCalc = message.includes('尚未计算三级达成度')
+    setMajorStatus('雷达图接口查询失败', normalized, 'warning', needCalc ? 'goCalculation' : undefined)
     ElMessage.warning(normalized)
   } finally {
     majorActionLoading.value = false
@@ -1553,7 +1567,8 @@ const handleLoadPenetrationAccount = async () => {
   } catch (error) {
     const message = error instanceof Error ? error.message : '穿透式台账查询失败'
     const normalized = normalizeBackendMessage(message, 'major')
-    setMajorStatus('穿透式台账查询失败', normalized, 'warning')
+    const needCalc = message.includes('尚未计算三级达成度')
+    setMajorStatus('穿透式台账查询失败', normalized, 'warning', needCalc ? 'goCalculation' : undefined)
     ElMessage.warning(normalized)
   } finally {
     majorActionLoading.value = false
@@ -1574,7 +1589,8 @@ const handleExportMajorAccount = async () => {
   } catch (error) {
     const message = error instanceof Error ? error.message : '专业台账导出失败'
     const normalized = normalizeBackendMessage(message, 'major')
-    setMajorStatus('专业台账导出失败', normalized, 'warning')
+    const needCalc = message.includes('尚未计算三级达成度')
+    setMajorStatus('专业台账导出失败', normalized, 'warning', needCalc ? 'goCalculation' : undefined)
     ElMessage.warning(normalized)
   } finally {
     majorActionLoading.value = false
@@ -1603,7 +1619,8 @@ const handleExportMajorIndicator = async (format: 'EXCEL' | 'PDF') => {
   } catch (error) {
     const message = error instanceof Error ? error.message : '专业指标点达成度导出失败'
     const normalized = normalizeBackendMessage(message, 'major')
-    setMajorStatus('专业指标点达成度导出失败', normalized, 'warning')
+    const needCalc = message.includes('尚未计算三级达成度')
+    setMajorStatus('专业指标点达成度导出失败', normalized, 'warning', needCalc ? 'goCalculation' : undefined)
     ElMessage.warning(normalized)
   } finally {
     majorActionLoading.value = false
@@ -1955,7 +1972,7 @@ onBeforeUnmount(() => {
 
 .summary-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -2025,6 +2042,10 @@ onBeforeUnmount(() => {
 }
 
 .section-alert {
+  margin-bottom: 16px;
+}
+
+.section-action {
   margin-bottom: 16px;
 }
 
