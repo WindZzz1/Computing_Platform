@@ -1,5 +1,7 @@
 package com.yupi.springbootinit.service.impl;
 
+import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.ExcelWriter;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.constant.SysUserConstant;
@@ -47,9 +49,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -445,7 +449,63 @@ public class MajorReportServiceImpl implements MajorReportService {
 
     @Override
     public byte[] exportPenetrationAccountExcel(MajorReportRequest request) {
-        throw new BusinessException(ErrorCode.OPERATION_ERROR, "Excel导出功能待完整实现");
+        PenetrationAccountVO vo = getPenetrationAccount(request);
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        ExcelWriter writer = EasyExcel.write(outputStream).build();
+        try {
+            // Sheet 1：专业信息
+            MajorAccountInfo info = vo.getMajorInfo();
+            List<List<Object>> data1 = new ArrayList<>();
+            data1.add(rowOf("专业", info == null ? null : info.getMajorName()));
+            data1.add(rowOf("学年学期", info == null ? null : joinNonEmpty(info.getYearName(), info.getSemesterName())));
+            data1.add(rowOf("年级", info == null ? null : info.getGrade()));
+            data1.add(rowOf("涉及课程数", info == null ? null : info.getTotalCourses()));
+            data1.add(rowOf("学生数", info == null ? null : info.getTotalStudents()));
+            data1.add(rowOf("整体达成度", info == null ? null : info.getOverallAchievement()));
+            writer.write(data1, EasyExcel.writerSheet(0, "专业信息")
+                    .head(headOf("项目", "内容")).build());
+
+            // Sheet 2：课程达成度（教学班粒度）
+            List<List<Object>> data2 = (vo.getCourses() == null ? Collections.<CourseAccountInfo>emptyList()
+                    : vo.getCourses()).stream()
+                    .map(c -> rowOf(c.getCourseCode(), c.getCourseName(), c.getClassName(),
+                            c.getTeacherName(), c.getStudentCount(), c.getCourseIndicatorAchievement()))
+                    .collect(Collectors.toList());
+            writer.write(data2, EasyExcel.writerSheet(1, "课程达成度")
+                    .head(headOf("课程编号", "课程名称", "教学班级", "主讲教师", "学生数", "课程指标点达成度")).build());
+
+            // Sheet 3：学生课程目标达成度
+            List<List<Object>> data3 = (vo.getStudentObjectives() == null ? Collections.<StudentObjectiveAccount>emptyList()
+                    : vo.getStudentObjectives()).stream()
+                    .map(s -> rowOf(s.getStudentNo(), s.getStudentName(), s.getCourseName(),
+                            formatObjectiveAchievements(s.getObjectiveAchievements()), s.getAverageAchievement()))
+                    .collect(Collectors.toList());
+            writer.write(data3, EasyExcel.writerSheet(2, "学生课程目标")
+                    .head(headOf("学号", "姓名", "课程", "各课程目标达成度", "平均达成度")).build());
+
+            // Sheet 4：考核点（含多对多展开）
+            List<List<Object>> data4 = (vo.getAssessmentPoints() == null ? Collections.<AssessmentPointAccount>emptyList()
+                    : vo.getAssessmentPoints()).stream()
+                    .map(a -> rowOf(a.getCourseName(), a.getAssessmentPointCode(), a.getAssessmentPointName(),
+                            a.getObjectiveCode(), a.getFullScore(), a.getWeight(), a.getClassAverageScore()))
+                    .collect(Collectors.toList());
+            writer.write(data4, EasyExcel.writerSheet(3, "考核点")
+                    .head(headOf("课程", "考核点编号", "考核点名称", "关联课程目标", "满分", "支撑权重", "班级平均分")).build());
+
+            // Sheet 5：学生原始成绩
+            List<List<Object>> data5 = (vo.getStudentScores() == null ? Collections.<StudentScoreAccount>emptyList()
+                    : vo.getStudentScores()).stream()
+                    .map(s -> rowOf(s.getStudentNo(), s.getStudentName(), s.getCourseName(),
+                            s.getAssessmentPointCode(), s.getAssessmentPointName(),
+                            s.getFullScore(), s.getScore(), s.getAchievement()))
+                    .collect(Collectors.toList());
+            writer.write(data5, EasyExcel.writerSheet(4, "学生原始成绩")
+                    .head(headOf("学号", "姓名", "课程", "考核点编号", "考核点名称", "满分", "得分", "达成度")).build());
+        } finally {
+            writer.finish();
+        }
+        return outputStream.toByteArray();
     }
 
     @Override
@@ -463,6 +523,34 @@ public class MajorReportServiceImpl implements MajorReportService {
     }
 
     // ==================== 私有工具 ====================
+
+    private List<List<String>> headOf(String... columns) {
+        List<List<String>> head = new ArrayList<>();
+        for (String column : columns) {
+            head.add(Collections.singletonList(column));
+        }
+        return head;
+    }
+
+    private List<Object> rowOf(Object... values) {
+        List<Object> row = new ArrayList<>();
+        Collections.addAll(row, values);
+        return row;
+    }
+
+    private String formatObjectiveAchievements(Map<String, BigDecimal> map) {
+        if (map == null || map.isEmpty()) {
+            return "";
+        }
+        return map.entrySet().stream()
+                .map(e -> e.getKey() + ":" + e.getValue())
+                .collect(Collectors.joining(", "));
+    }
+
+    private String joinNonEmpty(String... parts) {
+        return Arrays.stream(parts).filter(Objects::nonNull)
+                .collect(Collectors.joining(" "));
+    }
 
     private BigDecimal average(List<BigDecimal> values) {
         if (values == null || values.isEmpty()) {
