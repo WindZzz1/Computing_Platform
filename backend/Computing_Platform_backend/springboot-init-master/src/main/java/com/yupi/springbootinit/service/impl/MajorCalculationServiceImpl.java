@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.manager.GradesheetStatusHelper;
+import com.yupi.springbootinit.manager.MajorScopeHelper;
 import com.yupi.springbootinit.mapper.*;
 import com.yupi.springbootinit.model.dto.majorCalculation.MajorCalculationRequest;
 import com.yupi.springbootinit.model.dto.majorCalculation.MajorDashboardQueryRequest;
@@ -31,9 +32,6 @@ import java.util.stream.Collectors;
 public class MajorCalculationServiceImpl implements MajorCalculationService {
 
     @Resource
-    private TeachingClassMapper teachingClassMapper;
-
-    @Resource
     private CourseIndicatorAchievementMapper courseIndicatorAchievementMapper;
 
     @Resource
@@ -58,13 +56,10 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
     private SysDictMajorMapper sysDictMajorMapper;
 
     @Resource
-    private ClassStudentMapper classStudentMapper;
-
-    @Resource
     private MajorIndicatorAchievementMapper majorIndicatorAchievementMapper;
 
     @Resource
-    private StudentMapper studentMapper;
+    private MajorScopeHelper majorScopeHelper;
 
     @Resource
     private GradesheetStatusHelper gradesheetStatusHelper;
@@ -480,64 +475,11 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
     /**
      * 获取某专业 / 学年学期 / 年级涉及的教学班级。
      * <p>
-     * 专业过滤：教学班本身不挂专业（teaching_class 无 major_id），通过其所属课程的
-     * major_id 关联（course.major_id = majorId）。
-     * 年级过滤：教学班无 grade 字段，经 班级学生 → 学生.grade 关联。
-     * <p>
-     * 修复前 majorId / grade 均未生效（只写了注释、空实现），导致 C-4 看板和专业级
-     * 计算基于"全校该学期所有教学班"，跨专业串数据、canCalculate 永远误判。
-     *
-     * 包级可见以便单元测试直接覆盖（MajorCalculationScopeTest）。
+     * 实现已抽取到 {@link MajorScopeHelper#getTeachingClasses}，供专业级计算与专业级报表共用，
+     * 避免两处过滤逻辑不同步。本方法保留为包级委托，调用点（看板 / 专业级计算）无需改动。
      */
     List<TeachingClass> getTeachingClasses(Long majorId, Long termId, String grade) {
-        // 1. 专业过滤：取该专业下的所有课程 id（course.major_id）
-        List<Long> courseIds = null;
-        if (majorId != null) {
-            QueryWrapper<Course> courseQuery = new QueryWrapper<>();
-            courseQuery.eq("major_id", majorId).select("id");
-            courseIds = courseMapper.selectList(courseQuery).stream()
-                    .map(Course::getId).collect(Collectors.toList());
-            if (courseIds.isEmpty()) {
-                // 该专业无课程 → 无教学班
-                return Collections.emptyList();
-            }
-        }
-
-        // 2. 按课程 + 学年学期筛选教学班
-        QueryWrapper<TeachingClass> query = new QueryWrapper<>();
-        if (courseIds != null) {
-            query.in("course_id", courseIds);
-        }
-        if (termId != null) {
-            query.eq("term_id", termId);
-        }
-        List<TeachingClass> classes = teachingClassMapper.selectList(query);
-        if (classes.isEmpty()) {
-            return classes;
-        }
-
-        // 3. 年级过滤：教学班无 grade，取该专业该年级学生所在教学班，与上一步取交集
-        if (grade != null && !grade.isEmpty()) {
-            QueryWrapper<Student> studentQuery = new QueryWrapper<>();
-            if (majorId != null) {
-                studentQuery.eq("major_id", majorId);
-            }
-            studentQuery.eq("grade", grade).select("id");
-            List<Long> studentIds = studentMapper.selectList(studentQuery).stream()
-                    .map(Student::getId).collect(Collectors.toList());
-            if (studentIds.isEmpty()) {
-                return Collections.emptyList();
-            }
-            QueryWrapper<ClassStudent> classStudentQuery = new QueryWrapper<>();
-            classStudentQuery.in("student_id", studentIds);
-            Set<Long> classIdsOfGrade = classStudentMapper.selectList(classStudentQuery).stream()
-                    .map(ClassStudent::getClassId).collect(Collectors.toSet());
-            classes = classes.stream()
-                    .filter(tc -> classIdsOfGrade.contains(tc.getId()))
-                    .collect(Collectors.toList());
-        }
-
-        return classes;
+        return majorScopeHelper.getTeachingClasses(majorId, termId, grade);
     }
 
     /**
