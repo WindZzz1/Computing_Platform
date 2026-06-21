@@ -24,6 +24,14 @@ spring:
     url: jdbc:mysql://120.27.221.219:3306/graduation_achievement?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
     username: yu
     password: 125103Dbqwan
+    hikari:
+      # 连接最大存活时间（10 分钟）：远程 MySQL 会主动关闭长时间空闲的连接，
+      # HikariCP 默认不感知会拿到失效连接 → 登录报 code 50000，重启才恢复。
+      max-lifetime: 600000
+      # 空闲连接保活探测间隔（2 分钟），提前刷新即将失效的连接
+      keepalive-time: 120000
+      # 借出连接前的心跳查询
+      connection-test-query: SELECT 1
   # Redis 配置
   # todo 需替换配置，然后取消注释
 #  redis:
