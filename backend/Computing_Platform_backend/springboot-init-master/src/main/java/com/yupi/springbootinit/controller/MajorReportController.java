@@ -161,6 +161,123 @@ public class MajorReportController {
     }
 
     /**
+     * 导出专业指标点达成度（三级）Excel
+     */
+    @PostMapping("/export/indicator-excel")
+    @AuthCheck(anyRole = SysUserConstant.ROLE_LEADER + "," + SysUserConstant.ROLE_EDU)
+    public void exportIndicatorAchievementExcel(
+            @RequestBody MajorReportRequest request,
+            HttpServletResponse response,
+            HttpServletRequest httpRequest) {
+
+        // 参数验证
+        if (request == null || request.getMajorId() == null ||
+                request.getTermId() == null || request.getGrade() == null) {
+            handleError(response, 400, "专业ID、学年学期ID和年级不能为空");
+            return;
+        }
+
+        // 权限验证
+        Long userId = getCurrentUserId(httpRequest);
+        String userRole = getCurrentUserRole(httpRequest);
+
+        if (!majorReportService.validateMajorPermission(
+                request.getMajorId(), userId, userRole)) {
+            handleError(response, 403, "无权访问该专业数据");
+            return;
+        }
+
+        try {
+            byte[] excelBytes =
+                    majorReportService.exportIndicatorAchievementExcel(request);
+
+            // 设置响应头
+            String fileName = "专业指标点达成度_" + request.getMajorId() + "_" +
+                    request.getGrade() + ".xlsx";
+            String encodedFileName = URLEncoder.encode(fileName,
+                    StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+
+            response.setContentType("application/vnd.openxmlformats-" +
+                    "officedocument.spreadsheetml.sheet");
+            response.setHeader("Content-Disposition",
+                    "attachment; filename*=UTF-8''" + encodedFileName);
+            response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+            response.setHeader("Pragma", "no-cache");
+            response.setHeader("Expires", "0");
+
+            // 写入响应流
+            OutputStream outputStream = response.getOutputStream();
+            outputStream.write(excelBytes);
+            outputStream.flush();
+
+            log.info("专业指标点达成度Excel导出成功，专业ID：{}，年级：{}",
+                    request.getMajorId(), request.getGrade());
+
+        } catch (Exception e) {
+            log.error("专业指标点达成度Excel导出失败", e);
+            handleError(response, 500, "Excel导出失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 导出专业指标点达成度（三级）PDF
+     */
+    @PostMapping("/export/indicator-pdf")
+    @AuthCheck(anyRole = SysUserConstant.ROLE_LEADER + "," + SysUserConstant.ROLE_EDU)
+    public void exportIndicatorAchievementPdf(
+            @RequestBody MajorReportRequest request,
+            HttpServletResponse response,
+            HttpServletRequest httpRequest) {
+
+        // 参数验证
+        if (request == null || request.getMajorId() == null ||
+                request.getTermId() == null || request.getGrade() == null) {
+            handleError(response, 400, "专业ID、学年学期ID和年级不能为空");
+            return;
+        }
+
+        // 权限验证
+        Long userId = getCurrentUserId(httpRequest);
+        String userRole = getCurrentUserRole(httpRequest);
+
+        if (!majorReportService.validateMajorPermission(
+                request.getMajorId(), userId, userRole)) {
+            handleError(response, 403, "无权访问该专业数据");
+            return;
+        }
+
+        try {
+            byte[] pdfBytes =
+                    majorReportService.exportIndicatorAchievementPdf(request);
+
+            // 设置响应头
+            String fileName = "专业指标点达成度_" + request.getMajorId() + "_" +
+                    request.getGrade() + ".pdf";
+            String encodedFileName = URLEncoder.encode(fileName,
+                    StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+
+            response.setContentType("application/pdf");
+            response.setHeader("Content-Disposition",
+                    "attachment; filename*=UTF-8''" + encodedFileName);
+            response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+            response.setHeader("Pragma", "no-cache");
+            response.setHeader("Expires", "0");
+
+            // 写入响应流
+            OutputStream outputStream = response.getOutputStream();
+            outputStream.write(pdfBytes);
+            outputStream.flush();
+
+            log.info("专业指标点达成度PDF导出成功，专业ID：{}，年级：{}",
+                    request.getMajorId(), request.getGrade());
+
+        } catch (Exception e) {
+            log.error("专业指标点达成度PDF导出失败", e);
+            handleError(response, 500, "PDF导出失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 错误处理
      */
     private void handleError(HttpServletResponse response, int status, String message) {
