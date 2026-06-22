@@ -30,16 +30,6 @@
           style="margin-bottom: 12px"
         />
         <WeightMatrix :loading="loading" :indicators="indicatorRows" :rows="matrixRows" />
-        <div class="matrix-footer">
-          <span class="matrix-footer-label">列合计</span>
-          <span
-            v-for="indicator in indicatorRows"
-            :key="indicator.id"
-            :class="isColumnOk(indicator.id) ? 'success-text' : 'danger-text'"
-          >
-            {{ indicator.indicatorCode }} = {{ getColumnSum(indicator.id).toFixed(2) }}
-          </span>
-        </div>
         <div v-if="matrixCheckPendingItems.length" class="matrix-warning-list">
           <span class="formula">待处理：</span>
           <el-tag
@@ -104,8 +94,6 @@ const matrixCheckPendingItems = computed(() =>
 
 const getColumnSum = (indicatorId: number) =>
   matrixRows.value.reduce((acc, row) => acc + (Number(row.weights[indicatorId]) || 0), 0)
-
-const isColumnOk = (indicatorId: number) => Math.abs(getColumnSum(indicatorId) - 1) <= 0.001
 
 const invalidIndicators = computed(() =>
   indicatorRows.value.filter((indicator) => Math.abs(getColumnSum(indicator.id) - 1) > 0.001)
@@ -234,22 +222,6 @@ onMounted(async () => {
 
 .formula {
   color: var(--muted);
-}
-
-.matrix-footer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fbfdff;
-  font-weight: 700;
-}
-
-.matrix-footer-label {
-  color: #1e3555;
 }
 
 .matrix-warning-list {

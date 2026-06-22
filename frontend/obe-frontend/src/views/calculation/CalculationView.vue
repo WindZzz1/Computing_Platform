@@ -500,7 +500,7 @@ const canMajorQueryData = computed(() => userStore.role === 'admin' || userStore
 const canRunMajorCalculation = computed(() => userStore.role === 'admin' || userStore.role === 'edu' || userStore.role === 'leader')
 const canDeleteMajorCalculation = computed(() => userStore.role === 'admin')
 const canLoadMajorOptions = computed(() => userStore.role === 'admin' || userStore.role === 'edu' || userStore.role === 'leader')
-const canLoadSchoolYearOptions = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canLoadSchoolYearOptions = computed(() => userStore.role === 'admin' || userStore.role === 'edu' || userStore.role === 'leader')
 const canLoadTeachingClasses = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
 const canLoadCourseCatalog = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
 const canUseManualMajorTermInput = computed(() => canMajorQueryData.value && !schoolYears.value.length)

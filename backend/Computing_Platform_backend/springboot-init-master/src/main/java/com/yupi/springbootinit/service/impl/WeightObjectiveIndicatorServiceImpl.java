@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.OwnershipHelper;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
 import com.yupi.springbootinit.mapper.GraduationRequirementMapper;
 import com.yupi.springbootinit.mapper.IndicatorPointMapper;
@@ -73,9 +74,13 @@ public class WeightObjectiveIndicatorServiceImpl
     @Resource
     private WeightObjectiveIndicatorMapper weightObjectiveIndicatorMapper;
 
+    @Resource
+    private OwnershipHelper ownershipHelper;
+
     @Override
     public List<IndicatorPointVO> listAvailableIndicators(Long courseId) {
         validateId(courseId, "课程ID");
+        ownershipHelper.checkCourseOwnership(courseId);
         List<MatrixCourseIndicator> matrixList = listMatrixByCourseId(courseId);
         if (matrixList.isEmpty()) {
             return Collections.emptyList();
@@ -113,6 +118,7 @@ public class WeightObjectiveIndicatorServiceImpl
     @Override
     public List<WeightObjectiveIndicatorVO> listWeights(Long courseId) {
         validateId(courseId, "课程ID");
+        ownershipHelper.checkCourseOwnership(courseId);
         QueryWrapper<WeightObjectiveIndicator> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("course_id", courseId);
         queryWrapper.orderByAsc("indicator_id", "objective_id");
@@ -182,10 +188,11 @@ public class WeightObjectiveIndicatorServiceImpl
         if (request == null || request.getCourseId() == null || request.getCourseId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "课程ID不能为空");
         }
+        Long courseId = request.getCourseId();
+        ownershipHelper.checkCourseOwnership(courseId);
         if (request.getWeightList() == null || request.getWeightList().isEmpty()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "内部权重列表不能为空");
         }
-        Long courseId = request.getCourseId();
         Set<Long> availableIndicatorIds = listMatrixByCourseId(courseId).stream()
                 .map(MatrixCourseIndicator::getIndicatorId).collect(Collectors.toSet());
         if (availableIndicatorIds.isEmpty()) {
