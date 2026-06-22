@@ -26,21 +26,30 @@
     </section>
 
     <section class="page-grid top-grid">
-      <div class="panel span-5">
+      <div class="panel" :class="canUseMajorPrep ? 'span-5' : 'span-12'">
         <div class="toolbar">
           <h3 class="panel-title">接口状态概览</h3>
-          <el-tag type="info">{{ user.roleName }}</el-tag>
+          <el-tag type="info" effect="plain">{{ user.roleName }}</el-tag>
         </div>
-        <el-table :data="reportCatalog" border>
-          <el-table-column prop="name" label="能力" min-width="180" />
-          <el-table-column prop="targetRole" label="适用角色" width="180" />
-          <el-table-column label="调用状态" width="120">
-            <template #default="{ row }">
-              <el-tag :type="row.tagType">{{ row.statusText }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="tip" label="说明" min-width="220" />
-        </el-table>
+        <div class="status-overview-list">
+          <div
+            v-for="item in reportCatalog"
+            :key="item.name"
+            class="status-overview-item"
+            :class="`status-overview-item--${item.tagType}`"
+          >
+            <div class="status-overview-main">
+              <div class="status-overview-title-row">
+                <span class="status-overview-title">{{ item.name }}</span>
+                <span class="status-overview-role">{{ item.targetRole }}</span>
+              </div>
+              <p class="status-overview-tip">{{ item.tip }}</p>
+            </div>
+            <el-tag :type="item.tagType" effect="light" class="status-overview-tag">
+              {{ item.statusText }}
+            </el-tag>
+          </div>
+        </div>
       </div>
 
       <div v-if="canUseMajorPrep" class="panel span-7">
@@ -2004,6 +2013,63 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
+.status-overview-list {
+  display: grid;
+  gap: 10px;
+}
+
+.status-overview-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #e8edf5;
+  border-left: 4px solid #9bb0c8;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.status-overview-item--success {
+  border-left-color: #67c23a;
+  background: #fbfef8;
+}
+
+.status-overview-item--info {
+  border-left-color: #909399;
+}
+
+.status-overview-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.status-overview-title {
+  color: #1e3555;
+  font-weight: 700;
+}
+
+.status-overview-role {
+  color: #6b7b93;
+  font-size: 12px;
+}
+
+.status-overview-tip {
+  margin: 0;
+  color: #5d6d84;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.status-overview-tag {
+  justify-self: end;
+  min-width: 74px;
+  text-align: center;
+}
+
 .penetration-metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -2081,5 +2147,15 @@ onBeforeUnmount(() => {
 
 .section-empty {
   padding: 18px 0 6px;
+}
+
+@media (max-width: 720px) {
+  .status-overview-item {
+    grid-template-columns: 1fr;
+  }
+
+  .status-overview-tag {
+    justify-self: start;
+  }
 }
 </style>
