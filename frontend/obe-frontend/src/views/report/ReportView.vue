@@ -1853,7 +1853,7 @@ onMounted(async () => {
       loaders.push(
         Promise.all([
           user.role === 'admin' ? listMajors() : Promise.resolve([]),
-          user.role === 'admin' || user.role === 'edu' ? listSchoolYears() : Promise.resolve([]),
+          user.role === 'admin' || user.role === 'edu' || user.role === 'leader' ? listSchoolYears() : Promise.resolve([]),
           user.role === 'admin' || user.role === 'edu' ? pageCourses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
           user.role === 'leader' ? pageGraduationRequirements({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any)
         ]).then(([majorList, termList, coursePage, requirementPage]) => {
