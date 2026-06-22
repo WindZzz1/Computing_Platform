@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.OwnershipHelper;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
 import com.yupi.springbootinit.mapper.RelPointObjectiveMapper;
 import com.yupi.springbootinit.mapper.WeightObjectiveIndicatorMapper;
@@ -35,6 +36,9 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
     @Resource
     private WeightObjectiveIndicatorMapper weightObjectiveIndicatorMapper;
 
+    @Resource
+    private OwnershipHelper ownershipHelper;
+
     @Override
     public Long createCourseObjective(CourseObjectiveAddRequest request) {
         if (request == null) {
@@ -46,6 +50,7 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         if (courseId == null || courseId <= 0 || StringUtils.isAnyBlank(objCode, objName)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "课程ID、目标编号和目标名称不能为空");
         }
+        ownershipHelper.checkCourseOwnership(courseId);
         validateDuplicateObjCode(courseId, objCode, null);
         baseMapper.deleteDeletedByCourseIdAndObjCode(courseId, objCode);
 
@@ -72,6 +77,10 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         if (courseId == null || courseId <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "课程ID不合法");
         }
+        ownershipHelper.checkCourseOwnership(exist.getCourseId());
+        if (!courseId.equals(exist.getCourseId())) {
+            ownershipHelper.checkCourseOwnership(courseId);
+        }
         validateDuplicateObjCode(courseId, objCode, request.getId());
 
         CourseObjective courseObjective = new CourseObjective();
@@ -88,6 +97,7 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         if (exist == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "课程目标不存在");
         }
+        ownershipHelper.checkCourseOwnership(exist.getCourseId());
         validateObjectiveNotReferenced(id);
         return this.removeById(id);
     }
@@ -101,6 +111,7 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         if (courseObjective == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "课程目标不存在");
         }
+        ownershipHelper.checkCourseOwnership(courseObjective.getCourseId());
         return getCourseObjectiveVO(courseObjective);
     }
 
@@ -118,12 +129,11 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
 
     @Override
     public QueryWrapper<CourseObjective> getQueryWrapper(CourseObjectiveQueryRequest request) {
+        Long courseId = resolveRequiredCourseId(request);
+        ownershipHelper.checkCourseOwnership(courseId);
+
         QueryWrapper<CourseObjective> queryWrapper = new QueryWrapper<>();
-        if (request == null) {
-            queryWrapper.orderByAsc("course_id", "obj_code");
-            return queryWrapper;
-        }
-        queryWrapper.eq(request.getCourseId() != null, "course_id", request.getCourseId());
+        queryWrapper.eq("course_id", courseId);
         queryWrapper.like(StringUtils.isNotBlank(request.getObjCode()), "obj_code", request.getObjCode());
         queryWrapper.like(StringUtils.isNotBlank(request.getObjName()), "obj_name", request.getObjName());
         queryWrapper.orderByAsc("course_id", "obj_code");
@@ -138,6 +148,13 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         CourseObjectiveVO vo = new CourseObjectiveVO();
         BeanUtils.copyProperties(courseObjective, vo);
         return vo;
+    }
+
+    private Long resolveRequiredCourseId(CourseObjectiveQueryRequest request) {
+        if (request == null || request.getCourseId() == null || request.getCourseId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "courseId is required");
+        }
+        return request.getCourseId();
     }
 
 

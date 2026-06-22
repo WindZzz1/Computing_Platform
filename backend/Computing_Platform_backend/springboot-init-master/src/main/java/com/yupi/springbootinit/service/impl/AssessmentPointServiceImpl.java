@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.OwnershipHelper;
 import com.yupi.springbootinit.mapper.AssessmentPointMapper;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
 import com.yupi.springbootinit.mapper.RelPointObjectiveMapper;
@@ -48,12 +49,18 @@ public class AssessmentPointServiceImpl extends ServiceImpl<AssessmentPointMappe
     @Resource
     private RelPointObjectiveMapper relPointObjectiveMapper;
 
+    @Resource
+    private OwnershipHelper ownershipHelper;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createAssessmentPoint(AssessmentPointAddRequest request) {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+        Long courseId = request.getCourseId();
+        validateCourseId(courseId);
+        ownershipHelper.checkCourseOwnership(courseId);
         List<ObjectiveRelationParam> relations = resolveObjectiveRelations(request.getObjectiveId(),
                 request.getObjectiveIds(), true);
         validateAssessmentPoint(request.getCourseId(), request.getPointCode(), request.getPointName(),
@@ -81,6 +88,11 @@ public class AssessmentPointServiceImpl extends ServiceImpl<AssessmentPointMappe
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "考核点不存在");
         }
         Long courseId = request.getCourseId() == null ? exist.getCourseId() : request.getCourseId();
+        validateCourseId(courseId);
+        ownershipHelper.checkCourseOwnership(exist.getCourseId());
+        if (!courseId.equals(exist.getCourseId())) {
+            ownershipHelper.checkCourseOwnership(courseId);
+        }
         String pointCode = StringUtils.isBlank(request.getPointCode()) ? exist.getPointCode() : request.getPointCode();
         String pointName = StringUtils.isBlank(request.getPointName()) ? exist.getPointName() : request.getPointName();
         BigDecimal fullScore = request.getFullScore() == null ? exist.getFullScore() : request.getFullScore();
@@ -109,6 +121,7 @@ public class AssessmentPointServiceImpl extends ServiceImpl<AssessmentPointMappe
         if (exist == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "考核点不存在");
         }
+        ownershipHelper.checkCourseOwnership(exist.getCourseId());
         validateAssessmentPointNotReferenced(id);
         boolean removeResult = this.removeById(id);
         if (removeResult) {
@@ -126,6 +139,7 @@ public class AssessmentPointServiceImpl extends ServiceImpl<AssessmentPointMappe
         if (assessmentPoint == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "考核点不存在");
         }
+        ownershipHelper.checkCourseOwnership(assessmentPoint.getCourseId());
         return getAssessmentPointVO(assessmentPoint);
     }
 
@@ -143,12 +157,11 @@ public class AssessmentPointServiceImpl extends ServiceImpl<AssessmentPointMappe
 
     @Override
     public QueryWrapper<AssessmentPoint> getQueryWrapper(AssessmentPointQueryRequest request) {
+        Long courseId = resolveRequiredCourseId(request);
+        ownershipHelper.checkCourseOwnership(courseId);
+
         QueryWrapper<AssessmentPoint> queryWrapper = new QueryWrapper<>();
-        if (request == null) {
-            queryWrapper.orderByAsc("course_id", "point_code");
-            return queryWrapper;
-        }
-        queryWrapper.eq(request.getCourseId() != null, "course_id", request.getCourseId());
+        queryWrapper.eq("course_id", courseId);
         if (request.getObjectiveId() != null) {
             List<Long> pointIds = listPointIdsByObjectiveId(request.getObjectiveId());
             if (pointIds.isEmpty()) {
@@ -200,6 +213,19 @@ public class AssessmentPointServiceImpl extends ServiceImpl<AssessmentPointMappe
             vo.setObjName(firstObjective.getObjName());
         }
         return vo;
+    }
+
+    private Long resolveRequiredCourseId(AssessmentPointQueryRequest request) {
+        if (request == null || request.getCourseId() == null || request.getCourseId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "courseId is required");
+        }
+        return request.getCourseId();
+    }
+
+    private void validateCourseId(Long courseId) {
+        if (courseId == null || courseId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "courseId is required");
+        }
     }
 
     private void validateAssessmentPoint(Long courseId, String pointCode, String pointName, BigDecimal fullScore,
