@@ -238,7 +238,7 @@
                 <version>3.2.1</version>
                 <configuration>
                     <configLocation>checkstyle.xml</configLocation>
-                    <encoding>UTF-8</encoding>
+                    <inputEncoding>UTF-8</inputEncoding>
                     <consoleOutput>true</consoleOutput>
                     <failsOnError>false</failsOnError>
                     <linkXRef>false</linkXRef>
@@ -273,7 +273,7 @@
                 <artifactId>maven-pmd-plugin</artifactId>
                 <version>3.19.0</version>
                 <configuration>
-                    <failOnError>false</failOnError>
+                    <failOnViolation>false</failOnViolation>
                     <linkXRef>false</linkXRef>
                     <rulesets>
                         <ruleset>/rulesets/java/quickstart.xml</ruleset>
