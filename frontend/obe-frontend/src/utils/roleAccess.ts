@@ -12,21 +12,18 @@ export type FeatureKey =
   | 'report'
 
 const featureRoles: Record<FeatureKey, Role[]> = {
-  dashboard: ['admin', 'edu', 'leader', 'teacher'],
+  dashboard: ['leader'],
   basicData: ['admin', 'edu', 'leader'],
   courseLibrary: ['admin', 'edu'],
   indicatorLibrary: ['admin', 'leader'],
-  matrix: ['admin', 'edu'],
-  syllabus: ['admin', 'teacher'],
-  score: ['admin', 'edu', 'teacher'],
-  calculation: ['admin', 'edu', 'leader', 'teacher'],
-  report: ['admin', 'edu', 'leader', 'teacher']
+  matrix: ['leader'],
+  syllabus: ['teacher'],
+  score: ['edu', 'teacher'],
+  calculation: ['edu', 'leader', 'teacher'],
+  report: ['edu', 'leader', 'teacher']
 }
 
 export function canAccessFeature(role: Role, feature: FeatureKey) {
-  if (role === 'admin') {
-    return true
-  }
   return featureRoles[feature].includes(role)
 }
 
@@ -34,7 +31,13 @@ export function getAccessibleFeatures(role: Role) {
   return Object.keys(featureRoles).filter((feature) => canAccessFeature(role, feature as FeatureKey)) as FeatureKey[]
 }
 
+const roleHomeRoute: Record<Role, string> = {
+  admin: '/basic-data',
+  edu: '/basic-data',
+  leader: '/dashboard',
+  teacher: '/syllabus'
+}
+
 export function getDefaultRoute(role: Role) {
-  if (canAccessFeature(role, 'dashboard')) return '/dashboard'
-  return '/login'
+  return roleHomeRoute[role] || '/login'
 }

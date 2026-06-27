@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <h1 class="page-title">基础数据管理</h1>
-    <p class="page-desc">当前页集中维护课程、专业、毕业要求和指标点，优先把后端已经存在的基础数据能力全部接通。</p>
+    <p class="page-desc">集中维护课程、专业、学院、学年学期、用户账号、毕业要求与指标点等基础数据，为后续计算与报表提供数据支撑。</p>
 
     <section class="page-grid">
       <div v-if="canManageCourseSection" class="panel span-8">
@@ -120,6 +120,15 @@
           <h3 class="panel-title">毕业要求管理</h3>
           <el-button type="primary" :disabled="!availableRequirementMajors.length" @click="openRequirementCreateDialog">新增毕业要求</el-button>
         </div>
+        <div class="filter-bar" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0;">
+          <el-select v-model="requirementFilter.majorId" placeholder="按专业筛选" clearable filterable style="width: 200px">
+            <el-option v-for="major in majors" :key="major.id" :label="major.majorName" :value="major.id" />
+          </el-select>
+          <el-input v-model="requirementFilter.code" placeholder="编号搜索（如 GR1）" clearable style="width: 170px" />
+          <el-input v-model="requirementFilter.name" placeholder="名称搜索" clearable style="width: 200px" />
+          <span style="color: var(--muted); font-size: 13px;">共 {{ requirementRows.length }} 条</span>
+          <el-button @click="resetRequirementFilter">重置</el-button>
+        </div>
         <el-table v-loading="loadingRequirements" :data="requirementRows" border>
           <el-table-column prop="code" label="毕业要求编号" width="140" />
           <el-table-column prop="name" label="毕业要求名称" min-width="180" />
@@ -139,6 +148,15 @@
         <div class="toolbar">
           <h3 class="panel-title">指标点管理</h3>
           <el-button type="primary" :disabled="!requirements.length" @click="openIndicatorCreateDialog">新增指标点</el-button>
+        </div>
+        <div class="filter-bar" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0;">
+          <el-select v-model="indicatorFilter.requirementId" placeholder="按毕业要求筛选" clearable filterable style="width: 240px">
+            <el-option v-for="req in requirements" :key="req.id" :label="`${req.requirementCode} ${req.requirementName}`" :value="req.id" />
+          </el-select>
+          <el-input v-model="indicatorFilter.code" placeholder="编号搜索（如 1.1）" clearable style="width: 160px" />
+          <el-input v-model="indicatorFilter.name" placeholder="名称搜索" clearable style="width: 200px" />
+          <span style="color: var(--muted); font-size: 13px;">共 {{ indicatorRows.length }} 条</span>
+          <el-button @click="resetIndicatorFilter">重置</el-button>
         </div>
         <el-table v-loading="loadingIndicators" :data="indicatorRows" border>
           <el-table-column prop="requirementCode" label="毕业要求" width="130" />
@@ -555,10 +573,10 @@ const roleLabelMap: Record<string, string> = {
 }
 
 const getRoleLabel = (roleCode?: string) => roleLabelMap[roleCode || ''] || roleCode || '-'
-const canManageCourseSection = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canManageCourseSection = computed(() => userStore.role === 'edu')
 const canManageDictionarySection = computed(() => userStore.role === 'admin')
-const canManageUserSection = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
-const canManageRequirementSection = computed(() => userStore.role === 'admin' || userStore.role === 'leader')
+const canManageUserSection = computed(() => userStore.role === 'admin')
+const canManageRequirementSection = computed(() => userStore.role === 'leader')
 
 const formatDateTime = (value?: string) => {
   if (!value) return '-'
@@ -631,25 +649,57 @@ const userRows = computed(() =>
   }))
 )
 
+const requirementFilter = reactive({ majorId: undefined as number | undefined, code: '', name: '' })
+const indicatorFilter = reactive({ requirementId: undefined as number | undefined, code: '', name: '' })
+
+const resetRequirementFilter = () => {
+  requirementFilter.majorId = undefined
+  requirementFilter.code = ''
+  requirementFilter.name = ''
+}
+const resetIndicatorFilter = () => {
+  indicatorFilter.requirementId = undefined
+  indicatorFilter.code = ''
+  indicatorFilter.name = ''
+}
+
 const requirementRows = computed(() =>
-  requirements.value.map((requirement) => ({
-    code: requirement.requirementCode,
-    name: requirement.requirementName,
-    majorName: requirement.majorName || '-',
-    collegeName: requirement.collegeName || '-',
-    description: requirement.description || '-',
-    raw: requirement
-  }))
+  requirements.value
+    .filter((requirement) => {
+      if (requirementFilter.majorId && requirement.majorId !== requirementFilter.majorId) return false
+      const code = requirementFilter.code.trim().toLowerCase()
+      if (code && !(requirement.requirementCode || '').toLowerCase().includes(code)) return false
+      const name = requirementFilter.name.trim().toLowerCase()
+      if (name && !(requirement.requirementName || '').toLowerCase().includes(name)) return false
+      return true
+    })
+    .map((requirement) => ({
+      code: requirement.requirementCode,
+      name: requirement.requirementName,
+      majorName: requirement.majorName || '-',
+      collegeName: requirement.collegeName || '-',
+      description: requirement.description || '-',
+      raw: requirement
+    }))
 )
 
 const indicatorRows = computed(() =>
-  indicators.value.map((indicator) => ({
-    requirementCode: indicator.requirementCode || '-',
-    code: indicator.indicatorCode,
-    name: indicator.indicatorName,
-    description: indicator.description || '-',
-    raw: indicator
-  }))
+  indicators.value
+    .filter((indicator) => {
+      if (indicatorFilter.requirementId && indicator.requirementId !== indicatorFilter.requirementId) return false
+      const code = indicatorFilter.code.trim().toLowerCase()
+      if (code && !(indicator.indicatorCode || '').toLowerCase().includes(code)) return false
+      const name = indicatorFilter.name.trim().toLowerCase()
+      if (name && !(indicator.indicatorName || '').toLowerCase().includes(name)) return false
+      return true
+    })
+    .map((indicator) => ({
+      requirementCode: indicator.requirementCode || '-',
+      code: indicator.indicatorCode,
+      name: indicator.indicatorName,
+      description: indicator.description || '-',
+      raw: indicator
+    }))
 )
 
 const availableCourseMajors = computed<SysDictMajorSimpleVO[]>(() => {
@@ -1399,6 +1449,7 @@ onMounted(async () => {
 
   if (canManageRequirementSection.value) {
     loaders.push(
+      { label: '专业下拉', task: loadMajors() },
       { label: '毕业要求列表', task: loadRequirements() },
       { label: '指标点列表', task: loadIndicators() }
     )

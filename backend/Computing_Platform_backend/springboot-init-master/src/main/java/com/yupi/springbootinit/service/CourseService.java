@@ -105,4 +105,11 @@ public interface CourseService extends IService<Course> {
      * @return 课程简化列表
      */
     java.util.List<com.yupi.springbootinit.model.vo.CourseSimpleVO> listCourseSimple();
+
+    /**
+     * 获取当前登录教师讲授的课程简化列表（按 teacher_id 过滤，数据归属隔离）
+     *
+     * @return 课程简化列表
+     */
+    java.util.List<com.yupi.springbootinit.model.vo.CourseSimpleVO> listMyCourses();
 }

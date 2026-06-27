@@ -15,6 +15,10 @@ export function pageTeachingClasses(payload: TeachingClassPageQuery) {
   return apiPost<PageResponse<TeachingClassVO>>('/teaching-class/page', payload)
 }
 
+export function listMyTeachingClasses() {
+  return apiPost<TeachingClassVO[]>('/teaching-class/my')
+}
+
 export function createTeachingClass(payload: TeachingClassCreateRequest) {
   return apiPost<number>('/teaching-class/add', payload)
 }

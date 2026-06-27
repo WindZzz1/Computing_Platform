@@ -101,7 +101,7 @@ public class CourseController {
      * @return 分页结果
      */
     @PostMapping("/page")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    @AuthCheck(anyRole = SysUserConstant.ROLE_EDU + "," + SysUserConstant.ROLE_LEADER)
     public BaseResponse<PageResultVO<CourseVO>> pageCourse(@RequestBody CourseQueryRequest courseQueryRequest) {
         Page<CourseVO> coursePage = courseService.pageCourse(courseQueryRequest);
         return ResultUtils.success(PageResultVO.from(coursePage));
@@ -172,9 +172,21 @@ public class CourseController {
      * @return 课程简化列表
      */
     @PostMapping("/list")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    @AuthCheck(anyRole = SysUserConstant.ROLE_EDU + "," + SysUserConstant.ROLE_LEADER)
     public BaseResponse<List<CourseSimpleVO>> listCourse() {
         List<CourseSimpleVO> list = courseService.listCourseSimple();
+        return ResultUtils.success(list);
+    }
+
+    /**
+     * 获取当前登录教师讲授的课程列表（按 teacher_id 过滤，数据归属隔离）
+     *
+     * @return 课程简化列表
+     */
+    @PostMapping("/my")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
+    public BaseResponse<List<CourseSimpleVO>> listMyCourses() {
+        List<CourseSimpleVO> list = courseService.listMyCourses();
         return ResultUtils.success(list);
     }
 }

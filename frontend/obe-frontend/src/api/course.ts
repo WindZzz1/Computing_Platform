@@ -23,6 +23,10 @@ export function listCourses() {
   return apiPost<CourseSimpleVO[]>('/course/list')
 }
 
+export function listMyCourses() {
+  return apiPost<CourseSimpleVO[]>('/course/my')
+}
+
 export function createCourse(payload: CourseCreateRequest) {
   return apiPost<number>('/course/add', payload)
 }

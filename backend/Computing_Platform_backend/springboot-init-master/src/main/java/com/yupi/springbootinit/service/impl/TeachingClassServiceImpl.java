@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.OwnershipHelper;
 import com.yupi.springbootinit.mapper.*;
 import com.yupi.springbootinit.model.dto.teachingClass.ClassStudentBindRequest;
 import com.yupi.springbootinit.model.dto.teachingClass.TeachingClassAddRequest;
@@ -62,6 +63,9 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
 
     @Resource
     private SysDictCollegeMapper sysDictCollegeMapper;
+
+    @Resource
+    private OwnershipHelper ownershipHelper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -261,6 +265,20 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
         teachingClassVO.setStudentCount(studentCount.intValue());
 
         return teachingClassVO;
+    }
+
+    @Override
+    public List<TeachingClassVO> listMyTeachingClasses() {
+        SysUser currentUser = ownershipHelper.getCurrentUser();
+        if (currentUser == null || currentUser.getId() == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        QueryWrapper<TeachingClass> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("teacher_id", currentUser.getId());
+        queryWrapper.orderByDesc("create_time");
+        return this.list(queryWrapper).stream()
+                .map(this::getTeachingClassVO)
+                .collect(Collectors.toList());
     }
 
     @Override
