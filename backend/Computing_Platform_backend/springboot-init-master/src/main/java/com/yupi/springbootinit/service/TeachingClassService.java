@@ -114,4 +114,11 @@ public interface TeachingClassService extends IService<TeachingClass> {
      * @return 导入结果
      */
     java.util.Map<String, Object> importStudentsFromExcel(Long classId, org.springframework.web.multipart.MultipartFile file);
+
+    /**
+     * 获取当前登录教师主讲的的教学班列表（按 teacher_id 过滤，数据归属隔离）
+     *
+     * @return 教学班 VO 列表
+     */
+    java.util.List<com.yupi.springbootinit.model.vo.TeachingClassVO> listMyTeachingClasses();
 }

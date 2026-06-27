@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <h1 class="page-title">教学班与成绩准备</h1>
-    <p class="page-desc">这一页把教学班、学生导入、成绩模板下载、成绩导入和成绩查询都接通，方便继续联调课程计算链路。</p>
+    <p class="page-desc">管理教学班、学生导入、成绩模板下载、成绩导入与查询，为课程级达成度计算做准备。</p>
 
     <section class="page-grid">
       <div class="panel span-12">
@@ -20,39 +20,9 @@
               @keyup.enter="loadTeachingClasses"
             />
             <el-button @click="loadTeachingClasses">刷新</el-button>
-            <el-input-number
-              v-if="isTeacherScoreDirectMode"
-              v-model="selectedClassId"
-              :min="1"
-              :step="1"
-              controls-position="right"
-              style="width: 180px"
-              placeholder="教学班 ID"
-            />
-            <el-input-number
-              v-if="isTeacherScoreDirectMode"
-              v-model="directCourseId"
-              :min="1"
-              :step="1"
-              controls-position="right"
-              style="width: 180px"
-              placeholder="课程 ID"
-            />
-            <el-button v-if="isTeacherScoreDirectMode" type="primary" :disabled="!selectedClassId" @click="reloadPreview">
-              按当前 ID 联调
-            </el-button>
             <el-button v-if="canManageClassSection" type="primary" @click="openClassCreateDialog">新增教学班</el-button>
           </div>
         </div>
-
-        <el-alert
-          v-if="isTeacherScoreDirectMode"
-          title="教师端当前没有教学班列表接口，改为按 classId / courseId 直达联调"
-          type="info"
-          show-icon
-          :closable="false"
-          style="margin-bottom: 12px"
-        />
 
         <el-table v-loading="classLoading" :data="teachingClasses" border @row-click="handleSelectClass">
           <el-table-column prop="className" label="教学班名称" min-width="180" />
@@ -82,19 +52,6 @@
             type="primary"
             link
             :disabled="!selectedClass.courseId"
-            @click="navigateToSyllabus"
-          >
-            去当前课程大纲
-          </el-button>
-        </div>
-        <div v-else-if="isTeacherScoreDirectMode && selectedClassId" class="selected-class-bar">
-          <el-tag type="success">当前联调教学班 ID：{{ selectedClassId }}</el-tag>
-          <span>{{ directCourseId ? `课程 ID：${directCourseId}` : '当前未填写课程 ID' }}</span>
-          <el-button
-            v-if="canNavigateToSyllabus"
-            type="primary"
-            link
-            :disabled="!resolvedCourseId"
             @click="navigateToSyllabus"
           >
             去当前课程大纲
@@ -533,6 +490,7 @@ import {
   importStudentsFromExcel,
   importStudentsToClassFromExcel,
   importStudentsToClass,
+  listMyTeachingClasses,
   pageTeachingClasses,
   unbindStudentFromClass,
   updateTeachingClass
@@ -666,12 +624,12 @@ const directCourseId = ref<number>()
 const resolvedCourseId = computed(() => Number(selectedClass.value?.courseId || directCourseId.value || 0) || undefined)
 const classPanelHint = computed(() =>
   isTeacherScoreDirectMode.value
-    ? '教师角色当前改为按教学班 ID 直达联调，不再请求教师无权访问的教学班列表接口。'
+    ? '以下是你主讲的教学班，选择后即可进入成绩录入与计算准备。'
     : '先维护教学班，再导入学生并绑定到当前班级。'
 )
 const gradePanelHint = computed(() =>
   isTeacherScoreDirectMode.value
-    ? '教师可按教学班直接下载模板、导入成绩、查询成绩并手动修改；如果要显示考核点筛选，请同时填写课程 ID。'
+    ? '选择教学班后可下载成绩模板、导入成绩、查询并手动修改单条成绩。'
     : '按教学班查看已导入的成绩记录，可按考核点筛选、手动修改单条成绩，并清空当前班级成绩。'
 )
 const boundStudentIdSet = computed(() => new Set(students.value.map((student) => student.id)))
@@ -814,7 +772,7 @@ const results = computed(() => {
       status: assessments.value.length ? (gradeRows.value.length ? '已有成绩数据' : '待录入成绩') : '待配置考核点',
       hint: assessments.value.length
         ? gradeRows.value.length
-          ? '成绩录入与查询已接通，可继续联调课程计算和报表。'
+          ? '成绩录入与查询已就绪，可继续进行课程级计算与报表导出。'
           : '成绩录入与查询已接通，等待教师导入当前教学班成绩。'
         : '先补课程考核点，再进入成绩计算。'
     }
@@ -1057,25 +1015,19 @@ const loadCourseDetails = async (courseId?: number) => {
 }
 
 const loadTeachingClasses = async () => {
-  if (!canManageClassSection.value) {
-    classLoading.value = false
-    teachingClasses.value = []
-    if (routeClassId.value) {
-      selectedClassId.value = routeClassId.value
-      directCourseId.value = routeCourseId.value
-      await reloadPreview()
-    }
-    return
-  }
-
   classLoading.value = true
   try {
-    const page = await pageTeachingClasses({
-      current: 1,
-      pageSize: 200,
-      className: classKeyword.value || undefined
-    })
-    teachingClasses.value = page.records
+    if (canManageClassSection.value) {
+      const page = await pageTeachingClasses({
+        current: 1,
+        pageSize: 200,
+        className: classKeyword.value || undefined
+      })
+      teachingClasses.value = page.records
+    } else {
+      // teacher：仅加载自己主讲的教学班（后端按 teacher_id 过滤，数据归属隔离）
+      teachingClasses.value = await listMyTeachingClasses()
+    }
 
     if (selectedClassId.value && !teachingClasses.value.some((item) => item.id === selectedClassId.value)) {
       selectedClassId.value = undefined

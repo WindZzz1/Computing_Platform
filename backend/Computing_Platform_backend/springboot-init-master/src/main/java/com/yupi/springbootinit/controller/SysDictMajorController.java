@@ -105,7 +105,7 @@ public class SysDictMajorController {
      * @return 专业简化列表
      */
     @PostMapping("/list")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
+    @AuthCheck
     public BaseResponse<java.util.List<SysDictMajorSimpleVO>> listMajor() {
         java.util.List<SysDictMajorSimpleVO> list = sysDictMajorService.listMajorSimple();
         return ResultUtils.success(list);

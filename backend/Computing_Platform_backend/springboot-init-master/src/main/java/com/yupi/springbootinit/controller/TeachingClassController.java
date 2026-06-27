@@ -98,10 +98,22 @@ public class TeachingClassController {
      * @return 分页结果
      */
     @PostMapping("/page")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    @AuthCheck(anyRole = SysUserConstant.ROLE_EDU + "," + SysUserConstant.ROLE_LEADER)
     public BaseResponse<PageResultVO<TeachingClassVO>> pageTeachingClass(@RequestBody TeachingClassQueryRequest teachingClassQueryRequest) {
         Page<TeachingClassVO> classPage = teachingClassService.pageTeachingClass(teachingClassQueryRequest);
         return ResultUtils.success(PageResultVO.from(classPage));
+    }
+
+    /**
+     * 获取当前登录教师主讲的的教学班列表（按 teacher_id 过滤，数据归属隔离）
+     *
+     * @return 教学班列表
+     */
+    @PostMapping("/my")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
+    public BaseResponse<List<TeachingClassVO>> listMyTeachingClasses() {
+        List<TeachingClassVO> list = teachingClassService.listMyTeachingClasses();
+        return ResultUtils.success(list);
     }
 
     /**

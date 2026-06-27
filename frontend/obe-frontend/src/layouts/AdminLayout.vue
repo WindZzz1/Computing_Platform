@@ -12,7 +12,7 @@
             <el-icon><Files /></el-icon>
             <span>基础数据管理</span>
           </template>
-          <el-menu-item index="/basic-data">专业课程库</el-menu-item>
+          <el-menu-item index="/basic-data">基础数据</el-menu-item>
         </el-sub-menu>
         <el-menu-item v-if="hasFeature('matrix')" index="/matrix">
           <el-icon><Grid /></el-icon>
@@ -63,9 +63,7 @@
           <span>{{ $route.meta.title }}</span>
         </div>
         <div class="top-right">
-          <el-badge :value="13" class="badge">
-            <el-icon><Bell /></el-icon>
-          </el-badge>
+          <el-icon><Bell /></el-icon>
           <el-icon><QuestionFilled /></el-icon>
           <el-avatar :size="30">{{ user.name.slice(0, 1) }}</el-avatar>
           <span>{{ user.roleName }}</span>

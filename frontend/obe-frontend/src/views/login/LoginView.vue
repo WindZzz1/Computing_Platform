@@ -3,7 +3,7 @@
     <section class="login-panel">
       <div class="login-copy">
         <h1>OBE 达成度计算平台</h1>
-        <p>前端已切到真实后端接口，登录后可以直接继续做接口联调与页面开发。</p>
+        <p>面向专业认证的毕业要求达成度统一计算平台，支持四类角色协同完成基础数据配置、权重配置、达成度计算与报表导出。</p>
       </div>
       <el-card class="box" shadow="never">
         <h2>进入系统</h2>
@@ -35,6 +35,7 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { getDefaultRoute } from '@/utils/roleAccess'
 
 const username = ref('')
 const password = ref('')
@@ -51,7 +52,7 @@ const submit = async () => {
   loading.value = true
   try {
     await user.login(username.value, password.value)
-    await router.push('/dashboard')
+    await router.push(getDefaultRoute(user.role))
   } catch (error) {
     const message =
       axios.isAxiosError(error) && error.code === 'ECONNABORTED'

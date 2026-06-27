@@ -176,7 +176,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { listCourses } from '@/api/course'
+import { listCourses, listMyCourses } from '@/api/course'
+import { useUserStore } from '@/stores/user'
 import {
   createAssessmentPoint,
   checkObjectiveIndicatorWeights,
@@ -605,7 +606,8 @@ const saveWeights = async () => {
 
 onMounted(async () => {
   try {
-    courses.value = await listCourses()
+    const userStore = useUserStore()
+    courses.value = userStore.role === 'teacher' ? await listMyCourses() : await listCourses()
     const routeMatchedCourse = routeCourseId.value
       ? courses.value.find((item) => item.id === routeCourseId.value)
       : undefined

@@ -105,7 +105,7 @@ public class SysDictCollegeController {
      * @return 学院简化列表
      */
     @PostMapping("/list")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_ADMIN)
+    @AuthCheck
     public BaseResponse<java.util.List<SysDictCollegeSimpleVO>> listCollege() {
         java.util.List<SysDictCollegeSimpleVO> list = sysDictCollegeService.listCollegeSimple();
         return ResultUtils.success(list);
