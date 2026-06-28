@@ -6,11 +6,15 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.mapper.ClassStudentMapper;
 import com.yupi.springbootinit.mapper.StudentMapper;
 import com.yupi.springbootinit.mapper.SysDictCollegeMapper;
 import com.yupi.springbootinit.mapper.SysDictMajorMapper;
+import com.yupi.springbootinit.model.dto.student.StudentAddRequest;
 import com.yupi.springbootinit.model.dto.student.StudentImportRequest;
 import com.yupi.springbootinit.model.dto.student.StudentQueryRequest;
+import com.yupi.springbootinit.model.dto.student.StudentUpdateRequest;
+import com.yupi.springbootinit.model.entity.ClassStudent;
 import com.yupi.springbootinit.model.entity.Student;
 import com.yupi.springbootinit.model.entity.SysDictCollege;
 import com.yupi.springbootinit.model.entity.SysDictMajor;
@@ -51,6 +55,9 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
     @Resource
     private SysDictCollegeMapper sysDictCollegeMapper;
 
+    @Resource
+    private ClassStudentMapper classStudentMapper;
+
     @Override
     public Page<StudentVO> pageStudents(StudentQueryRequest studentQueryRequest) {
         long current = studentQueryRequest == null ? 1 : studentQueryRequest.getCurrent();
@@ -69,6 +76,93 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
         Page<StudentVO> studentVOPage = new Page<>(current, size, studentPage.getTotal());
         studentVOPage.setRecords(studentPage.getRecords().stream().map(this::getStudentVO).collect(java.util.stream.Collectors.toList()));
         return studentVOPage;
+    }
+
+    @Override
+    public Long addStudent(StudentAddRequest studentAddRequest) {
+        if (studentAddRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求参数不能为空");
+        }
+        String studentNo = studentAddRequest.getStudentNo();
+        String studentName = studentAddRequest.getStudentName();
+        Long majorId = studentAddRequest.getMajorId();
+        if (StringUtils.isAnyBlank(studentNo, studentName) || majorId == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "学号、姓名、所属专业不能为空");
+        }
+        // 专业校验
+        SysDictMajor major = sysDictMajorMapper.selectById(majorId);
+        if (major == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "所属专业不存在");
+        }
+        // 学号查重
+        QueryWrapper<Student> noWrapper = new QueryWrapper<>();
+        noWrapper.eq("student_no", studentNo);
+        if (this.count(noWrapper) > 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "学号已存在");
+        }
+        Student student = new Student();
+        student.setStudentNo(studentNo);
+        student.setName(studentName);
+        student.setGrade(studentAddRequest.getGrade());
+        student.setMajorId(majorId);
+        // 班级(className)不在此设置，待绑定教学班时回填
+        if (!this.save(student)) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "新增学生失败");
+        }
+        return student.getId();
+    }
+
+    @Override
+    public Boolean updateStudent(StudentUpdateRequest studentUpdateRequest) {
+        if (studentUpdateRequest == null || studentUpdateRequest.getId() == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "学生ID不能为空");
+        }
+        Student exist = this.getById(studentUpdateRequest.getId());
+        if (exist == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "学生不存在");
+        }
+        // 学号若变更需查重
+        String studentNo = studentUpdateRequest.getStudentNo();
+        if (StringUtils.isNotBlank(studentNo) && !studentNo.equals(exist.getStudentNo())) {
+            QueryWrapper<Student> noWrapper = new QueryWrapper<>();
+            noWrapper.eq("student_no", studentNo);
+            noWrapper.ne("id", exist.getId());
+            if (this.count(noWrapper) > 0) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "学号已存在");
+            }
+        }
+        // 专业若变更需校验
+        if (studentUpdateRequest.getMajorId() != null) {
+            SysDictMajor major = sysDictMajorMapper.selectById(studentUpdateRequest.getMajorId());
+            if (major == null) {
+                throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "所属专业不存在");
+            }
+        }
+        Student student = new Student();
+        student.setId(studentUpdateRequest.getId());
+        student.setStudentNo(studentNo);
+        student.setName(studentUpdateRequest.getStudentName());
+        student.setGrade(studentUpdateRequest.getGrade());
+        student.setMajorId(studentUpdateRequest.getMajorId());
+        return this.updateById(student);
+    }
+
+    @Override
+    public Boolean deleteStudent(Long id) {
+        if (id == null || id <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "学生ID不能为空");
+        }
+        Student student = this.getById(id);
+        if (student == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "学生不存在");
+        }
+        // 引用检查：已被教学班绑定的学生不允许删除，避免产生孤儿绑定/成绩
+        QueryWrapper<ClassStudent> bindWrapper = new QueryWrapper<>();
+        bindWrapper.eq("student_id", id);
+        if (classStudentMapper.selectCount(bindWrapper) > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "学生已被教学班绑定，请先解绑后再删除");
+        }
+        return this.removeById(id);
     }
 
     @Override
@@ -237,7 +331,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
                     student.setName(excel.getStudentName());
                     student.setGrade(excel.getGrade());
                     student.setMajorId(major.getId());
-                    student.setClassName(excel.getClassName());
+                    // 班级(className)不随学生导入，待绑定教学班时回填
 
                     if (this.save(student)) {
                         successCount++;

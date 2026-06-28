@@ -1,7 +1,19 @@
-import { apiPost, type PageResponse, type StudentPageQuery, type StudentVO } from './backend'
+import { apiPost, type PageResponse, type StudentAddRequest, type StudentPageQuery, type StudentUpdateRequest, type StudentVO } from './backend'
 
 export function pageStudents(payload: StudentPageQuery) {
   return apiPost<PageResponse<StudentVO>>('/student/page', payload)
+}
+
+export function createStudent(payload: StudentAddRequest) {
+  return apiPost<number>('/student/add', payload)
+}
+
+export function updateStudent(payload: StudentUpdateRequest) {
+  return apiPost<boolean>('/student/update', payload)
+}
+
+export function deleteStudent(id: number) {
+  return apiPost<boolean>('/student/delete', { id })
 }
 
 export function importStudents(payload: {

@@ -1302,9 +1302,10 @@ const loadStudentPool = async (page = studentQuery.current || 1) => {
       studentName: studentQuery.studentName?.trim() || undefined
     })
     studentPickerRows.value = result.records
-    studentPickerTotal.value = result.total
-    studentQuery.current = result.current
-    studentQuery.pageSize = result.size
+    // 后端把 Long 序列化成字符串，分页组件的 total/current/pageSize 必须是 number，否则分页栏失效
+    studentPickerTotal.value = Number(result.total) || 0
+    studentQuery.current = Number(result.current) || page
+    studentQuery.pageSize = Number(result.size) || studentQuery.pageSize
   } catch (error) {
     const message = error instanceof Error ? error.message : '系统学生库加载失败'
     ElMessage.error(message)
@@ -1499,9 +1500,10 @@ const loadGradeEntries = async (page = gradeQuery.current || 1) => {
       pageSize: gradeQuery.pageSize
     })
     gradeRows.value = result.records
-    gradeTotal.value = result.total
-    gradeQuery.current = result.current
-    gradeQuery.pageSize = result.size
+    // 后端 Long 序列化为字符串，分页组件需要 number
+    gradeTotal.value = Number(result.total) || 0
+    gradeQuery.current = Number(result.current) || page
+    gradeQuery.pageSize = Number(result.size) || gradeQuery.pageSize
   } catch (error) {
     const message = error instanceof Error ? error.message : '成绩数据加载失败'
     ElMessage.error(message)

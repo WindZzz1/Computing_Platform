@@ -218,6 +218,7 @@ export interface StudentVO {
   id: number
   studentNo: string
   name: string
+  grade?: string
   collegeId?: number
   collegeName?: string
   majorId?: number
@@ -232,6 +233,21 @@ export interface StudentPageQuery extends PageQuery {
   studentName?: string
   majorId?: number | null
   className?: string
+}
+
+export interface StudentAddRequest {
+  studentNo: string
+  studentName: string
+  grade?: string
+  majorId: number
+}
+
+export interface StudentUpdateRequest {
+  id: number
+  studentNo?: string
+  studentName?: string
+  grade?: string
+  majorId?: number
 }
 
 export interface CoursePageQuery extends PageQuery {
