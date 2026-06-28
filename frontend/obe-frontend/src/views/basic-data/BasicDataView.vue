@@ -163,7 +163,10 @@
       <div v-if="canManageRequirementSection" class="panel span-12">
         <div class="toolbar">
           <h3 class="panel-title">毕业要求管理</h3>
-          <el-button type="primary" :disabled="!availableRequirementMajors.length" @click="openRequirementCreateDialog">新增毕业要求</el-button>
+          <div class="toolbar-actions">
+            <el-button @click="openRequirementImportDialog">批量导入</el-button>
+            <el-button type="primary" :disabled="!availableRequirementMajors.length" @click="openRequirementCreateDialog">新增毕业要求</el-button>
+          </div>
         </div>
         <div class="filter-bar" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0;">
           <el-select v-model="requirementFilter.majorId" placeholder="按专业筛选" clearable filterable style="width: 200px">
@@ -192,7 +195,10 @@
       <div v-if="canManageRequirementSection" class="panel span-12">
         <div class="toolbar">
           <h3 class="panel-title">指标点管理</h3>
-          <el-button type="primary" :disabled="!requirements.length" @click="openIndicatorCreateDialog">新增指标点</el-button>
+          <div class="toolbar-actions">
+            <el-button @click="openIndicatorImportDialog">批量导入</el-button>
+            <el-button type="primary" :disabled="!requirements.length" @click="openIndicatorCreateDialog">新增指标点</el-button>
+          </div>
         </div>
         <div class="filter-bar" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0;">
           <el-select v-model="indicatorFilter.requirementId" placeholder="按毕业要求筛选" clearable filterable style="width: 240px">
@@ -458,6 +464,52 @@
         <el-button type="primary" :loading="submittingUser" @click="submitUser">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 毕业要求导入 -->
+    <el-dialog v-model="requirementImportVisible" title="批量导入毕业要求" width="560px" destroy-on-close>
+      <div class="import-tips">
+        <p>字段：专业代码*、毕业要求编号*、毕业要求名称*、毕业要求描述</p>
+        <div class="import-actions">
+          <el-button @click="handleDownloadRequirementTemplate">下载模板</el-button>
+        </div>
+      </div>
+      <el-upload
+        v-model:file-list="requirementImportFileList"
+        drag action="#" :auto-upload="false" :limit="1" accept=".xlsx,.xls"
+        :on-change="handleRequirementImportChange" :on-remove="handleRequirementImportRemove"
+      >
+        <el-icon class="upload-icon"><UploadFilled /></el-icon>
+        <div class="upload-title">拖拽毕业要求 Excel 到这里</div>
+        <template #tip><div class="muted">导入完成后请刷新页面查看。</div></template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="requirementImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingRequirementImport" @click="submitRequirementImport">开始导入</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 指标点导入 -->
+    <el-dialog v-model="indicatorImportVisible" title="批量导入指标点" width="560px" destroy-on-close>
+      <div class="import-tips">
+        <p>字段：毕业要求编码*、指标点编号*、指标点名称*、指标点描述</p>
+        <div class="import-actions">
+          <el-button @click="handleDownloadIndicatorTemplate">下载模板</el-button>
+        </div>
+      </div>
+      <el-upload
+        v-model:file-list="indicatorImportFileList"
+        drag action="#" :auto-upload="false" :limit="1" accept=".xlsx,.xls"
+        :on-change="handleIndicatorImportChange" :on-remove="handleIndicatorImportRemove"
+      >
+        <el-icon class="upload-icon"><UploadFilled /></el-icon>
+        <div class="upload-title">拖拽指标点 Excel 到这里</div>
+        <template #tip><div class="muted">导入完成后请刷新页面查看。</div></template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="indicatorImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingIndicatorImport" @click="submitIndicatorImport">开始导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -474,8 +526,12 @@ import {
   createIndicator,
   deleteGraduationRequirement,
   deleteIndicator,
+  downloadGraduationRequirementTemplate,
+  downloadIndicatorPointTemplate,
   getGraduationRequirement,
   getIndicator,
+  importGraduationRequirementsFromExcel,
+  importIndicatorPointsFromExcel,
   pageGraduationRequirements,
   pageIndicators,
   updateGraduationRequirement,
@@ -558,6 +614,15 @@ const submittingCollege = ref(false)
 const submittingSchoolYear = ref(false)
 
 const importFileList = ref<UploadUserFile[]>([])
+// 毕业要求导入
+const requirementImportVisible = ref(false)
+const requirementImportFileList = ref<UploadUserFile[]>([])
+const submittingRequirementImport = ref(false)
+// 指标点导入
+const indicatorImportVisible = ref(false)
+const indicatorImportFileList = ref<UploadUserFile[]>([])
+const submittingIndicatorImport = ref(false)
+
 const createFormRef = ref<FormInstance>()
 const requirementFormRef = ref<FormInstance>()
 const indicatorFormRef = ref<FormInstance>()
@@ -1209,6 +1274,119 @@ const openRequirementEditDialog = async (requirement: GraduationRequirementVO) =
   } catch (error) {
     const message = error instanceof Error ? error.message : '毕业要求详情加载失败'
     ElMessage.error(message)
+  }
+}
+
+// ===== 毕业要求导入 =====
+const openRequirementImportDialog = () => {
+  requirementImportFileList.value = []
+  requirementImportVisible.value = true
+}
+
+const handleRequirementImportChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.warning('仅支持 .xlsx/.xls 文件')
+    requirementImportFileList.value = []
+    return
+  }
+  requirementImportFileList.value = uploadFiles.slice(-1)
+}
+
+const handleRequirementImportRemove: UploadProps['onRemove'] = () => {
+  requirementImportFileList.value = []
+}
+
+const handleDownloadRequirementTemplate = async () => {
+  try {
+    const blob = await downloadGraduationRequirementTemplate()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = '毕业要求导入模板.xlsx'; a.click()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('模板已开始下载')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '模板下载失败')
+  }
+}
+
+const submitRequirementImport = async () => {
+  const file = requirementImportFileList.value[0]?.raw
+  if (!file) { ElMessage.warning('请先选择文件'); return }
+  submittingRequirementImport.value = true
+  try {
+    const result = await importGraduationRequirementsFromExcel(file as File)
+    requirementImportVisible.value = false
+    requirementImportFileList.value = []
+    await showRequirementIndicatorImportResult(result as Record<string, unknown>)
+    await Promise.all([loadRequirements(), loadIndicators()])
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '毕业要求导入失败')
+  } finally {
+    submittingRequirementImport.value = false
+  }
+}
+
+// ===== 指标点导入 =====
+const openIndicatorImportDialog = () => {
+  indicatorImportFileList.value = []
+  indicatorImportVisible.value = true
+}
+
+const handleIndicatorImportChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.warning('仅支持 .xlsx/.xls 文件')
+    indicatorImportFileList.value = []
+    return
+  }
+  indicatorImportFileList.value = uploadFiles.slice(-1)
+}
+
+const handleIndicatorImportRemove: UploadProps['onRemove'] = () => {
+  indicatorImportFileList.value = []
+}
+
+const handleDownloadIndicatorTemplate = async () => {
+  try {
+    const blob = await downloadIndicatorPointTemplate()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = '指标点导入模板.xlsx'; a.click()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('模板已开始下载')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '模板下载失败')
+  }
+}
+
+const submitIndicatorImport = async () => {
+  const file = indicatorImportFileList.value[0]?.raw
+  if (!file) { ElMessage.warning('请先选择文件'); return }
+  submittingIndicatorImport.value = true
+  try {
+    const result = await importIndicatorPointsFromExcel(file as File)
+    indicatorImportVisible.value = false
+    indicatorImportFileList.value = []
+    await showRequirementIndicatorImportResult(result as Record<string, unknown>)
+    await loadIndicators()
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '指标点导入失败')
+  } finally {
+    submittingIndicatorImport.value = false
+  }
+}
+
+const showRequirementIndicatorImportResult = async (result: Record<string, unknown>) => {
+  const failCount = Number(result.failCount || 0)
+  if (failCount > 0) {
+    const failDetails = result.failDetails as Array<Record<string, string>> | undefined
+    const preview = (failDetails ?? []).slice(0, 5)
+      .map((item) => `第 ${item.row || '-'} 行：${item.reason || '导入失败'}`).join('\n')
+    await ElMessageBox.alert(
+      `总计 ${result.total} 条，成功 ${result.successCount} 条，失败 ${failCount} 条。${preview ? `\n\n失败示例：\n${preview}` : ''}`,
+      '导入完成', { confirmButtonText: '知道了' }
+    )
+  } else {
+    ElMessage.success(`导入完成，共成功导入 ${result.successCount} 条`)
   }
 }
 
