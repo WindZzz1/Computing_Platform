@@ -1,6 +1,7 @@
 package com.yupi.springbootinit.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
@@ -308,7 +309,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
             }
 
             // 检查是否已绑定
-            if (bindOrRestoreStudent(classId, studentId)) {
+            if (bindOrRestoreStudent(classId, studentId, teachingClass.getClassName())) {
                 bindCount++;
             }
         }
@@ -327,7 +328,20 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
         queryWrapper.eq("teaching_class_id", classId);
         queryWrapper.eq("student_id", studentId);
 
-        return classStudentMapper.delete(queryWrapper) > 0;
+        boolean result = classStudentMapper.delete(queryWrapper) > 0;
+
+        // 解绑后：检查学生是否还绑定在其他教学班，若未绑定则清除 className（使用 UpdateWrapper 强制设 null 避免 NOT_NULL 策略跳过）
+        if (result) {
+            QueryWrapper<ClassStudent> remainingWrapper = new QueryWrapper<>();
+            remainingWrapper.eq("student_id", studentId);
+            if (classStudentMapper.selectCount(remainingWrapper) == 0) {
+                UpdateWrapper<Student> updateWrapper = new UpdateWrapper<>();
+                updateWrapper.eq("id", studentId).set("class_name", null);
+                studentMapper.update(null, updateWrapper);
+            }
+        }
+
+        return result;
     }
 
     @Override
@@ -437,7 +451,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
                 }
 
                 // 检查是否已绑定
-                if (!bindOrRestoreStudent(classId, student.getId())) {
+                if (!bindOrRestoreStudent(classId, student.getId(), teachingClass.getClassName())) {
                     failCount++;
                     java.util.Map<String, String> detail = new java.util.HashMap<>();
                     detail.put("row", String.valueOf(i + 1));
@@ -543,7 +557,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
                     }
 
                     // 检查是否已绑定
-                    if (!bindOrRestoreStudent(classId, student.getId())) {
+                    if (!bindOrRestoreStudent(classId, student.getId(), teachingClass.getClassName())) {
                         failCount++;
                         Map<String, String> detail = new HashMap<>();
                         detail.put("row", String.valueOf(i + 2));
@@ -581,18 +595,27 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
         }
     }
 
-    private boolean bindOrRestoreStudent(Long classId, Long studentId) {
+    private boolean bindOrRestoreStudent(Long classId, Long studentId, String className) {
         ClassStudent existingRelation = classStudentMapper.selectAnyByClassIdAndStudentId(classId, studentId);
+        boolean bound;
         if (existingRelation != null) {
             if (existingRelation.getIsDeleted() != null && existingRelation.getIsDeleted() == 0) {
                 return false;
             }
-            return classStudentMapper.restoreById(existingRelation.getId()) > 0;
+            bound = classStudentMapper.restoreById(existingRelation.getId()) > 0;
+        } else {
+            ClassStudent classStudent = new ClassStudent();
+            classStudent.setClassId(classId);
+            classStudent.setStudentId(studentId);
+            bound = classStudentMapper.insert(classStudent) > 0;
         }
-
-        ClassStudent classStudent = new ClassStudent();
-        classStudent.setClassId(classId);
-        classStudent.setStudentId(studentId);
-        return classStudentMapper.insert(classStudent) > 0;
+        // 绑定成功后回填学生的班级字段（学生导入时不带班级，绑定教学班时再回填）
+        if (bound && StringUtils.isNotBlank(className)) {
+            Student updateStudent = new Student();
+            updateStudent.setId(studentId);
+            updateStudent.setClassName(className);
+            studentMapper.updateById(updateStudent);
+        }
+        return bound;
     }
 }

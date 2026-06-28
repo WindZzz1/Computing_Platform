@@ -513,6 +513,7 @@ import type {
   TeachingClassUpdateRequest,
   TeachingClassVO
 } from '@/api/backend'
+import { normalizePageFields } from '@/api/backend'
 import { useUserStore } from '@/stores/user'
 
 type ClassFormState = TeachingClassCreateRequest
@@ -1302,9 +1303,10 @@ const loadStudentPool = async (page = studentQuery.current || 1) => {
       studentName: studentQuery.studentName?.trim() || undefined
     })
     studentPickerRows.value = result.records
-    studentPickerTotal.value = result.total
-    studentQuery.current = result.current
-    studentQuery.pageSize = result.size
+    const normalized = normalizePageFields(result, { current: page, pageSize: studentQuery.pageSize })
+    studentPickerTotal.value = normalized.total
+    studentQuery.current = normalized.current
+    studentQuery.pageSize = normalized.pageSize
   } catch (error) {
     const message = error instanceof Error ? error.message : '系统学生库加载失败'
     ElMessage.error(message)
@@ -1499,9 +1501,10 @@ const loadGradeEntries = async (page = gradeQuery.current || 1) => {
       pageSize: gradeQuery.pageSize
     })
     gradeRows.value = result.records
-    gradeTotal.value = result.total
-    gradeQuery.current = result.current
-    gradeQuery.pageSize = result.size
+    const normalized = normalizePageFields(result, { current: page, pageSize: gradeQuery.pageSize })
+    gradeTotal.value = normalized.total
+    gradeQuery.current = normalized.current
+    gradeQuery.pageSize = normalized.pageSize
   } catch (error) {
     const message = error instanceof Error ? error.message : '成绩数据加载失败'
     ElMessage.error(message)

@@ -25,7 +25,4 @@ public class StudentExcel {
     @ExcelProperty(value = "专业代码*", index = 3)
     private String majorCode;
 
-    @ExcelProperty(value = "班级", index = 4)
-    private String className;
-
 }
