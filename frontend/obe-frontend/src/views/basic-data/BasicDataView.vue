@@ -516,6 +516,7 @@ import type {
   StudentVO,
   TeachingClassVO
 } from '@/api/backend'
+import { normalizePageFields } from '@/api/backend'
 
 const userStore = useUserStore()
 const courses = ref<CourseVO[]>([])
@@ -706,8 +707,7 @@ const loadStudents = async () => {
       majorId: studentQuery.majorId || undefined
     })
     studentRows.value = page.records
-    // 后端会把 Long 序列化成字符串（如 "30"），el-pagination 的 total 需要 number，否则分页栏失效
-    studentTotal.value = Number(page.total) || 0
+    studentTotal.value = normalizePageFields(page, { current: studentQuery.current, pageSize: studentQuery.pageSize }).total
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '加载学生列表失败')
   } finally {
@@ -853,7 +853,7 @@ const submitStudentForm = async () => {
     const payload = {
       studentNo: studentForm.studentNo.trim(),
       studentName: studentForm.studentName.trim(),
-      grade: studentForm.grade.trim(),
+      grade: studentForm.grade?.trim() ?? '',
       majorId: Number(studentForm.majorId)
     }
     if (editingStudent.value) {

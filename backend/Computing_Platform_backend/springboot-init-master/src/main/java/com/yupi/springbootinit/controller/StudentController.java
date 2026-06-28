@@ -45,7 +45,7 @@ public class StudentController {
      * @return 学生分页结果
      */
     @PostMapping("/page")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    @AuthCheck(anyRole = SysUserConstant.ROLE_EDU + "," + SysUserConstant.ROLE_TEACHER)
     public BaseResponse<PageResultVO<StudentVO>> pageStudents(@RequestBody StudentQueryRequest studentQueryRequest) {
         Page<StudentVO> studentPage = studentService.pageStudents(studentQueryRequest);
         return ResultUtils.success(PageResultVO.from(studentPage));

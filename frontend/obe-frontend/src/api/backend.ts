@@ -20,6 +20,24 @@ export interface PageQuery {
   pageSize?: number
 }
 
+/**
+ * 将后端 Long 序列化为字符串的分页字段统一转换为 number。
+ * 后端 JsonConfig 全局将 Long 序列化为字符串（防止 JS 精度丢失），
+ * 但分页组件的 total/current/size 必须是 number 才能正常工作。
+ */
+export function normalizePageFields(
+  response: { total: unknown; current?: unknown; size?: unknown },
+  defaults?: { current?: number; pageSize?: number }
+): { total: number; current: number; pageSize: number } {
+  const fallbackCurrent = defaults?.current ?? 1
+  const fallbackPageSize = defaults?.pageSize ?? 10
+  return {
+    total: Number(response.total) || 0,
+    current: Number(response.current) || fallbackCurrent,
+    pageSize: Number(response.size) || fallbackPageSize,
+  }
+}
+
 export interface SysUserLoginRequest {
   username: string
   password: string

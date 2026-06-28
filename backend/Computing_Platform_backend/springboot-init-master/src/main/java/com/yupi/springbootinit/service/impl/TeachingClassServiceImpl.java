@@ -1,6 +1,7 @@
 package com.yupi.springbootinit.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
@@ -327,7 +328,20 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
         queryWrapper.eq("teaching_class_id", classId);
         queryWrapper.eq("student_id", studentId);
 
-        return classStudentMapper.delete(queryWrapper) > 0;
+        boolean result = classStudentMapper.delete(queryWrapper) > 0;
+
+        // 解绑后：检查学生是否还绑定在其他教学班，若未绑定则清除 className（使用 UpdateWrapper 强制设 null 避免 NOT_NULL 策略跳过）
+        if (result) {
+            QueryWrapper<ClassStudent> remainingWrapper = new QueryWrapper<>();
+            remainingWrapper.eq("student_id", studentId);
+            if (classStudentMapper.selectCount(remainingWrapper) == 0) {
+                UpdateWrapper<Student> updateWrapper = new UpdateWrapper<>();
+                updateWrapper.eq("id", studentId).set("class_name", null);
+                studentMapper.update(null, updateWrapper);
+            }
+        }
+
+        return result;
     }
 
     @Override
