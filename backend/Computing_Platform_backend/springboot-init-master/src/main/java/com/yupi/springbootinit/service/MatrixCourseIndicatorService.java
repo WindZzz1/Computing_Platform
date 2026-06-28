@@ -6,8 +6,10 @@ import com.yupi.springbootinit.model.dto.matrix.MatrixCourseIndicatorSaveRequest
 import com.yupi.springbootinit.model.entity.MatrixCourseIndicator;
 import com.yupi.springbootinit.model.vo.MatrixConfigVO;
 import com.yupi.springbootinit.model.vo.MatrixCourseIndicatorVO;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 /**
  * 宏观支撑矩阵服务
@@ -41,6 +43,21 @@ public interface MatrixCourseIndicatorService extends IService<MatrixCourseIndic
      * @return 校验结果
      */
     WeightCheckResult checkMatrixWeights(MatrixCourseIndicatorSaveRequest saveRequest);
+
+    /**
+     * 通过Excel批量导入宏观支撑矩阵
+     *
+     * @param file Excel文件
+     * @return 导入结果 { total, successCount, failCount, failDetails }
+     */
+    Map<String, Object> importMatrixFromExcel(MultipartFile file);
+
+    /**
+     * 生成宏观支撑矩阵导入模板
+     *
+     * @return Excel文件字节数组
+     */
+    byte[] generateMatrixTemplate();
 
     /**
      * 权重校验结果

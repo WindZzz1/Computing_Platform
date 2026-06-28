@@ -13,12 +13,15 @@ import com.yupi.springbootinit.model.vo.IndicatorPointVO;
 import com.yupi.springbootinit.model.vo.PageResultVO;
 import com.yupi.springbootinit.service.IndicatorPointService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 /**
  * 二级指标点接口
@@ -96,5 +99,38 @@ public class IndicatorPointController {
     public BaseResponse<PageResultVO<IndicatorPointVO>> pageIndicatorPoint(@RequestBody IndicatorPointQueryRequest indicatorPointQueryRequest) {
         Page<IndicatorPointVO> indicatorPointPage = indicatorPointService.pageIndicatorPoint(indicatorPointQueryRequest);
         return ResultUtils.success(PageResultVO.from(indicatorPointPage));
+    }
+
+    /**
+     * 通过Excel批量导入指标点
+     */
+    @PostMapping("/import/excel")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_LEADER)
+    public BaseResponse<Map<String, Object>> importIndicatorPointsFromExcel(@RequestParam("file") MultipartFile file) {
+        Map<String, Object> result = indicatorPointService.importIndicatorPointsFromExcel(file);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 下载指标点导入模板
+     */
+    @GetMapping("/template")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_LEADER)
+    @com.yupi.springbootinit.annotation.NoLog
+    public void downloadIndicatorPointTemplate(HttpServletResponse response) throws Exception {
+        String filename = "指标点导入模板.xlsx";
+        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
+                .replaceAll("\\+", "%20");
+
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFilename);
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setHeader("Expires", "0");
+
+        byte[] templateBytes = indicatorPointService.generateIndicatorPointTemplate();
+        ServletOutputStream outputStream = response.getOutputStream();
+        outputStream.write(templateBytes);
+        outputStream.flush();
     }
 }
