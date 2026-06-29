@@ -623,19 +623,6 @@ const routeGrade = computed(() => {
   return typeof value === 'string' ? value.trim() : ''
 })
 
-const mergeMajorOptions = (items: Array<{ id?: number | null; majorId?: number | null; majorName?: string | null }>) => {
-  const majorMap = new Map(majors.value.map((item) => [item.id, item.name]))
-  items.forEach((item) => {
-    const majorId = Number(item.id ?? item.majorId)
-    const majorName = item.majorName?.trim()
-    if (!Number.isFinite(majorId) || !majorName) {
-      return
-    }
-    majorMap.set(majorId, majorName)
-  })
-  majors.value = Array.from(majorMap.entries()).map(([id, name]) => ({ id, name }))
-}
-
 const majorGuideMessage = computed(() => {
   if (!canMajorQueryData.value) {
     return ''
@@ -1180,8 +1167,6 @@ async function loadBaseOptions() {
     majors.value = Array.from(majorMap.entries()).map(([id, name]) => ({ id, name }))
     schoolYears.value = schoolYearList
     teachingClasses.value = classPage.records
-    mergeMajorOptions(coursePage.records)
-    mergeMajorOptions(requirementPage.records)
 
     const routeMatchedClass = routeClassId.value
       ? teacherTeachingClasses.value.find((item) => item.id === routeClassId.value)
