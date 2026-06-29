@@ -1422,7 +1422,10 @@ function scrollToTop() {
 }
 
 const openDoc = () => {
-  window.open(apiDocUrl, '_blank')
+  const docWindow = window.open(apiDocUrl, '_blank', 'noopener,noreferrer')
+  if (docWindow) {
+    docWindow.opener = null
+  }
 }
 
 const renderPieChart = () => {
