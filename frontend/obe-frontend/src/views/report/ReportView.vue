@@ -474,7 +474,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
-import * as XLSX from 'xlsx'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { getCourseAchievementCalculationStatus } from '@/api/calculation'
@@ -1629,7 +1628,7 @@ const handleRawScoreSizeChange = (size: number) => {
   void handleLoadRawScores(1)
 }
 
-const exportMatrixLedgerExcel = () => {
+const exportMatrixLedgerExcel = async () => {
   if (!matrixLedgerRows.value.length) {
     ElMessage.warning('当前专业还没有矩阵台账数据，暂时无法导出')
     return
@@ -1646,6 +1645,7 @@ const exportMatrixLedgerExcel = () => {
     item.totalWeight
   ])
 
+  const XLSX = await import('xlsx')
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
   worksheet['!cols'] = [{ wch: 18 }, { wch: 14 }, { wch: 24 }, { wch: 14 }, { wch: 24 }, { wch: 28 }, { wch: 10 }]
   const workbook = XLSX.utils.book_new()
