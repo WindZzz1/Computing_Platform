@@ -9,8 +9,14 @@ import com.yupi.springbootinit.model.vo.MatrixConfigVO;
 import com.yupi.springbootinit.service.MatrixCourseIndicatorService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 /**
  * 宏观支撑矩阵接口
@@ -77,6 +83,39 @@ public class MatrixCourseIndicatorController {
         vo.setColumnSums(result.getColumnSums());
 
         return ResultUtils.success(vo);
+    }
+
+    /**
+     * 通过Excel批量导入宏观支撑矩阵
+     */
+    @PostMapping("/import/excel")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_LEADER)
+    public BaseResponse<Map<String, Object>> importMatrixFromExcel(@RequestParam("file") MultipartFile file) {
+        Map<String, Object> result = matrixCourseIndicatorService.importMatrixFromExcel(file);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 下载宏观支撑矩阵导入模板
+     */
+    @GetMapping("/template")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_LEADER)
+    @com.yupi.springbootinit.annotation.NoLog
+    public void downloadMatrixTemplate(HttpServletResponse response) throws Exception {
+        String filename = "宏观支撑矩阵导入模板.xlsx";
+        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
+                .replaceAll("\\+", "%20");
+
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFilename);
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setHeader("Expires", "0");
+
+        byte[] templateBytes = matrixCourseIndicatorService.generateMatrixTemplate();
+        ServletOutputStream outputStream = response.getOutputStream();
+        outputStream.write(templateBytes);
+        outputStream.flush();
     }
 
     /**
