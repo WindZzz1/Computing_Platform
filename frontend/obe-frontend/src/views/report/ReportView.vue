@@ -1168,6 +1168,14 @@ const downloadBlob = (blob: Blob, fileName: string) => {
   window.URL.revokeObjectURL(url)
 }
 
+const escapeHtml = (value: unknown) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
 const handleDownloadCourseTemplate = async () => {
   courseActionLoading.value = true
   try {
@@ -1670,13 +1678,13 @@ const exportMatrixLedgerPdf = () => {
     .map(
       (item) => `
         <tr>
-          <td>${item.majorName}</td>
-          <td>${item.courseCode}</td>
-          <td>${item.courseName}</td>
-          <td>${item.indicatorCode}</td>
-          <td>${item.indicatorName}</td>
-          <td>${item.requirement}</td>
-          <td>${item.totalWeight}</td>
+          <td>${escapeHtml(item.majorName)}</td>
+          <td>${escapeHtml(item.courseCode)}</td>
+          <td>${escapeHtml(item.courseName)}</td>
+          <td>${escapeHtml(item.indicatorCode)}</td>
+          <td>${escapeHtml(item.indicatorName)}</td>
+          <td>${escapeHtml(item.requirement)}</td>
+          <td>${escapeHtml(item.totalWeight)}</td>
         </tr>
       `
     )
@@ -1689,12 +1697,13 @@ const exportMatrixLedgerPdf = () => {
   }
 
   const title = `${selectedMajor.value?.majorName || '专业'} - 宏观支撑矩阵台账`
+  const escapedTitle = escapeHtml(title)
   printWindow.document.write(`
     <!doctype html>
     <html lang="zh-CN">
       <head>
         <meta charset="UTF-8" />
-        <title>${title}</title>
+        <title>${escapedTitle}</title>
         <style>
           body {
             font-family: "Microsoft YaHei", sans-serif;
@@ -1726,7 +1735,7 @@ const exportMatrixLedgerPdf = () => {
         </style>
       </head>
       <body>
-        <h1>${title}</h1>
+        <h1>${escapedTitle}</h1>
         <p>共 ${matrixLedgerRows.value.length} 条矩阵台账记录，可在打印窗口中直接另存为 PDF。</p>
         <table>
           <thead>
