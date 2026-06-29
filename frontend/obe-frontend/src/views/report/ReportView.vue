@@ -474,6 +474,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
+import * as XLSX from 'xlsx'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { getCourseAchievementCalculationStatus } from '@/api/calculation'
@@ -1645,12 +1646,17 @@ const exportMatrixLedgerExcel = () => {
     item.totalWeight
   ])
 
-  const csvContent = [headers, ...rows]
-    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\r\n')
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  worksheet['!cols'] = [{ wch: 18 }, { wch: 14 }, { wch: 24 }, { wch: 14 }, { wch: 24 }, { wch: 28 }, { wch: 10 }]
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, '宏观支撑矩阵台账')
+  const workbookBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
 
-  const fileName = `${selectedMajor.value?.majorName || '专业'}-宏观支撑矩阵台账.csv`
-  downloadBlob(new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }), fileName)
+  const fileName = `${selectedMajor.value?.majorName || '专业'}-宏观支撑矩阵台账.xlsx`
+  downloadBlob(
+    new Blob([workbookBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    fileName
+  )
   ElMessage.success('矩阵台账 Excel 已开始下载')
 }
 
