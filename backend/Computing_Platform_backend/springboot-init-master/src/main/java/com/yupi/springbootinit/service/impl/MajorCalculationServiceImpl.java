@@ -64,6 +64,21 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
     @Resource
     private GradesheetStatusHelper gradesheetStatusHelper;
 
+    @Resource
+    private StudentObjectiveAchievementMapper studentObjectiveAchievementMapper;
+
+    @Resource
+    private WeightObjectiveIndicatorMapper weightObjectiveIndicatorMapper;
+
+    @Resource
+    private ClassStudentMapper classStudentMapper;
+
+    @Resource
+    private StudentMapper studentMapper;
+
+    @Resource
+    private StudentMajorAchievementMapper studentMajorAchievementMapper;
+
     private static final int SCALE = 4; // 计算精度：4位小数
     private static final BigDecimal THRESHOLD = new BigDecimal("0.7"); // 达成度阈值
 
@@ -203,6 +218,10 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
             // 计算三级达成度
             Map<String, Object> achievementStats = calculateLevelThreeAchievement(majorId, termId, grade, teachingClasses);
             result.putAll(achievementStats);
+
+            // 计算每个学生的专业达成度（学生×指标点）
+            Map<String, Object> studentStats = calculateStudentMajorAchievement(majorId, termId, grade, teachingClasses);
+            result.putAll(studentStats);
 
             result.put("success", true);
             result.put("calcStatus", 2);
@@ -468,6 +487,165 @@ public class MajorCalculationServiceImpl implements MajorCalculationService {
 
         log.info("三级达成度计算完成：专业ID={}, 指标点数={}, 平均达成度={}, 是否满足毕业要求={}",
                 majorId, stats.get("totalIndicators"), stats.get("averageAchievement"), stats.get("meetsGraduationRequirement"));
+
+        return stats;
+    }
+
+    /**
+     * 计算每个学生的专业达成度（学生×指标点），全程保留学生维度。
+     * 公式：
+     *   学生 s 在课程 c 指标点 X 达成度 C(s,c,X) = Σ( s 在 c 的目标 j 达成度 × wjk ) / Σ( wjk )
+     *   学生 s 专业指标点达成度     M(s,X)   = Σ( C(s,c,X) × Wc ) / Σ( Wc )
+     * 整体达成度（各指标点算术平均）不在此落表，导出时从明细聚合。
+     */
+    private Map<String, Object> calculateStudentMajorAchievement(
+            Long majorId, Long termId, String grade, List<TeachingClass> teachingClasses) {
+
+        log.info("开始计算学生专业达成度：专业ID={}, 学年学期ID={}, 年级={}", majorId, termId, grade);
+
+        List<Long> classIds = teachingClasses.stream()
+                .map(TeachingClass::getId).collect(Collectors.toList());
+        List<Long> courseIds = teachingClasses.stream()
+                .map(TeachingClass::getCourseId).distinct().collect(Collectors.toList());
+
+        // 班级 -> 课程
+        Map<Long, Long> classToCourse = teachingClasses.stream()
+                .collect(Collectors.toMap(TeachingClass::getId, TeachingClass::getCourseId, (a, b) -> a));
+
+        // 宏观支撑矩阵（指标点 -> 支撑课程 + Wc）
+        QueryWrapper<MatrixCourseIndicator> matrixQuery = new QueryWrapper<>();
+        matrixQuery.eq("major_id", majorId).in("course_id", courseIds);
+        Map<Long, List<MatrixCourseIndicator>> indicatorMatricesMap = matrixCourseIndicatorMapper.selectList(matrixQuery)
+                .stream().collect(Collectors.groupingBy(MatrixCourseIndicator::getIndicatorId));
+
+        // 指标点 / 毕业要求元信息
+        List<Long> indicatorIds = new ArrayList<>(indicatorMatricesMap.keySet());
+        Map<Long, IndicatorPoint> indicatorMap = indicatorIds.isEmpty() ? Collections.emptyMap()
+                : indicatorPointMapper.selectBatchIds(indicatorIds).stream()
+                .collect(Collectors.toMap(IndicatorPoint::getId, i -> i));
+        List<Long> requirementIds = indicatorMap.values().stream()
+                .map(IndicatorPoint::getRequirementId).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        Map<Long, GraduationRequirement> requirementMap = requirementIds.isEmpty() ? Collections.emptyMap()
+                : graduationRequirementMapper.selectBatchIds(requirementIds).stream()
+                .collect(Collectors.toMap(GraduationRequirement::getId, r -> r));
+
+        // 课程目标-指标点内部权重（课程 -> 权重列表）
+        QueryWrapper<WeightObjectiveIndicator> weightQuery = new QueryWrapper<>();
+        weightQuery.in("course_id", courseIds);
+        Map<Long, List<WeightObjectiveIndicator>> weightByCourse = weightObjectiveIndicatorMapper.selectList(weightQuery)
+                .stream().collect(Collectors.groupingBy(WeightObjectiveIndicator::getCourseId));
+
+        // 学生一级达成度：studentId -> courseId -> objectiveId -> achievement
+        QueryWrapper<StudentObjectiveAchievement> soaQuery = new QueryWrapper<>();
+        soaQuery.in("teaching_class_id", classIds);
+        List<StudentObjectiveAchievement> soaList = studentObjectiveAchievementMapper.selectList(soaQuery);
+
+        Map<Long, Map<Long, Map<Long, BigDecimal>>> studentObjectiveMap = new HashMap<>();
+        for (StudentObjectiveAchievement soa : soaList) {
+            if (soa.getStudentId() == null || soa.getClassId() == null
+                    || soa.getObjectiveId() == null || soa.getAchievement() == null) {
+                continue;
+            }
+            Long courseId = classToCourse.get(soa.getClassId());
+            if (courseId == null) {
+                continue;
+            }
+            studentObjectiveMap
+                    .computeIfAbsent(soa.getStudentId(), k -> new HashMap<>())
+                    .computeIfAbsent(courseId, k -> new HashMap<>())
+                    .put(soa.getObjectiveId(), soa.getAchievement());
+        }
+
+        // 计算每个学生每个指标点
+        Date now = new Date();
+        List<StudentMajorAchievement> toInsert = new ArrayList<>();
+
+        for (Map.Entry<Long, Map<Long, Map<Long, BigDecimal>>> stuEntry : studentObjectiveMap.entrySet()) {
+            Long studentId = stuEntry.getKey();
+            Map<Long, Map<Long, BigDecimal>> studentByCourse = stuEntry.getValue();
+
+            for (Map.Entry<Long, List<MatrixCourseIndicator>> indEntry : indicatorMatricesMap.entrySet()) {
+                Long indicatorId = indEntry.getKey();
+                IndicatorPoint indicator = indicatorMap.get(indicatorId);
+                if (indicator == null) {
+                    continue;
+                }
+
+                BigDecimal numerator = BigDecimal.ZERO;
+                BigDecimal denominator = BigDecimal.ZERO;
+
+                for (MatrixCourseIndicator matrix : indEntry.getValue()) {
+                    Long courseId = matrix.getCourseId();
+                    Map<Long, BigDecimal> objAch = studentByCourse.get(courseId);
+                    if (objAch == null || objAch.isEmpty()) {
+                        continue;
+                    }
+                    List<WeightObjectiveIndicator> indicatorWeights = weightByCourse
+                            .getOrDefault(courseId, Collections.emptyList()).stream()
+                            .filter(w -> indicatorId.equals(w.getIndicatorId()))
+                            .collect(Collectors.toList());
+                    if (indicatorWeights.isEmpty()) {
+                        continue;
+                    }
+
+                    // C(s,c,X) = Σ(学生该目标达成度 × wjk) / Σ(wjk)
+                    BigDecimal cNum = BigDecimal.ZERO;
+                    BigDecimal cDen = BigDecimal.ZERO;
+                    for (WeightObjectiveIndicator w : indicatorWeights) {
+                        BigDecimal ach = objAch.get(w.getObjectiveId());
+                        if (ach == null) {
+                            continue;
+                        }
+                        cNum = cNum.add(ach.multiply(w.getInnerWeight()));
+                        cDen = cDen.add(w.getInnerWeight());
+                    }
+                    if (cDen.compareTo(BigDecimal.ZERO) <= 0) {
+                        continue;
+                    }
+                    BigDecimal cAchievement = cNum.divide(cDen, SCALE, RoundingMode.HALF_UP);
+
+                    // 按 Wc 聚合到指标点
+                    numerator = numerator.add(cAchievement.multiply(matrix.getTotalWeight()));
+                    denominator = denominator.add(matrix.getTotalWeight());
+                }
+
+                if (denominator.compareTo(BigDecimal.ZERO) <= 0) {
+                    continue;
+                }
+                BigDecimal achievement = numerator.divide(denominator, SCALE, RoundingMode.HALF_UP);
+
+                StudentMajorAchievement sma = new StudentMajorAchievement();
+                sma.setStudentId(studentId);
+                sma.setMajorId(majorId);
+                sma.setTermId(termId);
+                sma.setGrade(grade);
+                sma.setIndicatorId(indicatorId);
+                sma.setIndicatorCode(indicator.getIndicatorCode());
+                sma.setIndicatorName(indicator.getIndicatorName());
+                sma.setRequirementId(indicator.getRequirementId());
+                GraduationRequirement req = requirementMap.get(indicator.getRequirementId());
+                if (req != null) {
+                    sma.setRequirementCode(req.getRequirementCode());
+                    sma.setRequirementName(req.getRequirementName());
+                }
+                sma.setAchievement(achievement);
+                sma.setCalculateTime(now);
+                toInsert.add(sma);
+            }
+        }
+
+        // 删旧 + 插新
+        studentMajorAchievementMapper.deleteByMajorTermGradePhysically(majorId, termId, grade);
+        for (StudentMajorAchievement sma : toInsert) {
+            studentMajorAchievementMapper.insert(sma);
+        }
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("studentAchievementCount", toInsert.size());
+        stats.put("studentCount", toInsert.stream().map(StudentMajorAchievement::getStudentId).distinct().count());
+
+        log.info("学生专业达成度计算完成：专业ID={}, 学生数={}, 记录数={}",
+                majorId, stats.get("studentCount"), stats.get("studentAchievementCount"));
 
         return stats;
     }

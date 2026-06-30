@@ -12,47 +12,8 @@
       class="summary-alert"
     />
 
-    <section class="summary-metrics">
-      <el-card shadow="never" class="metric-card">
-        <span class="metric-label">可用功能</span>
-        <strong class="metric-value">{{ availableReportCount }}</strong>
-        <span class="metric-tip">当前角色可直接继续接的接口或导出能力</span>
-      </el-card>
-      <el-card shadow="never" class="metric-card">
-        <span class="metric-label">矩阵准备度</span>
-        <strong class="metric-value">{{ readyIndicatorCount }}/{{ indicatorRows.length || 0 }}</strong>
-        <span class="metric-tip">当前专业下已满足列权重要求的指标点数量</span>
-      </el-card>
-    </section>
-
-    <section class="page-grid top-grid">
-      <div class="panel" :class="canUseMajorPrep ? 'span-5' : 'span-12'">
-        <div class="toolbar">
-          <h3 class="panel-title">接口状态概览</h3>
-          <el-tag type="info" effect="plain">{{ user.roleName }}</el-tag>
-        </div>
-        <div class="status-overview-list">
-          <div
-            v-for="item in reportCatalog"
-            :key="item.name"
-            class="status-overview-item"
-            :class="`status-overview-item--${item.tagType}`"
-          >
-            <div class="status-overview-main">
-              <div class="status-overview-title-row">
-                <span class="status-overview-title">{{ item.name }}</span>
-                <span class="status-overview-role">{{ item.targetRole }}</span>
-              </div>
-              <p class="status-overview-tip">{{ item.tip }}</p>
-            </div>
-            <el-tag :type="item.tagType" effect="light" class="status-overview-tag">
-              {{ item.statusText }}
-            </el-tag>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="canUseMajorPrep" class="panel span-7">
+    <section v-if="canUseMajorPrep" class="page-grid top-grid">
+      <div class="panel span-12">
         <div class="toolbar">
           <h3 class="panel-title">指标点支撑情况</h3>
           <el-select v-model="selectedMajorId" style="width: 260px" placeholder="选择专业" @change="reloadMajorSupportData">
@@ -245,16 +206,6 @@
       </div>
 
       <div v-if="majorRadarData || majorPenetrationData" class="result-grid">
-        <el-card v-if="majorRadarData" shadow="never" class="result-card">
-          <template #header>雷达图接口返回摘要</template>
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="专业">{{ majorRadarData.majorName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="年级">{{ majorRadarData.grade || selectedGrade || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="指标点数">{{ majorRadarData.indicatorPoints?.length ?? 0 }}</el-descriptions-item>
-            <el-descriptions-item label="生成时间">{{ majorRadarData.generatedTime || '-' }}</el-descriptions-item>
-          </el-descriptions>
-        </el-card>
-
         <el-card v-if="majorRadarData" shadow="never" class="result-card wide-result-card">
           <template #header>雷达图指标点结果预览</template>
           <div v-if="majorRadarRows.length" ref="majorRadarChartRef" class="radar-chart-box"></div>
@@ -524,14 +475,6 @@ type IndicatorSupportRow = {
   ready: boolean
 }
 
-type ReportCatalogRow = {
-  name: string
-  targetRole: string
-  statusText: string
-  tagType: 'success' | 'warning' | 'info'
-  tip: string
-}
-
 type MatrixLedgerRow = {
   majorName: string
   courseCode: string
@@ -624,8 +567,6 @@ const selectedCourseClassLabel = computed(() => {
   return selectedClassId.value ? `教学班 ${selectedClassId.value}` : '-'
 })
 const canSubmitMajorRequest = computed(() => Boolean(selectedMajorId.value && selectedTermId.value && selectedGrade.value))
-const availableReportCount = computed(() => reportCatalog.value.filter((item) => item.tagType === 'success').length)
-const readyIndicatorCount = computed(() => indicatorRows.value.filter((item) => item.ready).length)
 const courseReportPrep = computed(() => ({
   objectiveCount: courseObjectives.value.length,
   assessmentCount: rawScoreAssessmentPoints.value.length,
@@ -852,43 +793,6 @@ const roleSummary = computed<StatusState>(() => {
     type: 'info'
   }
 })
-
-const reportCatalog = computed<ReportCatalogRow[]>(() => [
-  {
-    name: '课程目标达成情况评价表',
-    targetRole: '课程教师、管理员',
-    statusText: canUseCourseReport.value ? '可调用' : '当前角色不可调',
-    tagType: canUseCourseReport.value ? 'success' : 'info',
-    tip: canUseCourseReport.value
-      ? '模板下载、报表数据、Excel/PDF 导出均已实现，可直接使用。'
-      : '当前角色暂时不能使用这组接口。'
-  },
-  {
-    name: '专业毕业要求达成度报告',
-    targetRole: '专业负责人、教务',
-    statusText: canUseMajorReport.value ? '可调用' : '当前角色不可调',
-    tagType: canUseMajorReport.value ? 'success' : 'info',
-    tip: canUseMajorReport.value
-      ? '雷达图、穿透式台账、达成度 Excel/PDF 导出均已实现，可直接使用。'
-      : '当前角色可先看准备状态，不建议直接调用该接口。'
-  },
-  {
-    name: '宏观支撑矩阵台账',
-    targetRole: '管理员',
-    statusText: canUseMatrixLedger.value ? '前端可导出' : '当前角色不可调',
-    tagType: canUseMatrixLedger.value ? 'success' : 'info',
-    tip: '该能力使用当前矩阵配置数据做前端导出，不依赖额外后端报表服务。'
-  },
-  {
-    name: '学生考核点原始成绩明细',
-    targetRole: '课程教师、管理员',
-    statusText: canUseCourseReport.value ? '可查询' : '当前角色不可调',
-    tagType: canUseCourseReport.value ? 'success' : 'info',
-    tip: canUseCourseReport.value
-      ? '已接入真实成绩查询接口，支持按教学班预览并导出 CSV。'
-      : '当前角色暂时不能直接查询这组原始成绩明细。'
-  }
-])
 
 const indicatorRows = computed<IndicatorSupportRow[]>(() => {
   const config = matrixConfig.value

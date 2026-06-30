@@ -48,7 +48,10 @@
       <div class="panel span-7">
         <div class="toolbar">
           <h3 class="panel-title">内部贡献权重</h3>
-          <el-tag :type="weightCheckValid ? 'success' : 'warning'">{{ weightCheckValid ? '当前校验已通过' : '当前校验待处理' }}</el-tag>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <el-tag :type="weightCheckValid ? 'success' : 'warning'">{{ weightCheckValid ? '当前校验已通过' : '当前校验待处理' }}</el-tag>
+            <el-button :disabled="!currentCourseId || !objectives.length" @click="openWeightImportDialog">批量导入</el-button>
+          </div>
         </div>
         <el-alert
           :type="weightCheckValid ? 'success' : 'warning'"
@@ -189,6 +192,36 @@
       </template>
     </el-dialog>
 
+    <!-- 内部贡献权重批量导入 -->
+    <el-dialog v-model="weightImportVisible" title="批量导入内部贡献权重" width="560px" destroy-on-close>
+      <div class="import-tips">
+        <p>支持上传 <code>.xlsx</code> / <code>.xls</code>，字段：课程代码*、课程目标编号*、指标点编号*、内部权重*。<br/>约束：同一课程下，支撑同一指标点的所有课程目标内部权重之和必须为 1.0。</p>
+        <div class="import-actions">
+          <el-button @click="handleDownloadWeightTemplate">下载模板</el-button>
+        </div>
+      </div>
+      <el-upload
+        v-model:file-list="weightImportFileList"
+        drag
+        action="#"
+        :auto-upload="false"
+        :limit="1"
+        accept=".xlsx,.xls"
+        :on-change="handleWeightImportChange"
+        :on-remove="handleWeightImportRemove"
+      >
+        <el-icon class="upload-icon"><UploadFilled /></el-icon>
+        <div class="upload-title">拖拽内部贡献权重 Excel 到这里，或点击选择文件</div>
+        <template #tip>
+          <div class="muted">导入完成后会自动刷新权重矩阵。</div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="weightImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingWeightImport" @click="submitWeightImport">开始导入</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="objectiveDialogVisible" :title="objectiveEditing ? '编辑课程目标' : '新增课程目标'" width="520px" destroy-on-close>
       <el-form ref="objectiveFormRef" :model="objectiveForm" :rules="objectiveRules" label-width="88px">
         <el-form-item label="目标编号" prop="objCode">
@@ -257,6 +290,8 @@ import {
   getCourseObjective,
   importAssessmentPointsFromExcel,
   importCourseObjectivesFromExcel,
+  importObjectiveIndicatorWeightsFromExcel,
+  downloadObjectiveWeightTemplate,
   listAssessmentPoints,
   listAvailableIndicators,
   listCourseObjectives,
@@ -350,6 +385,11 @@ const submittingObjectiveImport = ref(false)
 const assessmentImportVisible = ref(false)
 const assessmentImportFileList = ref<UploadProps['fileList']>([])
 const submittingAssessmentImport = ref(false)
+
+// 内部贡献权重导入
+const weightImportVisible = ref(false)
+const weightImportFileList = ref<UploadProps['fileList']>([])
+const submittingWeightImport = ref(false)
 
 const assessmentRules: FormRules<AssessmentPointCreateRequest> = {
   pointCode: [{ required: true, message: '请输入考核点编号', trigger: 'blur' }],
@@ -768,6 +808,63 @@ const submitAssessmentImport = async () => {
     ElMessage.error(message)
   } finally {
     submittingAssessmentImport.value = false
+  }
+}
+
+// ===== 内部贡献权重批量导入 =====
+const openWeightImportDialog = () => {
+  weightImportFileList.value = []
+  weightImportVisible.value = true
+}
+
+const handleWeightImportChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.warning('仅支持上传以 .xlsx 或 .xls 结尾的 Excel 文件')
+    return
+  }
+  weightImportFileList.value = uploadFiles.slice(-1)
+}
+
+const handleWeightImportRemove: UploadProps['onRemove'] = () => {
+  weightImportFileList.value = []
+}
+
+const handleDownloadWeightTemplate = async () => {
+  try {
+    const blob = await downloadObjectiveWeightTemplate()
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = '内部贡献权重导入模板.xlsx'
+    link.click()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('模板已开始下载')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '模板下载失败'
+    ElMessage.error(message)
+  }
+}
+
+const submitWeightImport = async () => {
+  const file = weightImportFileList.value?.[0]?.raw
+  if (!file) {
+    ElMessage.warning('请先选择要导入的 Excel 文件')
+    return
+  }
+
+  submittingWeightImport.value = true
+  try {
+    const result = await importObjectiveIndicatorWeightsFromExcel(file as File)
+    weightImportVisible.value = false
+    weightImportFileList.value = []
+    await reloadCourseData()
+    await showImportResult(result as Record<string, unknown>)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '内部贡献权重导入失败'
+    ElMessage.error(message)
+  } finally {
+    submittingWeightImport.value = false
   }
 }
 
