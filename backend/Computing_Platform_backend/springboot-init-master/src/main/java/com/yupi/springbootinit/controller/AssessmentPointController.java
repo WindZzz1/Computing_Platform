@@ -12,15 +12,12 @@ import com.yupi.springbootinit.model.dto.assessment.AssessmentPointUpdateRequest
 import com.yupi.springbootinit.model.vo.AssessmentPointVO;
 import com.yupi.springbootinit.service.AssessmentPointService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
-import javax.servlet.ServletOutputStream;
-import javax.servlet.http.HttpServletResponse;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 // 课程考核点接口
 
@@ -107,41 +104,5 @@ public class AssessmentPointController {
         request.setCurrent(1);
         request.setPageSize(1000);
         return ResultUtils.success(assessmentPointService.pageAssessmentPoint(request));
-    }
-
-    /**
-     * 通过Excel批量导入考核点（含支撑权重）
-     *
-     * @param file Excel文件
-     * @return 导入结果
-     */
-    @PostMapping("/import/excel")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
-    public BaseResponse<Map<String, Object>> importAssessmentPointsFromExcel(@RequestParam("file") MultipartFile file) {
-        Map<String, Object> result = assessmentPointService.importAssessmentPointsFromExcel(file);
-        return ResultUtils.success(result);
-    }
-
-    /**
-     * 下载考核点导入模板
-     */
-    @GetMapping("/template")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
-    @com.yupi.springbootinit.annotation.NoLog
-    public void downloadAssessmentPointTemplate(HttpServletResponse response) throws Exception {
-        String filename = "考核点导入模板.xlsx";
-        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
-                .replaceAll("\\+", "%20");
-
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFilename);
-        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        response.setHeader("Pragma", "no-cache");
-        response.setHeader("Expires", "0");
-
-        byte[] templateBytes = assessmentPointService.generateAssessmentPointTemplate();
-        ServletOutputStream outputStream = response.getOutputStream();
-        outputStream.write(templateBytes);
-        outputStream.flush();
     }
 }

@@ -45,19 +45,4 @@ public interface WeightObjectiveIndicatorService extends IService<WeightObjectiv
      * @return 校验结果
      */
     WeightCheckVO checkWeights(WeightObjectiveIndicatorCheckRequest request);
-
-    /**
-     * 通过 Excel 批量导入内部贡献权重
-     *
-     * @param file Excel 文件
-     * @return 导入结果（total/successCount/failCount/failDetails）
-     */
-    java.util.Map<String, Object> importWeightsFromExcel(org.springframework.web.multipart.MultipartFile file);
-
-    /**
-     * 生成内部贡献权重导入模板
-     *
-     * @return 模板文件字节
-     */
-    byte[] generateWeightTemplate();
 }

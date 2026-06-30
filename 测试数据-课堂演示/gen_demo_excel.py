@@ -38,8 +38,8 @@ for k in range(30):
     cls_name = f"软工2023-{courses[cls_idx][1]}班"
     students.append((k, sno, sname, cls_idx, cls_name))
 
-# 每课 4 个考核点：(编号, 名称, 满分) —— 与 generate_test_data.py point_config 一致
-points = [("AP1", "平时作业", 20), ("AP2", "实验报告", 20), ("AP3", "期中考试", 20), ("AP4", "期末考试", 40)]
+# 每课 4 个考核点：(编号, 名称, 满分) —— 与数据库 assessment_point 实际数据一致（2026-06-30 修正）
+points = [("AP1", "平时作业", 30), ("AP2", "实验报告", 40), ("AP3", "课程设计", 20), ("AP4", "期末考试", 10)]
 
 def score(k, j, full):
     """确定性成绩：满分的 0.65~0.95，与 generate_test_data.py 公式一致"""

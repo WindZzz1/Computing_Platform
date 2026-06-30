@@ -21,6 +21,34 @@
             />
             <el-button @click="loadTeachingClasses">刷新</el-button>
             <el-button v-if="canManageClassSection" type="primary" @click="openClassCreateDialog">新增教学班</el-button>
+            <el-button v-if="canManageClassSection" @click="classBatchUploadExpanded = !classBatchUploadExpanded">
+              批量导入
+            </el-button>
+          </div>
+        </div>
+
+        <!-- 教学班批量导入 -->
+        <div v-if="canManageClassSection && classBatchUploadExpanded" class="import-block" style="margin-bottom: 12px">
+          <div class="section-title">批量导入教学班</div>
+          <el-upload
+            v-model:file-list="classBatchFileList"
+            drag
+            action="#"
+            :auto-upload="false"
+            :limit="1"
+            accept=".xlsx,.xls"
+            :on-change="handleClassBatchFileChange"
+            :on-remove="handleClassBatchFileRemove"
+          >
+            <el-icon class="upload-icon"><UploadFilled /></el-icon>
+            <div class="upload-title">拖拽教学班 Excel 到这里，或点击选择文件</div>
+            <template #tip>
+              <div class="muted">请先下载模板，按格式填写后上传。</div>
+            </template>
+          </el-upload>
+          <div class="import-actions">
+            <el-button :loading="downloadingClassBatchTemplate" @click="handleDownloadClassBatchTemplate">下载模板</el-button>
+            <el-button type="primary" :loading="importingClassBatch" @click="submitClassBatchImport">开始导入</el-button>
           </div>
         </div>
 
@@ -485,11 +513,13 @@ import {
   deleteTeachingClass,
   downloadClassStudentTemplate,
   downloadStudentTemplate,
+  downloadTeachingClassTemplate,
   getTeachingClass,
   getTeachingClassStudents,
   importStudentsFromExcel,
   importStudentsToClassFromExcel,
   importStudentsToClass,
+  importTeachingClassesFromExcel,
   listMyTeachingClasses,
   pageTeachingClasses,
   unbindStudentFromClass,
@@ -529,6 +559,10 @@ const importingStudentsToClass = ref(false)
 const bindingStudents = ref(false)
 const downloadingTemplate = ref(false)
 const downloadingClassTemplate = ref(false)
+const downloadingClassBatchTemplate = ref(false)
+const importingClassBatch = ref(false)
+const classBatchUploadExpanded = ref(false)
+const classBatchFileList = ref<UploadUserFile[]>([])
 const gradeImporting = ref(false)
 const gradeTemplateLoading = ref(false)
 const gradeLoading = ref(false)
@@ -919,6 +953,20 @@ const handleStudentFileRemove: UploadProps['onRemove'] = () => {
   studentFileList.value = []
 }
 
+const handleClassBatchFileChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.error('请上传 Excel 文件')
+    classBatchFileList.value = []
+    return
+  }
+  classBatchFileList.value = uploadFiles.slice(-1)
+}
+
+const handleClassBatchFileRemove: UploadProps['onRemove'] = () => {
+  classBatchFileList.value = []
+}
+
 const handleGradeFileChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
   const fileName = uploadFile.name.toLowerCase()
   if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
@@ -1159,6 +1207,44 @@ const handleDownloadClassTemplate = async () => {
     ElMessage.error(message)
   } finally {
     downloadingClassTemplate.value = false
+  }
+}
+
+const handleDownloadClassBatchTemplate = async () => {
+  downloadingClassBatchTemplate.value = true
+  try {
+    const blob = await downloadTeachingClassTemplate()
+    downloadBlob(blob, '教学班导入模板.xlsx')
+    ElMessage.success('教学班导入模板已开始下载')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '教学班模板下载失败'
+    ElMessage.error(message)
+  } finally {
+    downloadingClassBatchTemplate.value = false
+  }
+}
+
+const submitClassBatchImport = async () => {
+  const file = classBatchFileList.value[0]?.raw
+  if (!file) {
+    ElMessage.warning('请先选择教学班 Excel 文件')
+    return
+  }
+
+  importingClassBatch.value = true
+  try {
+    const result = await importTeachingClassesFromExcel(file)
+    showImportResult(
+      { total: result.total ?? 0, successCount: result.successCount, failCount: result.failCount, failDetails: result.failDetails },
+      '教学班批量导入完成'
+    )
+    classBatchFileList.value = []
+    await loadTeachingClasses()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '教学班批量导入失败'
+    ElMessageBox.alert(message, '导入失败', { confirmButtonText: '知道了', type: 'error' })
+  } finally {
+    importingClassBatch.value = false
   }
 }
 

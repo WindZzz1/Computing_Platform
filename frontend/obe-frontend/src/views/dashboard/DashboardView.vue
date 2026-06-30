@@ -1457,20 +1457,15 @@ const renderPieChart = () => {
 const mergeMajorOptions = (items: Array<{ id?: number | null; majorId?: number | null; majorName?: string | null }>) => {
   const majorMap = new Map(majors.value.map((item) => [item.id, item]))
   items.forEach((item) => {
-    // 用真正的专业 id（课程/毕业要求挂在 majorId 上），不能用记录自身 id，
-    // 否则每条课程/毕业要求都会被当成一个"专业"，产生大量同名重复项
-    const majorId = Number(item.majorId)
+    const majorId = Number(item.id ?? item.majorId)
     const majorName = item.majorName?.trim()
     if (!Number.isFinite(majorId) || !majorName) {
       return
     }
-    // 仅补充字典里没有的专业，避免覆盖 listMajors 返回的完整项
-    if (!majorMap.has(majorId)) {
-      majorMap.set(majorId, {
-        id: majorId,
-        majorName
-      })
-    }
+    majorMap.set(majorId, {
+      id: majorId,
+      majorName
+    })
   })
   majors.value = Array.from(majorMap.values())
 }

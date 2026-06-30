@@ -1,6 +1,5 @@
 package com.yupi.springbootinit.service.impl;
 
-import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
@@ -16,21 +15,15 @@ import com.yupi.springbootinit.model.entity.GraduationRequirement;
 import com.yupi.springbootinit.model.entity.IndicatorPoint;
 import com.yupi.springbootinit.model.entity.MatrixCourseIndicator;
 import com.yupi.springbootinit.model.entity.SysDictMajor;
-import com.yupi.springbootinit.model.excel.MatrixCourseIndicatorExcel;
 import com.yupi.springbootinit.model.vo.MatrixConfigVO;
 import com.yupi.springbootinit.model.vo.MatrixCourseIndicatorVO;
 import com.yupi.springbootinit.service.MatrixCourseIndicatorService;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
@@ -355,220 +348,5 @@ public class MatrixCourseIndicatorServiceImpl extends ServiceImpl<MatrixCourseIn
         }
 
         return vo;
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> importMatrixFromExcel(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件不能为空");
-        }
-        String filename = file.getOriginalFilename();
-        if (filename == null || (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件格式不正确，请上传Excel文件");
-        }
-
-        int successCount = 0;
-        int failCount = 0;
-        List<Map<String, String>> failDetails = new ArrayList<>();
-
-        try {
-            List<MatrixCourseIndicatorExcel> matrixExcels = EasyExcel.read(file.getInputStream())
-                    .head(MatrixCourseIndicatorExcel.class)
-                    .sheet(0)
-                    .doReadSync();
-
-            if (matrixExcels == null || matrixExcels.isEmpty()) {
-                throw new BusinessException(ErrorCode.PARAMS_ERROR, "Excel中没有数据");
-            }
-
-            for (int i = 0; i < matrixExcels.size(); i++) {
-                MatrixCourseIndicatorExcel excel = matrixExcels.get(i);
-                try {
-                    if (StringUtils.isAnyBlank(excel.getMajorCode(), excel.getCourseCode(),
-                            excel.getIndicatorCode()) || excel.getTotalWeight() == null) {
-                        failCount++;
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("row", String.valueOf(i + 2));
-                        detail.put("courseCode", excel.getCourseCode() != null ? excel.getCourseCode() : "");
-                        detail.put("reason", "必填字段为空");
-                        failDetails.add(detail);
-                        continue;
-                    }
-
-                    // 查找专业
-                    QueryWrapper<SysDictMajor> majorWrapper = new QueryWrapper<>();
-                    majorWrapper.eq("major_code", excel.getMajorCode());
-                    SysDictMajor major = sysDictMajorMapper.selectOne(majorWrapper);
-                    if (major == null) {
-                        failCount++;
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("row", String.valueOf(i + 2));
-                        detail.put("courseCode", excel.getCourseCode());
-                        detail.put("reason", "专业代码 " + excel.getMajorCode() + " 不存在");
-                        failDetails.add(detail);
-                        continue;
-                    }
-
-                    // 查找课程
-                    QueryWrapper<Course> courseWrapper = new QueryWrapper<>();
-                    courseWrapper.eq("course_code", excel.getCourseCode());
-                    Course course = courseMapper.selectOne(courseWrapper);
-                    if (course == null) {
-                        failCount++;
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("row", String.valueOf(i + 2));
-                        detail.put("courseCode", excel.getCourseCode());
-                        detail.put("reason", "课程代码 " + excel.getCourseCode() + " 不存在");
-                        failDetails.add(detail);
-                        continue;
-                    }
-
-                    // 查找指标点
-                    QueryWrapper<IndicatorPoint> indicatorWrapper = new QueryWrapper<>();
-                    indicatorWrapper.eq("indicator_code", excel.getIndicatorCode());
-                    IndicatorPoint indicator = indicatorPointMapper.selectOne(indicatorWrapper);
-                    if (indicator == null) {
-                        failCount++;
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("row", String.valueOf(i + 2));
-                        detail.put("courseCode", excel.getCourseCode());
-                        detail.put("reason", "指标点编号 " + excel.getIndicatorCode() + " 不存在");
-                        failDetails.add(detail);
-                        continue;
-                    }
-
-                    // 验证指标点属于该专业（通过毕业要求关联）
-                    if (indicator.getRequirementId() != null) {
-                        GraduationRequirement req = graduationRequirementMapper.selectById(indicator.getRequirementId());
-                        if (req == null || !major.getId().equals(req.getMajorId())) {
-                            failCount++;
-                            Map<String, String> detail = new HashMap<>();
-                            detail.put("row", String.valueOf(i + 2));
-                            detail.put("courseCode", excel.getCourseCode());
-                            detail.put("reason", "指标点 " + excel.getIndicatorCode() + " 不属于专业 " + excel.getMajorCode());
-                            failDetails.add(detail);
-                            continue;
-                        }
-                    }
-
-                    // 验证权重范围
-                    if (excel.getTotalWeight().compareTo(BigDecimal.ZERO) <= 0
-                            || excel.getTotalWeight().compareTo(BigDecimal.ONE) > 0) {
-                        failCount++;
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("row", String.valueOf(i + 2));
-                        detail.put("courseCode", excel.getCourseCode());
-                        detail.put("reason", "权重必须在0~1之间");
-                        failDetails.add(detail);
-                        continue;
-                    }
-
-                    // 检查重复（同一专业+课程+指标点）
-                    QueryWrapper<MatrixCourseIndicator> dupWrapper = new QueryWrapper<>();
-                    dupWrapper.eq("major_id", major.getId());
-                    dupWrapper.eq("course_id", course.getId());
-                    dupWrapper.eq("indicator_id", indicator.getId());
-                    if (this.count(dupWrapper) > 0) {
-                        failCount++;
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("row", String.valueOf(i + 2));
-                        detail.put("courseCode", excel.getCourseCode());
-                        detail.put("reason", "该专业下课程 " + excel.getCourseCode()
-                                + " 与指标点 " + excel.getIndicatorCode() + " 的支撑关系已存在");
-                        failDetails.add(detail);
-                        continue;
-                    }
-
-                    MatrixCourseIndicator matrix = new MatrixCourseIndicator();
-                    matrix.setMajorId(major.getId());
-                    matrix.setCourseId(course.getId());
-                    matrix.setIndicatorId(indicator.getId());
-                    matrix.setTotalWeight(excel.getTotalWeight().setScale(4, RoundingMode.HALF_UP));
-
-                    if (this.save(matrix)) {
-                        successCount++;
-                    } else {
-                        failCount++;
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("row", String.valueOf(i + 2));
-                        detail.put("courseCode", excel.getCourseCode());
-                        detail.put("reason", "保存失败");
-                        failDetails.add(detail);
-                    }
-                } catch (BusinessException e) {
-                    failCount++;
-                    Map<String, String> detail = new HashMap<>();
-                    detail.put("row", String.valueOf(i + 2));
-                    detail.put("courseCode", excel.getCourseCode() != null ? excel.getCourseCode() : "");
-                    detail.put("reason", e.getMessage());
-                    failDetails.add(detail);
-                }
-            }
-
-            if (failCount > 0) {
-                throw new BusinessException(ErrorCode.OPERATION_ERROR,
-                        "宏观支撑矩阵导入存在 " + failCount + " 条失败，已整体回滚，请修正后重新导入");
-            }
-
-            Map<String, Object> result = new HashMap<>();
-            result.put("total", matrixExcels.size());
-            result.put("successCount", successCount);
-            result.put("failCount", failCount);
-            result.put("failDetails", failDetails);
-            return result;
-
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("文件读取失败", e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件读取失败: " + e.getMessage());
-        }
-    }
-
-    @Override
-    public byte[] generateMatrixTemplate() {
-        try {
-            ClassPathResource resource = new ClassPathResource("templates/matrix_template.xlsx");
-            if (resource.exists()) {
-                try (InputStream inputStream = resource.getInputStream()) {
-                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                    byte[] data = new byte[8192];
-                    int bytesRead;
-                    while ((bytesRead = inputStream.read(data, 0, data.length)) != -1) {
-                        buffer.write(data, 0, bytesRead);
-                    }
-                    return buffer.toByteArray();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("使用ClassPathResource读取宏观支撑矩阵模板失败: {}", e.getMessage());
-        }
-
-        try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream("templates/matrix_template.xlsx")) {
-            if (inputStream != null) {
-                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                byte[] data = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(data, 0, data.length)) != -1) {
-                    buffer.write(data, 0, bytesRead);
-                }
-                return buffer.toByteArray();
-            }
-        } catch (Exception e) {
-            log.warn("使用ClassLoader读取宏观支撑矩阵模板失败: {}", e.getMessage());
-        }
-
-        log.info("静态模板不存在，使用动态生成");
-        try {
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            EasyExcel.write(outputStream, MatrixCourseIndicatorExcel.class)
-                    .sheet("宏观支撑矩阵导入模板")
-                    .doWrite(new ArrayList<>());
-            return outputStream.toByteArray();
-        } catch (Exception e) {
-            log.error("动态生成宏观支撑矩阵模板失败", e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成模板失败");
-        }
     }
 }

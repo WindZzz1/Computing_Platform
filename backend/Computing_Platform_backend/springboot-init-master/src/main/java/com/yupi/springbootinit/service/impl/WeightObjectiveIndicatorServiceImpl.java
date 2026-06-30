@@ -21,16 +21,10 @@ import com.yupi.springbootinit.model.vo.IndicatorPointVO;
 import com.yupi.springbootinit.model.vo.WeightCheckVO;
 import com.yupi.springbootinit.model.vo.WeightObjectiveIndicatorVO;
 import com.yupi.springbootinit.service.WeightObjectiveIndicatorService;
-import com.alibaba.excel.EasyExcel;
-import com.yupi.springbootinit.mapper.CourseMapper;
-import com.yupi.springbootinit.model.entity.Course;
-import com.yupi.springbootinit.model.excel.WeightObjectiveIndicatorExcel;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import java.math.BigDecimal;
@@ -79,9 +73,6 @@ public class WeightObjectiveIndicatorServiceImpl
 
     @Resource
     private WeightObjectiveIndicatorMapper weightObjectiveIndicatorMapper;
-
-    @Resource
-    private CourseMapper courseMapper;
 
     @Resource
     private OwnershipHelper ownershipHelper;
@@ -337,175 +328,5 @@ public class WeightObjectiveIndicatorServiceImpl
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, name + "不合法");
         }
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> importWeightsFromExcel(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件不能为空");
-        }
-        String filename = file.getOriginalFilename();
-        if (filename == null || (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件格式不正确，请上传Excel文件");
-        }
-
-        Map<String, Object> result = new HashMap<>();
-        List<Map<String, String>> failDetails = new ArrayList<>();
-
-        List<WeightObjectiveIndicatorExcel> rows;
-        try {
-            rows = EasyExcel.read(file.getInputStream())
-                    .head(WeightObjectiveIndicatorExcel.class)
-                    .sheet(0)
-                    .doReadSync();
-        } catch (Exception e) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "Excel解析失败：" + e.getMessage());
-        }
-        if (rows == null || rows.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "Excel中没有数据");
-        }
-
-        // 缓存，避免重复查库
-        Map<String, Course> courseCache = new HashMap<>();
-        Map<String, CourseObjective> objectiveCache = new HashMap<>();
-        Map<String, IndicatorPoint> indicatorCache = new HashMap<>();
-        // courseId -> 权重项列表
-        Map<Long, List<WeightObjectiveIndicatorCheckRequest.Item>> byCourse = new LinkedHashMap<>();
-
-        for (int i = 0; i < rows.size(); i++) {
-            WeightObjectiveIndicatorExcel row = rows.get(i);
-            int rowNum = i + 2;
-            String courseCode = row.getCourseCode();
-            try {
-                if (StringUtils.isAnyBlank(row.getCourseCode(), row.getObjCode(),
-                        row.getIndicatorCode(), row.getInnerWeight())) {
-                    failDetails.add(failDetail(rowNum, courseCode, "必填字段为空"));
-                    continue;
-                }
-                // 课程
-                Course course = courseCache.computeIfAbsent(row.getCourseCode().trim(), code -> {
-                    QueryWrapper<Course> q = new QueryWrapper<>();
-                    q.eq("course_code", code);
-                    return courseMapper.selectOne(q);
-                });
-                if (course == null) {
-                    failDetails.add(failDetail(rowNum, courseCode, "课程代码不存在"));
-                    continue;
-                }
-                ownershipHelper.checkCourseOwnership(course.getId());
-                // 课程目标
-                final String objCode = row.getObjCode().trim();
-                CourseObjective objective = objectiveCache.computeIfAbsent(course.getId() + ":" + objCode, k -> {
-                    QueryWrapper<CourseObjective> q = new QueryWrapper<>();
-                    q.eq("course_id", course.getId());
-                    q.eq("obj_code", objCode);
-                    return courseObjectiveMapper.selectOne(q);
-                });
-                if (objective == null) {
-                    failDetails.add(failDetail(rowNum, courseCode, "课程目标编号 " + objCode + " 在该课程中不存在"));
-                    continue;
-                }
-                // 指标点
-                IndicatorPoint indicator = indicatorCache.computeIfAbsent(row.getIndicatorCode().trim(), code -> {
-                    QueryWrapper<IndicatorPoint> q = new QueryWrapper<>();
-                    q.eq("indicator_code", code);
-                    return indicatorPointMapper.selectOne(q);
-                });
-                if (indicator == null) {
-                    failDetails.add(failDetail(rowNum, courseCode, "指标点编号 " + row.getIndicatorCode() + " 不存在"));
-                    continue;
-                }
-                // 权重值
-                BigDecimal innerWeight;
-                try {
-                    innerWeight = new BigDecimal(row.getInnerWeight().trim());
-                } catch (NumberFormatException e) {
-                    failDetails.add(failDetail(rowNum, courseCode, "内部权重格式不正确: " + row.getInnerWeight()));
-                    continue;
-                }
-                if (innerWeight.compareTo(BigDecimal.ZERO) < 0 || innerWeight.compareTo(BigDecimal.ONE) > 0) {
-                    failDetails.add(failDetail(rowNum, courseCode, "内部权重必须在0到1之间: " + innerWeight));
-                    continue;
-                }
-                WeightObjectiveIndicatorCheckRequest.Item item = new WeightObjectiveIndicatorCheckRequest.Item();
-                item.setObjectiveId(objective.getId());
-                item.setIndicatorId(indicator.getId());
-                item.setInnerWeight(innerWeight);
-                byCourse.computeIfAbsent(course.getId(), k -> new ArrayList<>()).add(item);
-            } catch (BusinessException e) {
-                failDetails.add(failDetail(rowNum, courseCode, e.getMessage()));
-            }
-        }
-
-        // 逐课程校验（复用 checkWeights：同指标点和=1.0、指标点在宏观矩阵范围内、目标属于该课程等）
-        Map<Long, WeightObjectiveIndicatorSaveRequest> reqByCourse = new LinkedHashMap<>();
-        if (failDetails.isEmpty()) {
-            for (Map.Entry<Long, List<WeightObjectiveIndicatorCheckRequest.Item>> e : byCourse.entrySet()) {
-                WeightObjectiveIndicatorSaveRequest req = new WeightObjectiveIndicatorSaveRequest();
-                req.setCourseId(e.getKey());
-                req.setWeightList(e.getValue());
-                String code = courseCodeOf(courseCache, e.getKey());
-                try {
-                    WeightCheckVO vo = checkWeights(req);
-                    if (!Boolean.TRUE.equals(vo.getValid())) {
-                        failDetails.add(failDetail(0, code, vo.getMessage()));
-                    } else {
-                        reqByCourse.put(e.getKey(), req);
-                    }
-                } catch (BusinessException ex) {
-                    failDetails.add(failDetail(0, code, ex.getMessage()));
-                }
-            }
-        }
-
-        // 全有或全无：有任一错误就不入库（此时未做任何写操作）
-        if (!failDetails.isEmpty()) {
-            result.put("total", rows.size());
-            result.put("successCount", 0);
-            result.put("failCount", failDetails.size());
-            result.put("failDetails", failDetails);
-            return result;
-        }
-
-        // 全部校验通过，逐课程先删后插
-        for (WeightObjectiveIndicatorSaveRequest req : reqByCourse.values()) {
-            saveWeights(req);
-        }
-
-        result.put("total", rows.size());
-        result.put("successCount", rows.size());
-        result.put("failCount", 0);
-        result.put("failDetails", failDetails);
-        return result;
-    }
-
-    @Override
-    public byte[] generateWeightTemplate() {
-        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-        List<WeightObjectiveIndicatorExcel> sample = new ArrayList<>();
-        WeightObjectiveIndicatorExcel s = new WeightObjectiveIndicatorExcel();
-        s.setCourseCode("SE101");
-        s.setObjCode("CO1");
-        s.setIndicatorCode("1.1");
-        s.setInnerWeight("0.25");
-        sample.add(s);
-        EasyExcel.write(out, WeightObjectiveIndicatorExcel.class).sheet("内部贡献权重").doWrite(sample);
-        return out.toByteArray();
-    }
-
-    /** 反查 courseId 对应的 courseCode（用于错误信息展示） */
-    private String courseCodeOf(Map<String, Course> courseCache, Long courseId) {
-        return courseCache.entrySet().stream()
-                .filter(en -> en.getValue() != null && en.getValue().getId().equals(courseId))
-                .map(Map.Entry::getKey).findFirst().orElse("");
-    }
-
-    private Map<String, String> failDetail(int row, String courseCode, String reason) {
-        Map<String, String> d = new HashMap<>();
-        d.put("row", String.valueOf(row));
-        d.put("courseCode", courseCode != null ? courseCode : "");
-        d.put("reason", reason);
-        return d;
     }
 }

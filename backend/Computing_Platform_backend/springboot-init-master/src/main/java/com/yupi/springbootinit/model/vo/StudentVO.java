@@ -31,11 +31,6 @@ public class StudentVO implements Serializable {
     private String name;
 
     /**
-     * 年级
-     */
-    private String grade;
-
-    /**
      * 学院ID
      */
     private Long collegeId;

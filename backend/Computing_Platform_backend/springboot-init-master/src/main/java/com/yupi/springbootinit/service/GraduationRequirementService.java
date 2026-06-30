@@ -8,9 +8,6 @@ import com.yupi.springbootinit.model.dto.requirement.GraduationRequirementQueryR
 import com.yupi.springbootinit.model.dto.requirement.GraduationRequirementUpdateRequest;
 import com.yupi.springbootinit.model.entity.GraduationRequirement;
 import com.yupi.springbootinit.model.vo.GraduationRequirementVO;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.util.Map;
 
 /**
  * 毕业要求服务
@@ -74,8 +71,4 @@ public interface GraduationRequirementService extends IService<GraduationRequire
      * @return 毕业要求VO
      */
     GraduationRequirementVO getRequirementVO(GraduationRequirement graduationRequirement);
-
-    Map<String, Object> importGraduationRequirementsFromExcel(MultipartFile file);
-
-    byte[] generateGraduationRequirementTemplate();
 }

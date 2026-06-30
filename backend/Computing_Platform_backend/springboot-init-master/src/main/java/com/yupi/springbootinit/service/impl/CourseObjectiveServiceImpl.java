@@ -1,40 +1,27 @@
 package com.yupi.springbootinit.service.impl;
 
-import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.manager.OwnershipHelper;
-import com.yupi.springbootinit.mapper.CourseMapper;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
 import com.yupi.springbootinit.mapper.RelPointObjectiveMapper;
 import com.yupi.springbootinit.mapper.WeightObjectiveIndicatorMapper;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveAddRequest;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveQueryRequest;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveUpdateRequest;
-import com.yupi.springbootinit.model.entity.Course;
 import com.yupi.springbootinit.model.entity.CourseObjective;
 import com.yupi.springbootinit.model.entity.WeightObjectiveIndicator;
-import com.yupi.springbootinit.model.excel.CourseObjectiveExcel;
 import com.yupi.springbootinit.model.vo.CourseObjectiveVO;
 import com.yupi.springbootinit.service.CourseObjectiveService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 //课程目标服务实现
 
@@ -51,9 +38,6 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
 
     @Resource
     private OwnershipHelper ownershipHelper;
-
-    @Resource
-    private CourseMapper courseMapper;
 
     @Override
     public Long createCourseObjective(CourseObjectiveAddRequest request) {
@@ -209,154 +193,6 @@ public class CourseObjectiveServiceImpl extends ServiceImpl<CourseObjectiveMappe
         Long weightCount = weightObjectiveIndicatorMapper.selectCount(weightQueryWrapper);
         if (weightCount != null && weightCount > 0) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "课程目标已被内部权重配置引用，不能删除");
-        }
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> importCourseObjectivesFromExcel(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件不能为空");
-        }
-        String filename = file.getOriginalFilename();
-        if (filename == null || (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件格式不正确，请上传Excel文件");
-        }
-
-        int successCount = 0;
-        int failCount = 0;
-        List<Map<String, String>> failDetails = new ArrayList<>();
-
-        try {
-            List<CourseObjectiveExcel> objectiveExcels = EasyExcel.read(file.getInputStream())
-                    .head(CourseObjectiveExcel.class)
-                    .sheet(0)
-                    .doReadSync();
-
-            if (objectiveExcels == null || objectiveExcels.isEmpty()) {
-                throw new BusinessException(ErrorCode.PARAMS_ERROR, "Excel中没有数据");
-            }
-
-            for (int i = 0; i < objectiveExcels.size(); i++) {
-                CourseObjectiveExcel excel = objectiveExcels.get(i);
-                try {
-                    if (StringUtils.isAnyBlank(excel.getCourseCode(), excel.getObjCode(), excel.getObjName())) {
-                        failCount++;
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("row", String.valueOf(i + 2));
-                        detail.put("courseCode", excel.getCourseCode() != null ? excel.getCourseCode() : "");
-                        detail.put("reason", "必填字段为空（课程代码、目标编号、目标名称）");
-                        failDetails.add(detail);
-                        continue;
-                    }
-
-                    QueryWrapper<Course> courseWrapper = new QueryWrapper<>();
-                    courseWrapper.eq("course_code", excel.getCourseCode());
-                    Course course = courseMapper.selectOne(courseWrapper);
-                    if (course == null) {
-                        failCount++;
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("row", String.valueOf(i + 2));
-                        detail.put("courseCode", excel.getCourseCode());
-                        detail.put("reason", "课程代码不存在");
-                        failDetails.add(detail);
-                        continue;
-                    }
-
-                    ownershipHelper.checkCourseOwnership(course.getId());
-                    validateDuplicateObjCode(course.getId(), excel.getObjCode(), null);
-                    baseMapper.deleteDeletedByCourseIdAndObjCode(course.getId(), excel.getObjCode());
-
-                    CourseObjective courseObjective = new CourseObjective();
-                    courseObjective.setCourseId(course.getId());
-                    courseObjective.setObjCode(excel.getObjCode());
-                    courseObjective.setObjName(excel.getObjName());
-                    courseObjective.setObjDesc(excel.getObjDesc());
-
-                    if (this.save(courseObjective)) {
-                        successCount++;
-                    } else {
-                        failCount++;
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("row", String.valueOf(i + 2));
-                        detail.put("courseCode", excel.getCourseCode());
-                        detail.put("reason", "保存失败");
-                        failDetails.add(detail);
-                    }
-                } catch (BusinessException e) {
-                    failCount++;
-                    Map<String, String> detail = new HashMap<>();
-                    detail.put("row", String.valueOf(i + 2));
-                    detail.put("courseCode", excel.getCourseCode() != null ? excel.getCourseCode() : "");
-                    detail.put("reason", e.getMessage());
-                    failDetails.add(detail);
-                }
-            }
-
-            if (failCount > 0) {
-                throw new BusinessException(ErrorCode.OPERATION_ERROR,
-                        "课程目标导入存在 " + failCount + " 条失败，已整体回滚，请修正后重新导入");
-            }
-
-            Map<String, Object> result = new HashMap<>();
-            result.put("total", objectiveExcels.size());
-            result.put("successCount", successCount);
-            result.put("failCount", failCount);
-            result.put("failDetails", failDetails);
-            return result;
-
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("文件读取失败", e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件读取失败: " + e.getMessage());
-        }
-    }
-
-    @Override
-    public byte[] generateCourseObjectiveTemplate() {
-        String templatePath = "/templates/course_objective_template.xlsx";
-        try {
-            ClassPathResource resource = new ClassPathResource("templates/course_objective_template.xlsx");
-            if (resource.exists()) {
-                try (InputStream inputStream = resource.getInputStream()) {
-                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                    byte[] data = new byte[8192];
-                    int bytesRead;
-                    while ((bytesRead = inputStream.read(data, 0, data.length)) != -1) {
-                        buffer.write(data, 0, bytesRead);
-                    }
-                    return buffer.toByteArray();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("使用ClassPathResource读取课程目标模板失败: {}", e.getMessage());
-        }
-
-        try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream("templates/course_objective_template.xlsx")) {
-            if (inputStream != null) {
-                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                byte[] data = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(data, 0, data.length)) != -1) {
-                    buffer.write(data, 0, bytesRead);
-                }
-                return buffer.toByteArray();
-            }
-        } catch (Exception e) {
-            log.warn("使用ClassLoader读取课程目标模板失败: {}", e.getMessage());
-        }
-
-        log.info("静态模板不存在，使用动态生成");
-        try {
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            EasyExcel.write(outputStream, CourseObjectiveExcel.class)
-                    .sheet("课程目标导入模板")
-                    .doWrite(new ArrayList<>());
-            return outputStream.toByteArray();
-        } catch (Exception e) {
-            log.error("动态生成课程目标模板失败", e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成模板失败");
         }
     }
 }

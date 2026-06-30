@@ -13,15 +13,12 @@ import com.yupi.springbootinit.model.vo.GraduationRequirementVO;
 import com.yupi.springbootinit.model.vo.PageResultVO;
 import com.yupi.springbootinit.service.GraduationRequirementService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
-import javax.servlet.ServletOutputStream;
-import javax.servlet.http.HttpServletResponse;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 /**
  * 毕业要求接口
@@ -99,30 +96,5 @@ public class GraduationRequirementController {
     public BaseResponse<PageResultVO<GraduationRequirementVO>> pageRequirement(@RequestBody GraduationRequirementQueryRequest graduationRequirementQueryRequest) {
         Page<GraduationRequirementVO> requirementPage = graduationRequirementService.pageRequirement(graduationRequirementQueryRequest);
         return ResultUtils.success(PageResultVO.from(requirementPage));
-    }
-
-    @PostMapping("/import/excel")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_LEADER)
-    public BaseResponse<Map<String, Object>> importGraduationRequirementsFromExcel(@RequestParam("file") MultipartFile file) {
-        Map<String, Object> result = graduationRequirementService.importGraduationRequirementsFromExcel(file);
-        return ResultUtils.success(result);
-    }
-
-    @GetMapping("/template")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_LEADER)
-    @com.yupi.springbootinit.annotation.NoLog
-    public void downloadGraduationRequirementTemplate(HttpServletResponse response) throws Exception {
-        String filename = "毕业要求导入模板.xlsx";
-        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
-                .replaceAll("\\+", "%20");
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFilename);
-        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        response.setHeader("Pragma", "no-cache");
-        response.setHeader("Expires", "0");
-        byte[] templateBytes = graduationRequirementService.generateGraduationRequirementTemplate();
-        ServletOutputStream outputStream = response.getOutputStream();
-        outputStream.write(templateBytes);
-        outputStream.flush();
     }
 }

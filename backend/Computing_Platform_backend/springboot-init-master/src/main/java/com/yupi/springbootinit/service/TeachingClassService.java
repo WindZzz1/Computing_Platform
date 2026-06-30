@@ -121,4 +121,12 @@ public interface TeachingClassService extends IService<TeachingClass> {
      * @return 教学班 VO 列表
      */
     java.util.List<com.yupi.springbootinit.model.vo.TeachingClassVO> listMyTeachingClasses();
+
+    /**
+     * 通过Excel批量导入教学班
+     *
+     * @param file Excel文件
+     * @return 导入结果
+     */
+    java.util.Map<String, Object> importTeachingClassesFromExcel(org.springframework.web.multipart.MultipartFile file);
 }

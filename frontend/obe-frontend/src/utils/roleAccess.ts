@@ -20,7 +20,7 @@ const featureRoles: Record<FeatureKey, Role[]> = {
   syllabus: ['teacher'],
   score: ['edu', 'teacher'],
   calculation: ['edu', 'leader', 'teacher'],
-  report: ['admin', 'edu', 'leader', 'teacher']
+  report: ['edu', 'leader', 'teacher']
 }
 
 export function canAccessFeature(role: Role, feature: FeatureKey) {

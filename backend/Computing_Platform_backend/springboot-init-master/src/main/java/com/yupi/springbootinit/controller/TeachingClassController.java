@@ -186,6 +186,52 @@ public class TeachingClassController {
     }
 
     /**
+     * 通过Excel批量导入教学班
+     *
+     * @param file Excel文件
+     * @return 导入结果
+     */
+    @PostMapping("/import/excel")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    public BaseResponse<Map<String, Object>> importTeachingClassesFromExcel(@RequestParam("file") MultipartFile file) {
+        Map<String, Object> result = teachingClassService.importTeachingClassesFromExcel(file);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 下载教学班导入模板
+     *
+     * @return Excel文件
+     */
+    @GetMapping("/template")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    @com.yupi.springbootinit.annotation.NoLog
+    public void downloadTeachingClassTemplate(javax.servlet.http.HttpServletResponse response) throws Exception {
+        String filename = "教学班导入模板.xlsx";
+        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
+                .replaceAll("\\+", "%20");
+
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFilename);
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setHeader("Expires", "0");
+
+        org.springframework.core.io.ClassPathResource resource =
+            new org.springframework.core.io.ClassPathResource("templates/teaching_class_template.xlsx");
+        java.io.InputStream inputStream = resource.getInputStream();
+        javax.servlet.ServletOutputStream outputStream = response.getOutputStream();
+
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = inputStream.read(buffer)) != -1) {
+            outputStream.write(buffer, 0, bytesRead);
+        }
+        inputStream.close();
+        outputStream.flush();
+    }
+
+    /**
      * 下载教学班学生导入模板
      *
      * @return Excel文件

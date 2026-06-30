@@ -14,6 +14,7 @@ import com.yupi.springbootinit.model.dto.teachingClass.TeachingClassQueryRequest
 import com.yupi.springbootinit.model.dto.teachingClass.TeachingClassUpdateRequest;
 import com.yupi.springbootinit.model.entity.*;
 import com.yupi.springbootinit.model.excel.ClassStudentExcel;
+import com.yupi.springbootinit.model.excel.TeachingClassExcel;
 import com.yupi.springbootinit.model.vo.StudentVO;
 import com.yupi.springbootinit.model.vo.TeachingClassVO;
 import com.yupi.springbootinit.service.TeachingClassService;
@@ -585,6 +586,161 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
 
             Map<String, Object> result = new HashMap<>();
             result.put("total", studentExcels.size());
+            result.put("successCount", successCount);
+            result.put("failCount", failCount);
+            result.put("failDetails", failDetails);
+            return result;
+
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件读取失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> importTeachingClassesFromExcel(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件不能为空");
+        }
+
+        // 验证文件类型
+        String filename = file.getOriginalFilename();
+        if (filename == null || (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件格式不正确，请上传Excel文件");
+        }
+
+        int successCount = 0;
+        int failCount = 0;
+        List<Map<String, String>> failDetails = new ArrayList<>();
+
+        try {
+            // 读取Excel数据
+            List<TeachingClassExcel> classExcels = com.alibaba.excel.EasyExcel.read(file.getInputStream())
+                    .head(TeachingClassExcel.class)
+                    .sheet(0)
+                    .doReadSync();
+
+            if (classExcels == null || classExcels.isEmpty()) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "Excel中没有数据");
+            }
+
+            for (int i = 0; i < classExcels.size(); i++) {
+                TeachingClassExcel excel = classExcels.get(i);
+                try {
+                    // 检查必填字段
+                    if (StringUtils.isAnyBlank(excel.getClassName(), excel.getCourseCode(),
+                            excel.getTeacherUsername(), excel.getYearName(), excel.getSemesterName())) {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName() != null ? excel.getClassName() : "");
+                        detail.put("reason", "必填字段为空（教学班名称、课程代码、教师用户名、学年、学期均必填）");
+                        failDetails.add(detail);
+                        continue;
+                    }
+
+                    // 查找课程（按课程代码）
+                    QueryWrapper<Course> courseQueryWrapper = new QueryWrapper<>();
+                    courseQueryWrapper.eq("course_code", excel.getCourseCode());
+                    Course course = courseMapper.selectOne(courseQueryWrapper);
+                    if (course == null) {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName());
+                        detail.put("reason", "课程代码不存在：" + excel.getCourseCode());
+                        failDetails.add(detail);
+                        continue;
+                    }
+
+                    // 查找教师（按用户名）
+                    QueryWrapper<SysUser> userQueryWrapper = new QueryWrapper<>();
+                    userQueryWrapper.eq("username", excel.getTeacherUsername());
+                    SysUser teacher = sysUserMapper.selectOne(userQueryWrapper);
+                    if (teacher == null) {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName());
+                        detail.put("reason", "教师用户名不存在：" + excel.getTeacherUsername());
+                        failDetails.add(detail);
+                        continue;
+                    }
+
+                    // 查找学年学期（按学年名称+学期名称）
+                    QueryWrapper<SysDictSchoolYear> termQueryWrapper = new QueryWrapper<>();
+                    termQueryWrapper.eq("year_name", excel.getYearName());
+                    termQueryWrapper.eq("semester_name", excel.getSemesterName());
+                    SysDictSchoolYear schoolYear = sysDictSchoolYearMapper.selectOne(termQueryWrapper);
+                    if (schoolYear == null) {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName());
+                        detail.put("reason", "学年学期不存在：" + excel.getYearName() + " " + excel.getSemesterName());
+                        failDetails.add(detail);
+                        continue;
+                    }
+
+                    // 检查唯一性约束：课程+教师+学期组合不能重复
+                    QueryWrapper<TeachingClass> existQueryWrapper = new QueryWrapper<>();
+                    existQueryWrapper.eq("course_id", course.getId());
+                    existQueryWrapper.eq("teacher_id", teacher.getId());
+                    existQueryWrapper.eq("term_id", schoolYear.getId());
+                    Long existCount = this.baseMapper.selectCount(existQueryWrapper);
+                    if (existCount > 0) {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName());
+                        detail.put("reason", "该课程、教师、学期组合已存在教学班");
+                        failDetails.add(detail);
+                        continue;
+                    }
+
+                    // 创建教学班
+                    TeachingClass teachingClass = new TeachingClass();
+                    teachingClass.setClassName(excel.getClassName());
+                    teachingClass.setCourseId(course.getId());
+                    teachingClass.setTeacherId(teacher.getId());
+                    teachingClass.setTermId(schoolYear.getId());
+
+                    if (this.save(teachingClass)) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName());
+                        detail.put("reason", "保存失败");
+                        failDetails.add(detail);
+                    }
+                } catch (Exception e) {
+                    failCount++;
+                    Map<String, String> detail = new HashMap<>();
+                    detail.put("row", String.valueOf(i + 2));
+                    detail.put("className", excel.getClassName() != null ? excel.getClassName() : "");
+                    detail.put("reason", "系统错误：" + e.getMessage());
+                    failDetails.add(detail);
+                }
+            }
+
+            // 原子导入：任一行失败则整批回滚
+            if (failCount > 0) {
+                // 拼接失败明细到异常消息中，方便用户定位问题
+                StringBuilder msg = new StringBuilder();
+                msg.append("Excel导入存在 ").append(failCount).append(" 条失败，已整体回滚，请修正后重新导入");
+                msg.append("\n\n失败明细：");
+                for (Map<String, String> detail : failDetails) {
+                    msg.append("\n第 ").append(detail.get("row")).append(" 行（")
+                       .append(detail.get("className")).append("）：")
+                       .append(detail.get("reason"));
+                }
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, msg.toString());
+            }
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("total", classExcels.size());
             result.put("successCount", successCount);
             result.put("failCount", failCount);
             result.put("failDetails", failDetails);

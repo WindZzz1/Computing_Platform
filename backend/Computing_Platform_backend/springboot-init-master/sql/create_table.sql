@@ -305,27 +305,3 @@ CREATE TABLE major_indicator_achievement (
     INDEX idx_major_term_grade (major_id, term_id, grade),
     INDEX idx_indicator_id (indicator_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '专业级指标点达成度表（三级达成度）';
-
--- ----------------------------
--- 20. 学生专业达成度表（每个学生在各指标点的专业达成度）
--- ----------------------------
-CREATE TABLE student_major_achievement (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    student_id BIGINT NOT NULL COMMENT '学生ID',
-    major_id BIGINT NOT NULL COMMENT '专业ID',
-    term_id BIGINT COMMENT '学年学期ID',
-    grade VARCHAR(20) COMMENT '年级',
-    indicator_id BIGINT NOT NULL COMMENT '指标点ID',
-    indicator_code VARCHAR(50) COMMENT '指标点编号',
-    indicator_name VARCHAR(255) COMMENT '指标点名称',
-    requirement_id BIGINT COMMENT '毕业要求ID',
-    requirement_code VARCHAR(50) COMMENT '毕业要求编号',
-    requirement_name VARCHAR(255) COMMENT '毕业要求名称',
-    achievement DECIMAL(10,4) COMMENT '学生专业达成度值',
-    calculate_time DATETIME COMMENT '计算时间',
-    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_deleted TINYINT DEFAULT 0 COMMENT '是否删除',
-    INDEX idx_student_major_term_grade (student_id, major_id, term_id, grade),
-    INDEX idx_major_grade_indicator (major_id, grade, indicator_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '学生专业达成度表（学生×指标点）';
