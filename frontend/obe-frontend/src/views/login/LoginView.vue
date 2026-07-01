@@ -16,6 +16,14 @@
             <el-input v-model="password" type="password" show-password placeholder="请输入密码" />
           </el-form-item>
           <el-alert
+            v-if="loginError"
+            type="error"
+            :closable="false"
+            show-icon
+            :title="loginError"
+            style="margin-bottom: 16px"
+          />
+          <el-alert
             type="info"
             :closable="false"
             show-icon
@@ -39,9 +47,71 @@ import { getDefaultRoute } from '@/utils/roleAccess'
 
 const username = ref('')
 const password = ref('')
+const loginError = ref('')
 const loading = ref(false)
 const user = useUserStore()
 const router = useRouter()
+
+const getAxiosResponseMessage = (error: unknown) => {
+  if (!axios.isAxiosError(error)) {
+    return ''
+  }
+
+  const data = error.response?.data
+  if (!data) {
+    return ''
+  }
+  if (typeof data === 'string') {
+    return data
+  }
+  if (typeof data === 'object' && 'message' in data) {
+    return String((data as { message?: unknown }).message ?? '')
+  }
+  return ''
+}
+
+const isCredentialError = (message: string) =>
+  /账号|账户|用户|用户名|密码|凭证|不存在|错误|无效|unauthorized|forbidden/i.test(message)
+
+const normalizeLoginErrorMessage = (error: unknown) => {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status
+    const backendMessage = getAxiosResponseMessage(error)
+
+    if (error.code === 'ECONNABORTED' || /timeout/i.test(error.message)) {
+      return '登录请求超时，请检查网络或稍后重试'
+    }
+    if (status === 502) {
+      return '后端服务暂时不可用，请检查后端服务或 Nginx 代理是否正常'
+    }
+    if (status === 503 || status === 504) {
+      return '后端服务响应超时或暂不可用，请稍后重试'
+    }
+    if (!error.response) {
+      return '无法连接后端服务，请检查网络连接或确认后端是否已启动'
+    }
+    if (status === 400 || status === 401 || status === 403) {
+      return isCredentialError(backendMessage) ? '账号或密码错误，请重新输入' : backendMessage || '登录权限校验失败，请检查账号状态'
+    }
+
+    return backendMessage || `登录失败，服务返回 HTTP ${status ?? '未知'}`
+  }
+
+  if (error instanceof Error) {
+    if (isCredentialError(error.message)) {
+      return '账号或密码错误，请重新输入'
+    }
+    if (/timeout|超时/i.test(error.message)) {
+      return '登录请求超时，请检查网络或稍后重试'
+    }
+    if (/network|failed to fetch|无法连接/i.test(error.message)) {
+      return '无法连接后端服务，请检查网络连接或确认后端是否已启动'
+    }
+    return error.message || '登录失败，请稍后重试'
+  }
+
+  return '登录失败，请稍后重试'
+}
 
 const submit = async () => {
   if (!username.value || !password.value) {
@@ -49,17 +119,15 @@ const submit = async () => {
     return
   }
 
+  loginError.value = ''
   loading.value = true
   try {
     await user.login(username.value, password.value)
+    loginError.value = ''
     await router.push(getDefaultRoute(user.role))
   } catch (error) {
-    const message =
-      axios.isAxiosError(error) && error.code === 'ECONNABORTED'
-        ? '登录请求超时，本地后端首次响应较慢，请稍等后重试。'
-        : error instanceof Error
-          ? error.message
-          : '登录失败'
+    const message = normalizeLoginErrorMessage(error)
+    loginError.value = message
     ElMessage.error(message)
   } finally {
     loading.value = false
