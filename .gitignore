@@ -144,3 +144,13 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 .tools/
+
+# Frontend deployment and verification artifacts
+.deploy_tools/
+.npm-cache/
+deploy-dist/
+verify-dist/
+frontend/obe-frontend/.deploy_tools/
+frontend/obe-frontend/.npm-cache/
+frontend/obe-frontend/deploy-dist/
+frontend/obe-frontend/verify-dist/
