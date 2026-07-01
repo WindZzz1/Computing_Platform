@@ -321,7 +321,7 @@
           <el-option v-for="major in majors" :key="major.id" :label="major.majorName" :value="major.id" />
         </el-select>
         <el-button :disabled="!matrixLedgerRows.length" @click="exportMatrixLedgerExcel">导出 Excel</el-button>
-        <el-button :disabled="!matrixLedgerRows.length" @click="exportMatrixLedgerPdf">导出 PDF</el-button>
+        <el-button :disabled="!matrixLedgerRows.length" @click="printMatrixLedger">打印台账</el-button>
       </div>
       <el-table :data="matrixLedgerRows.slice(0, 6)" border empty-text="当前专业还没有矩阵台账数据">
         <el-table-column prop="courseCode" label="课程代码" width="120" />
@@ -365,6 +365,7 @@
           placeholder="按学号筛选，可选"
           style="width: 220px"
           clearable
+          @keyup.enter="handleLoadRawScores(1)"
         />
         <el-button
           type="primary"
@@ -447,7 +448,7 @@ import {
 } from '@/api/report'
 import { listSchoolYears } from '@/api/schoolyear'
 import { listAssessmentPoints, listCourseObjectives } from '@/api/syllabus'
-import { listMyTeachingClasses, pageTeachingClasses } from '@/api/teaching-class'
+import { getTeachingClassStudents, listMyTeachingClasses, pageTeachingClasses } from '@/api/teaching-class'
 import { useUserStore } from '@/stores/user'
 import type {
   AssessmentPointVO,
@@ -464,6 +465,7 @@ import type {
   StudentScoreVO,
   SysDictMajorSimpleVO,
   SysDictSchoolYearVO,
+  StudentVO,
   TeachingClassVO
 } from '@/api/backend'
 
@@ -520,6 +522,7 @@ const courseClasses = ref<TeachingClassVO[]>([])
 const rawScoreAssessmentPoints = ref<AssessmentPointVO[]>([])
 const courseObjectives = ref<CourseObjectiveVO[]>([])
 const courseCalculationStatus = ref<AchievementCalculationStatusVO>()
+const classStudentCache = new Map<number, StudentVO[]>()
 
 const selectedMajorId = ref<number>()
 const selectedTermId = ref<number>()
@@ -703,7 +706,6 @@ const majorPenetrationScoreRows = computed(() =>
 )
 const rawScoreRows = computed(() =>
   (rawScorePage.value.records ?? [])
-    .filter((item) => !rawScoreStudentNo.value || item.studentNo?.includes(rawScoreStudentNo.value))
     .map((item) => ({
       ...item,
       scoreText: formatDecimal(item.score),
@@ -896,6 +898,14 @@ const formatDecimal = (value?: unknown) => {
   return Number(value).toFixed(2)
 }
 
+const escapeHtml = (value?: unknown) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
 const formatDateTime = (value?: unknown) => {
   if (!value) {
     return '-'
@@ -1070,6 +1080,36 @@ const downloadBlob = (blob: Blob, fileName: string) => {
   link.download = fileName
   link.click()
   window.URL.revokeObjectURL(url)
+}
+
+const getClassStudentsCached = async (classId: number) => {
+  const cached = classStudentCache.get(classId)
+  if (cached) {
+    return cached
+  }
+  const students = await getTeachingClassStudents(classId)
+  classStudentCache.set(classId, students)
+  return students
+}
+
+const resolveRawScoreStudentId = async (classId: number) => {
+  const studentNo = rawScoreStudentNo.value.trim()
+  if (!studentNo) {
+    return undefined
+  }
+
+  const students = await getClassStudentsCached(classId)
+  return students.find((student) => student.studentNo?.includes(studentNo))?.id
+}
+
+const resetRawScorePage = (page = 1) => {
+  rawScorePage.value = {
+    records: [],
+    total: 0,
+    size: rawScoreQuery.value.pageSize,
+    current: page,
+    pages: 0
+  }
 }
 
 const handleDownloadCourseTemplate = async () => {
@@ -1469,9 +1509,19 @@ const handleLoadRawScores = async (page = rawScoreQuery.value.current || 1) => {
 
   rawScoreLoading.value = true
   try {
+    const classId = Number(selectedClassId.value)
+    const studentId = await resolveRawScoreStudentId(classId)
+    if (rawScoreStudentNo.value.trim() && !studentId) {
+      rawScoreQuery.value.current = page
+      resetRawScorePage(page)
+      setRawScoreStatus('未查询到该学生', '当前教学班中没有匹配该学号的学生，请检查学号后重新查询。', 'warning')
+      return
+    }
+
     const data = await queryGrades({
-      classId: Number(selectedClassId.value),
+      classId,
       pointId: rawScorePointId.value,
+      studentId,
       current: page,
       pageSize: rawScoreQuery.value.pageSize
     })
@@ -1564,7 +1614,7 @@ const exportMatrixLedgerExcel = () => {
   ElMessage.success('矩阵台账 Excel 已开始下载')
 }
 
-const exportMatrixLedgerPdf = () => {
+const printMatrixLedger = () => {
   if (!matrixLedgerRows.value.length) {
     ElMessage.warning('当前专业还没有矩阵台账数据，暂时无法导出')
     return
@@ -1574,31 +1624,25 @@ const exportMatrixLedgerPdf = () => {
     .map(
       (item) => `
         <tr>
-          <td>${item.majorName}</td>
-          <td>${item.courseCode}</td>
-          <td>${item.courseName}</td>
-          <td>${item.indicatorCode}</td>
-          <td>${item.indicatorName}</td>
-          <td>${item.requirement}</td>
-          <td>${item.totalWeight}</td>
+          <td>${escapeHtml(item.majorName)}</td>
+          <td>${escapeHtml(item.courseCode)}</td>
+          <td>${escapeHtml(item.courseName)}</td>
+          <td>${escapeHtml(item.indicatorCode)}</td>
+          <td>${escapeHtml(item.indicatorName)}</td>
+          <td>${escapeHtml(item.requirement)}</td>
+          <td>${escapeHtml(item.totalWeight)}</td>
         </tr>
       `
     )
     .join('')
 
-  const printWindow = window.open('', '_blank', 'width=1200,height=800')
-  if (!printWindow) {
-    ElMessage.warning('浏览器拦截了打印窗口，请允许弹窗后重试')
-    return
-  }
-
   const title = `${selectedMajor.value?.majorName || '专业'} - 宏观支撑矩阵台账`
-  printWindow.document.write(`
+  const htmlContent = `
     <!doctype html>
     <html lang="zh-CN">
       <head>
         <meta charset="UTF-8" />
-        <title>${title}</title>
+        <title>${escapeHtml(title)}</title>
         <style>
           body {
             font-family: "Microsoft YaHei", sans-serif;
@@ -1630,7 +1674,7 @@ const exportMatrixLedgerPdf = () => {
         </style>
       </head>
       <body>
-        <h1>${title}</h1>
+        <h1>${escapeHtml(title)}</h1>
         <p>共 ${matrixLedgerRows.value.length} 条矩阵台账记录，可在打印窗口中直接另存为 PDF。</p>
         <table>
           <thead>
@@ -1648,10 +1692,20 @@ const exportMatrixLedgerPdf = () => {
         </table>
       </body>
     </html>
-  `)
-  printWindow.document.close()
+  `
+  const printUrl = URL.createObjectURL(new Blob([htmlContent], { type: 'text/html;charset=utf-8' }))
+  const printWindow = window.open(printUrl, '_blank', 'width=1200,height=800')
+  if (!printWindow) {
+    URL.revokeObjectURL(printUrl)
+    ElMessage.warning('浏览器拦截了打印窗口，请允许弹窗后重试')
+    return
+  }
+
   printWindow.focus()
-  printWindow.print()
+  printWindow.addEventListener('load', () => {
+    printWindow.print()
+    window.setTimeout(() => URL.revokeObjectURL(printUrl), 1000)
+  })
 }
 
 onMounted(async () => {
@@ -1737,17 +1791,12 @@ onMounted(async () => {
 })
 
 watch(selectedClassId, () => {
-  rawScorePage.value = {
-    records: [],
-    total: 0,
-    size: rawScoreQuery.value.pageSize,
-    current: 1,
-    pages: 0
-  }
+  resetRawScorePage(1)
   rawScoreStudentNo.value = ''
   rawScoreStatus.value = undefined
 
   if (selectedClassId.value && canUseCourseReport.value) {
+    classStudentCache.delete(selectedClassId.value)
     void loadRawScoreAssessmentPoints()
   } else {
     rawScoreAssessmentPoints.value = []
