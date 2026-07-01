@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <h1 class="page-title">教学班与成绩准备</h1>
-    <p class="page-desc">这一页把教学班、学生导入、成绩模板下载、成绩导入和成绩查询都接通，方便继续联调课程计算链路。</p>
+    <p class="page-desc">管理教学班、学生导入、成绩模板下载、成绩导入与查询，为课程级达成度计算做准备。</p>
 
     <section class="page-grid">
       <div class="panel span-12">
@@ -20,39 +20,37 @@
               @keyup.enter="loadTeachingClasses"
             />
             <el-button @click="loadTeachingClasses">刷新</el-button>
-            <el-input-number
-              v-if="isTeacherScoreDirectMode"
-              v-model="selectedClassId"
-              :min="1"
-              :step="1"
-              controls-position="right"
-              style="width: 180px"
-              placeholder="教学班 ID"
-            />
-            <el-input-number
-              v-if="isTeacherScoreDirectMode"
-              v-model="directCourseId"
-              :min="1"
-              :step="1"
-              controls-position="right"
-              style="width: 180px"
-              placeholder="课程 ID"
-            />
-            <el-button v-if="isTeacherScoreDirectMode" type="primary" :disabled="!selectedClassId" @click="reloadPreview">
-              按当前 ID 联调
-            </el-button>
             <el-button v-if="canManageClassSection" type="primary" @click="openClassCreateDialog">新增教学班</el-button>
+            <el-button v-if="canManageClassSection" @click="classBatchUploadExpanded = !classBatchUploadExpanded">
+              批量导入
+            </el-button>
           </div>
         </div>
 
-        <el-alert
-          v-if="isTeacherScoreDirectMode"
-          title="教师端当前没有教学班列表接口，改为按 classId / courseId 直达联调"
-          type="info"
-          show-icon
-          :closable="false"
-          style="margin-bottom: 12px"
-        />
+        <!-- 教学班批量导入 -->
+        <div v-if="canManageClassSection && classBatchUploadExpanded" class="import-block" style="margin-bottom: 12px">
+          <div class="section-title">批量导入教学班</div>
+          <el-upload
+            v-model:file-list="classBatchFileList"
+            drag
+            action="#"
+            :auto-upload="false"
+            :limit="1"
+            accept=".xlsx,.xls"
+            :on-change="handleClassBatchFileChange"
+            :on-remove="handleClassBatchFileRemove"
+          >
+            <el-icon class="upload-icon"><UploadFilled /></el-icon>
+            <div class="upload-title">拖拽教学班 Excel 到这里，或点击选择文件</div>
+            <template #tip>
+              <div class="muted">请先下载模板，按格式填写后上传。</div>
+            </template>
+          </el-upload>
+          <div class="import-actions">
+            <el-button :loading="downloadingClassBatchTemplate" @click="handleDownloadClassBatchTemplate">下载模板</el-button>
+            <el-button type="primary" :loading="importingClassBatch" @click="submitClassBatchImport">开始导入</el-button>
+          </div>
+        </div>
 
         <el-table v-loading="classLoading" :data="teachingClasses" border @row-click="handleSelectClass">
           <el-table-column prop="className" label="教学班名称" min-width="180" />
@@ -82,19 +80,6 @@
             type="primary"
             link
             :disabled="!selectedClass.courseId"
-            @click="navigateToSyllabus"
-          >
-            去当前课程大纲
-          </el-button>
-        </div>
-        <div v-else-if="isTeacherScoreDirectMode && selectedClassId" class="selected-class-bar">
-          <el-tag type="success">当前联调教学班 ID：{{ selectedClassId }}</el-tag>
-          <span>{{ directCourseId ? `课程 ID：${directCourseId}` : '当前未填写课程 ID' }}</span>
-          <el-button
-            v-if="canNavigateToSyllabus"
-            type="primary"
-            link
-            :disabled="!resolvedCourseId"
             @click="navigateToSyllabus"
           >
             去当前课程大纲
@@ -528,11 +513,14 @@ import {
   deleteTeachingClass,
   downloadClassStudentTemplate,
   downloadStudentTemplate,
+  downloadTeachingClassTemplate,
   getTeachingClass,
   getTeachingClassStudents,
   importStudentsFromExcel,
   importStudentsToClassFromExcel,
   importStudentsToClass,
+  importTeachingClassesFromExcel,
+  listMyTeachingClasses,
   pageTeachingClasses,
   unbindStudentFromClass,
   updateTeachingClass
@@ -555,6 +543,7 @@ import type {
   TeachingClassUpdateRequest,
   TeachingClassVO
 } from '@/api/backend'
+import { normalizePageFields } from '@/api/backend'
 import { useUserStore } from '@/stores/user'
 
 type ClassFormState = TeachingClassCreateRequest
@@ -570,6 +559,10 @@ const importingStudentsToClass = ref(false)
 const bindingStudents = ref(false)
 const downloadingTemplate = ref(false)
 const downloadingClassTemplate = ref(false)
+const downloadingClassBatchTemplate = ref(false)
+const importingClassBatch = ref(false)
+const classBatchUploadExpanded = ref(false)
+const classBatchFileList = ref<UploadUserFile[]>([])
 const gradeImporting = ref(false)
 const gradeTemplateLoading = ref(false)
 const gradeLoading = ref(false)
@@ -666,12 +659,12 @@ const directCourseId = ref<number>()
 const resolvedCourseId = computed(() => Number(selectedClass.value?.courseId || directCourseId.value || 0) || undefined)
 const classPanelHint = computed(() =>
   isTeacherScoreDirectMode.value
-    ? '教师角色当前改为按教学班 ID 直达联调，不再请求教师无权访问的教学班列表接口。'
+    ? '以下是你主讲的教学班，选择后即可进入成绩录入与计算准备。'
     : '先维护教学班，再导入学生并绑定到当前班级。'
 )
 const gradePanelHint = computed(() =>
   isTeacherScoreDirectMode.value
-    ? '教师可按教学班直接下载模板、导入成绩、查询成绩并手动修改；如果要显示考核点筛选，请同时填写课程 ID。'
+    ? '选择教学班后可下载成绩模板、导入成绩、查询并手动修改单条成绩。'
     : '按教学班查看已导入的成绩记录，可按考核点筛选、手动修改单条成绩，并清空当前班级成绩。'
 )
 const boundStudentIdSet = computed(() => new Set(students.value.map((student) => student.id)))
@@ -814,7 +807,7 @@ const results = computed(() => {
       status: assessments.value.length ? (gradeRows.value.length ? '已有成绩数据' : '待录入成绩') : '待配置考核点',
       hint: assessments.value.length
         ? gradeRows.value.length
-          ? '成绩录入与查询已接通，可继续联调课程计算和报表。'
+          ? '成绩录入与查询已就绪，可继续进行课程级计算与报表导出。'
           : '成绩录入与查询已接通，等待教师导入当前教学班成绩。'
         : '先补课程考核点，再进入成绩计算。'
     }
@@ -960,6 +953,20 @@ const handleStudentFileRemove: UploadProps['onRemove'] = () => {
   studentFileList.value = []
 }
 
+const handleClassBatchFileChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.error('请上传 Excel 文件')
+    classBatchFileList.value = []
+    return
+  }
+  classBatchFileList.value = uploadFiles.slice(-1)
+}
+
+const handleClassBatchFileRemove: UploadProps['onRemove'] = () => {
+  classBatchFileList.value = []
+}
+
 const handleGradeFileChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
   const fileName = uploadFile.name.toLowerCase()
   if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
@@ -1057,25 +1064,19 @@ const loadCourseDetails = async (courseId?: number) => {
 }
 
 const loadTeachingClasses = async () => {
-  if (!canManageClassSection.value) {
-    classLoading.value = false
-    teachingClasses.value = []
-    if (routeClassId.value) {
-      selectedClassId.value = routeClassId.value
-      directCourseId.value = routeCourseId.value
-      await reloadPreview()
-    }
-    return
-  }
-
   classLoading.value = true
   try {
-    const page = await pageTeachingClasses({
-      current: 1,
-      pageSize: 200,
-      className: classKeyword.value || undefined
-    })
-    teachingClasses.value = page.records
+    if (canManageClassSection.value) {
+      const page = await pageTeachingClasses({
+        current: 1,
+        pageSize: 200,
+        className: classKeyword.value || undefined
+      })
+      teachingClasses.value = page.records
+    } else {
+      // teacher：仅加载自己主讲的教学班（后端按 teacher_id 过滤，数据归属隔离）
+      teachingClasses.value = await listMyTeachingClasses()
+    }
 
     if (selectedClassId.value && !teachingClasses.value.some((item) => item.id === selectedClassId.value)) {
       selectedClassId.value = undefined
@@ -1206,6 +1207,44 @@ const handleDownloadClassTemplate = async () => {
     ElMessage.error(message)
   } finally {
     downloadingClassTemplate.value = false
+  }
+}
+
+const handleDownloadClassBatchTemplate = async () => {
+  downloadingClassBatchTemplate.value = true
+  try {
+    const blob = await downloadTeachingClassTemplate()
+    downloadBlob(blob, '教学班导入模板.xlsx')
+    ElMessage.success('教学班导入模板已开始下载')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '教学班模板下载失败'
+    ElMessage.error(message)
+  } finally {
+    downloadingClassBatchTemplate.value = false
+  }
+}
+
+const submitClassBatchImport = async () => {
+  const file = classBatchFileList.value[0]?.raw
+  if (!file) {
+    ElMessage.warning('请先选择教学班 Excel 文件')
+    return
+  }
+
+  importingClassBatch.value = true
+  try {
+    const result = await importTeachingClassesFromExcel(file)
+    showImportResult(
+      { total: result.total ?? 0, successCount: result.successCount, failCount: result.failCount, failDetails: result.failDetails },
+      '教学班批量导入完成'
+    )
+    classBatchFileList.value = []
+    await loadTeachingClasses()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '教学班批量导入失败'
+    ElMessageBox.alert(message, '导入失败', { confirmButtonText: '知道了', type: 'error' })
+  } finally {
+    importingClassBatch.value = false
   }
 }
 
@@ -1350,9 +1389,10 @@ const loadStudentPool = async (page = studentQuery.current || 1) => {
       studentName: studentQuery.studentName?.trim() || undefined
     })
     studentPickerRows.value = result.records
-    studentPickerTotal.value = result.total
-    studentQuery.current = result.current
-    studentQuery.pageSize = result.size
+    const normalized = normalizePageFields(result, { current: page, pageSize: studentQuery.pageSize })
+    studentPickerTotal.value = normalized.total
+    studentQuery.current = normalized.current
+    studentQuery.pageSize = normalized.pageSize
   } catch (error) {
     const message = error instanceof Error ? error.message : '系统学生库加载失败'
     ElMessage.error(message)
@@ -1547,9 +1587,10 @@ const loadGradeEntries = async (page = gradeQuery.current || 1) => {
       pageSize: gradeQuery.pageSize
     })
     gradeRows.value = result.records
-    gradeTotal.value = result.total
-    gradeQuery.current = result.current
-    gradeQuery.pageSize = result.size
+    const normalized = normalizePageFields(result, { current: page, pageSize: gradeQuery.pageSize })
+    gradeTotal.value = normalized.total
+    gradeQuery.current = normalized.current
+    gradeQuery.pageSize = normalized.pageSize
   } catch (error) {
     const message = error instanceof Error ? error.message : '成绩数据加载失败'
     ElMessage.error(message)

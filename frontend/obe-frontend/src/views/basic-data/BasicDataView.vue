@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <h1 class="page-title">基础数据管理</h1>
-    <p class="page-desc">当前页集中维护课程、专业、毕业要求和指标点，优先把后端已经存在的基础数据能力全部接通。</p>
+    <p class="page-desc">集中维护课程、专业、学院、学年学期、用户账号、毕业要求与指标点等基础数据，为后续计算与报表提供数据支撑。</p>
 
     <section class="page-grid">
       <div v-if="canManageCourseSection" class="panel span-8">
@@ -31,6 +31,51 @@
             </template>
           </el-table-column>
         </el-table>
+      </div>
+
+      <div v-if="canManageStudentSection" class="panel span-12">
+        <div class="toolbar">
+          <h3 class="panel-title">学生库</h3>
+          <div class="toolbar-actions">
+            <el-button @click="openStudentImportDialog">批量导入</el-button>
+            <el-button type="primary" :disabled="!availableCourseMajors.length" @click="openStudentCreateDialog">新增学生</el-button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+          <el-input v-model="studentQuery.studentNo" placeholder="按学号搜索" clearable style="width:160px" @keyup.enter="searchStudents" />
+          <el-input v-model="studentQuery.studentName" placeholder="按姓名搜索" clearable style="width:140px" @keyup.enter="searchStudents" />
+          <el-select v-model="studentQuery.majorId" placeholder="全部专业" clearable style="width:180px">
+            <el-option v-for="major in availableCourseMajors" :key="major.id" :label="major.majorName" :value="major.id" />
+          </el-select>
+          <el-button type="primary" @click="searchStudents">查询</el-button>
+          <el-button @click="resetStudentQuery">重置</el-button>
+        </div>
+        <el-table v-loading="loadingStudents" :data="studentRows" border size="small">
+          <el-table-column prop="studentNo" label="学号" width="130" />
+          <el-table-column prop="name" label="姓名" width="120" />
+          <el-table-column prop="grade" label="年级" width="90" />
+          <el-table-column prop="majorName" label="所属专业" min-width="150" />
+          <el-table-column prop="collegeName" label="所属学院" min-width="130" />
+          <el-table-column prop="className" label="班级" min-width="160" />
+          <el-table-column label="操作" width="140" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openStudentEditDialog(row)">编辑</el-button>
+              <el-button link type="danger" @click="handleDeleteStudent(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+          <el-pagination
+            background
+            layout="total, sizes, prev, pager, next, jumper"
+            :total="studentTotal"
+            :current-page="studentQuery.current"
+            :page-size="studentQuery.pageSize"
+            :page-sizes="[10, 20, 50]"
+            @current-change="onStudentPageChange"
+            @size-change="onStudentSizeChange"
+          />
+        </div>
       </div>
 
       <div v-if="canManageDictionarySection" class="panel span-4">
@@ -118,7 +163,19 @@
       <div v-if="canManageRequirementSection" class="panel span-12">
         <div class="toolbar">
           <h3 class="panel-title">毕业要求管理</h3>
-          <el-button type="primary" :disabled="!availableRequirementMajors.length" @click="openRequirementCreateDialog">新增毕业要求</el-button>
+          <div class="toolbar-actions">
+            <el-button @click="openRequirementImportDialog">批量导入</el-button>
+            <el-button type="primary" :disabled="!availableRequirementMajors.length" @click="openRequirementCreateDialog">新增毕业要求</el-button>
+          </div>
+        </div>
+        <div class="filter-bar" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0;">
+          <el-select v-model="requirementFilter.majorId" placeholder="按专业筛选" clearable filterable style="width: 200px">
+            <el-option v-for="major in majors" :key="major.id" :label="major.majorName" :value="major.id" />
+          </el-select>
+          <el-input v-model="requirementFilter.code" placeholder="编号搜索（如 GR1）" clearable style="width: 170px" />
+          <el-input v-model="requirementFilter.name" placeholder="名称搜索" clearable style="width: 200px" />
+          <span style="color: var(--muted); font-size: 13px;">共 {{ requirementRows.length }} 条</span>
+          <el-button @click="resetRequirementFilter">重置</el-button>
         </div>
         <el-table v-loading="loadingRequirements" :data="requirementRows" border>
           <el-table-column prop="code" label="毕业要求编号" width="140" />
@@ -138,7 +195,19 @@
       <div v-if="canManageRequirementSection" class="panel span-12">
         <div class="toolbar">
           <h3 class="panel-title">指标点管理</h3>
-          <el-button type="primary" :disabled="!requirements.length" @click="openIndicatorCreateDialog">新增指标点</el-button>
+          <div class="toolbar-actions">
+            <el-button @click="openIndicatorImportDialog">批量导入</el-button>
+            <el-button type="primary" :disabled="!requirements.length" @click="openIndicatorCreateDialog">新增指标点</el-button>
+          </div>
+        </div>
+        <div class="filter-bar" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0;">
+          <el-select v-model="indicatorFilter.requirementId" placeholder="按毕业要求筛选" clearable filterable style="width: 240px">
+            <el-option v-for="req in requirements" :key="req.id" :label="`${req.requirementCode} ${req.requirementName}`" :value="req.id" />
+          </el-select>
+          <el-input v-model="indicatorFilter.code" placeholder="编号搜索（如 1.1）" clearable style="width: 160px" />
+          <el-input v-model="indicatorFilter.name" placeholder="名称搜索" clearable style="width: 200px" />
+          <span style="color: var(--muted); font-size: 13px;">共 {{ indicatorRows.length }} 条</span>
+          <el-button @click="resetIndicatorFilter">重置</el-button>
         </div>
         <el-table v-loading="loadingIndicators" :data="indicatorRows" border>
           <el-table-column prop="requirementCode" label="毕业要求" width="130" />
@@ -210,6 +279,58 @@
       <template #footer>
         <el-button @click="importDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submittingImport" @click="submitImportCourses">开始导入</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="studentImportVisible" title="批量导入学生" width="560px" destroy-on-close>
+      <div class="import-tips">
+        <p>支持上传 `.xlsx` / `.xls`，字段：姓名、学号、年级、专业代码（班级在绑定教学班时自动回填）。建议先下载模板再填写。</p>
+        <div class="import-actions">
+          <el-button @click="handleDownloadStudentTemplate">下载模板</el-button>
+        </div>
+      </div>
+      <el-upload
+        v-model:file-list="studentImportFileList"
+        drag
+        action="#"
+        :auto-upload="false"
+        :limit="1"
+        accept=".xlsx,.xls"
+        :on-change="handleStudentImportChange"
+        :on-remove="handleStudentImportRemove"
+      >
+        <el-icon class="upload-icon"><UploadFilled /></el-icon>
+        <div class="upload-title">拖拽学生 Excel 到这里，或点击选择文件</div>
+        <template #tip>
+          <div class="muted">导入完成后会自动刷新学生列表。</div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="studentImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingStudentImport" @click="submitImportStudents">开始导入</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="studentDialogVisible" :title="editingStudent ? '编辑学生' : '新增学生'" width="520px" destroy-on-close>
+      <el-form ref="studentFormRef" :model="studentForm" :rules="studentRules" label-width="88px">
+        <el-form-item label="学号" prop="studentNo">
+          <el-input v-model="studentForm.studentNo" placeholder="例如 202301001" />
+        </el-form-item>
+        <el-form-item label="姓名" prop="studentName">
+          <el-input v-model="studentForm.studentName" placeholder="请输入姓名" />
+        </el-form-item>
+        <el-form-item label="年级" prop="grade">
+          <el-input v-model="studentForm.grade" placeholder="例如 2023" />
+        </el-form-item>
+        <el-form-item label="所属专业" prop="majorId">
+          <el-select v-model="studentForm.majorId" placeholder="请选择专业" style="width: 100%">
+            <el-option v-for="major in availableCourseMajors" :key="major.id" :label="major.majorName" :value="major.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="studentDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingStudent" @click="submitStudentForm">保存</el-button>
       </template>
     </el-dialog>
 
@@ -343,6 +464,52 @@
         <el-button type="primary" :loading="submittingUser" @click="submitUser">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 毕业要求导入 -->
+    <el-dialog v-model="requirementImportVisible" title="批量导入毕业要求" width="560px" destroy-on-close>
+      <div class="import-tips">
+        <p>字段：专业代码*、毕业要求编号*、毕业要求名称*、毕业要求描述</p>
+        <div class="import-actions">
+          <el-button @click="handleDownloadRequirementTemplate">下载模板</el-button>
+        </div>
+      </div>
+      <el-upload
+        v-model:file-list="requirementImportFileList"
+        drag action="#" :auto-upload="false" :limit="1" accept=".xlsx,.xls"
+        :on-change="handleRequirementImportChange" :on-remove="handleRequirementImportRemove"
+      >
+        <el-icon class="upload-icon"><UploadFilled /></el-icon>
+        <div class="upload-title">拖拽毕业要求 Excel 到这里</div>
+        <template #tip><div class="muted">导入完成后请刷新页面查看。</div></template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="requirementImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingRequirementImport" @click="submitRequirementImport">开始导入</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 指标点导入 -->
+    <el-dialog v-model="indicatorImportVisible" title="批量导入指标点" width="560px" destroy-on-close>
+      <div class="import-tips">
+        <p>字段：毕业要求编码*、指标点编号*、指标点名称*、指标点描述</p>
+        <div class="import-actions">
+          <el-button @click="handleDownloadIndicatorTemplate">下载模板</el-button>
+        </div>
+      </div>
+      <el-upload
+        v-model:file-list="indicatorImportFileList"
+        drag action="#" :auto-upload="false" :limit="1" accept=".xlsx,.xls"
+        :on-change="handleIndicatorImportChange" :on-remove="handleIndicatorImportRemove"
+      >
+        <el-icon class="upload-icon"><UploadFilled /></el-icon>
+        <div class="upload-title">拖拽指标点 Excel 到这里</div>
+        <template #tip><div class="muted">导入完成后请刷新页面查看。</div></template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="indicatorImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingIndicatorImport" @click="submitIndicatorImport">开始导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -359,8 +526,12 @@ import {
   createIndicator,
   deleteGraduationRequirement,
   deleteIndicator,
+  downloadGraduationRequirementTemplate,
+  downloadIndicatorPointTemplate,
   getGraduationRequirement,
   getIndicator,
+  importGraduationRequirementsFromExcel,
+  importIndicatorPointsFromExcel,
   pageGraduationRequirements,
   pageIndicators,
   updateGraduationRequirement,
@@ -368,7 +539,8 @@ import {
 } from '@/api/indicator'
 import { createMajor, deleteMajor, getMajor, listMajors, pageMajors, updateMajor } from '@/api/major'
 import { createSchoolYear, deleteSchoolYear, getSchoolYear, pageSchoolYears, updateSchoolYear } from '@/api/schoolyear'
-import { pageTeachingClasses } from '@/api/teaching-class'
+import { pageTeachingClasses, importStudentsFromExcel, downloadStudentTemplate } from '@/api/teaching-class'
+import { createStudent, deleteStudent, pageStudents, updateStudent } from '@/api/student'
 import StatusTag from '@/components/StatusTag/StatusTag.vue'
 import { useUserStore } from '@/stores/user'
 import type {
@@ -395,8 +567,12 @@ import type {
   SysDictSchoolYearUpdateRequest,
   SysDictSchoolYearVO,
   SysUserVO,
+  StudentAddRequest,
+  StudentUpdateRequest,
+  StudentVO,
   TeachingClassVO
 } from '@/api/backend'
+import { normalizePageFields } from '@/api/backend'
 
 const userStore = useUserStore()
 const courses = ref<CourseVO[]>([])
@@ -438,6 +614,15 @@ const submittingCollege = ref(false)
 const submittingSchoolYear = ref(false)
 
 const importFileList = ref<UploadUserFile[]>([])
+// 毕业要求导入
+const requirementImportVisible = ref(false)
+const requirementImportFileList = ref<UploadUserFile[]>([])
+const submittingRequirementImport = ref(false)
+// 指标点导入
+const indicatorImportVisible = ref(false)
+const indicatorImportFileList = ref<UploadUserFile[]>([])
+const submittingIndicatorImport = ref(false)
+
 const createFormRef = ref<FormInstance>()
 const requirementFormRef = ref<FormInstance>()
 const indicatorFormRef = ref<FormInstance>()
@@ -555,10 +740,219 @@ const roleLabelMap: Record<string, string> = {
 }
 
 const getRoleLabel = (roleCode?: string) => roleLabelMap[roleCode || ''] || roleCode || '-'
-const canManageCourseSection = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
+const canManageCourseSection = computed(() => userStore.role === 'edu')
 const canManageDictionarySection = computed(() => userStore.role === 'admin')
-const canManageUserSection = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
-const canManageRequirementSection = computed(() => userStore.role === 'admin' || userStore.role === 'leader')
+const canManageUserSection = computed(() => userStore.role === 'admin')
+const canManageRequirementSection = computed(() => userStore.role === 'leader')
+const canManageStudentSection = computed(() => userStore.role === 'edu')
+
+// ===== 学生库 =====
+const studentRows = ref<StudentVO[]>([])
+const studentTotal = ref(0)
+const loadingStudents = ref(false)
+const studentQuery = reactive({
+  current: 1,
+  pageSize: 10,
+  studentNo: '',
+  studentName: '',
+  majorId: null as number | null
+})
+const studentImportVisible = ref(false)
+const studentImportFileList = ref<UploadUserFile[]>([])
+const submittingStudentImport = ref(false)
+
+const loadStudents = async () => {
+  loadingStudents.value = true
+  try {
+    const page = await pageStudents({
+      current: studentQuery.current,
+      pageSize: studentQuery.pageSize,
+      studentNo: studentQuery.studentNo || undefined,
+      studentName: studentQuery.studentName || undefined,
+      majorId: studentQuery.majorId || undefined
+    })
+    studentRows.value = page.records
+    studentTotal.value = normalizePageFields(page, { current: studentQuery.current, pageSize: studentQuery.pageSize }).total
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '加载学生列表失败')
+  } finally {
+    loadingStudents.value = false
+  }
+}
+
+const searchStudents = () => {
+  studentQuery.current = 1
+  loadStudents()
+}
+
+const resetStudentQuery = () => {
+  studentQuery.studentNo = ''
+  studentQuery.studentName = ''
+  studentQuery.majorId = null
+  studentQuery.current = 1
+  loadStudents()
+}
+
+const onStudentPageChange = (p: number) => {
+  studentQuery.current = p
+  loadStudents()
+}
+
+const onStudentSizeChange = (s: number) => {
+  studentQuery.pageSize = s
+  studentQuery.current = 1
+  loadStudents()
+}
+
+const openStudentImportDialog = () => {
+  studentImportFileList.value = []
+  studentImportVisible.value = true
+}
+
+const handleStudentImportChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.error('请上传 Excel 文件')
+    studentImportFileList.value = []
+    return
+  }
+  studentImportFileList.value = uploadFiles.slice(-1)
+}
+
+const handleStudentImportRemove: UploadProps['onRemove'] = () => {
+  studentImportFileList.value = []
+}
+
+const handleDownloadStudentTemplate = async () => {
+  try {
+    const blob = await downloadStudentTemplate()
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = '学生导入模板.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '模板下载失败')
+  }
+}
+
+const submitImportStudents = async () => {
+  const file = studentImportFileList.value[0]?.raw
+  if (!file) {
+    ElMessage.warning('请先选择学生 Excel 文件')
+    return
+  }
+  submittingStudentImport.value = true
+  try {
+    const result = await importStudentsFromExcel(file)
+    if (result.failCount > 0) {
+      const preview = (result.failDetails ?? [])
+        .slice(0, 5)
+        .map((item) => `第 ${item.row || '-'} 行：${item.reason || '导入失败'}`)
+        .join('\n')
+      await ElMessageBox.alert(
+        `总计 ${result.total} 条，成功 ${result.successCount} 条，失败 ${result.failCount} 条。${preview ? `\n\n失败示例：\n${preview}` : ''}`,
+        '导入完成',
+        { confirmButtonText: '知道了' }
+      )
+    } else {
+      ElMessage.success(`学生导入完成，共成功导入 ${result.successCount} 条`)
+    }
+    studentImportVisible.value = false
+    studentImportFileList.value = []
+    await loadStudents()
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '学生导入失败')
+  } finally {
+    submittingStudentImport.value = false
+  }
+}
+
+// ===== 学生增删改 =====
+const studentDialogVisible = ref(false)
+const editingStudent = ref<StudentVO>()
+const studentFormRef = ref<FormInstance>()
+const submittingStudent = ref(false)
+const studentForm = reactive<StudentAddRequest>({
+  studentNo: '',
+  studentName: '',
+  grade: '',
+  majorId: undefined as unknown as number
+})
+const studentRules: FormRules<StudentAddRequest> = {
+  studentNo: [{ required: true, message: '请输入学号', trigger: 'blur' }],
+  studentName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+  majorId: [{ required: true, message: '请选择专业', trigger: 'change' }]
+}
+
+const resetStudentForm = () => {
+  studentForm.studentNo = ''
+  studentForm.studentName = ''
+  studentForm.grade = ''
+  studentForm.majorId = availableCourseMajors.value[0]?.id ?? (undefined as unknown as number)
+}
+
+const openStudentCreateDialog = () => {
+  editingStudent.value = undefined
+  resetStudentForm()
+  studentDialogVisible.value = true
+}
+
+const openStudentEditDialog = (row: StudentVO) => {
+  editingStudent.value = row
+  studentForm.studentNo = row.studentNo ?? ''
+  studentForm.studentName = row.name ?? ''
+  studentForm.grade = row.grade ?? ''
+  studentForm.majorId = (row.majorId ?? undefined) as unknown as number
+  studentDialogVisible.value = true
+}
+
+const submitStudentForm = async () => {
+  const isValid = await studentFormRef.value?.validate().catch(() => false)
+  if (!isValid) return
+  submittingStudent.value = true
+  try {
+    const payload = {
+      studentNo: studentForm.studentNo.trim(),
+      studentName: studentForm.studentName.trim(),
+      grade: studentForm.grade?.trim() ?? '',
+      majorId: Number(studentForm.majorId)
+    }
+    if (editingStudent.value) {
+      await updateStudent({ id: editingStudent.value.id, ...payload } as StudentUpdateRequest)
+      ElMessage.success('学生已更新')
+    } else {
+      await createStudent(payload)
+      ElMessage.success('学生已创建')
+    }
+    studentDialogVisible.value = false
+    editingStudent.value = undefined
+    await loadStudents()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '学生保存失败'
+    ElMessage.error(message)
+  } finally {
+    submittingStudent.value = false
+  }
+}
+
+const handleDeleteStudent = async (row: StudentVO) => {
+  try {
+    await ElMessageBox.confirm(`确认删除学生 ${row.studentNo} - ${row.name} 吗？`, '删除确认', {
+      type: 'warning'
+    })
+    await deleteStudent(row.id)
+    ElMessage.success('学生已删除')
+    await loadStudents()
+  } catch (error) {
+    if (error === 'cancel') return
+    const message = error instanceof Error ? error.message : '学生删除失败'
+    ElMessage.error(message)
+  }
+}
 
 const formatDateTime = (value?: string) => {
   if (!value) return '-'
@@ -631,25 +1025,57 @@ const userRows = computed(() =>
   }))
 )
 
+const requirementFilter = reactive({ majorId: undefined as number | undefined, code: '', name: '' })
+const indicatorFilter = reactive({ requirementId: undefined as number | undefined, code: '', name: '' })
+
+const resetRequirementFilter = () => {
+  requirementFilter.majorId = undefined
+  requirementFilter.code = ''
+  requirementFilter.name = ''
+}
+const resetIndicatorFilter = () => {
+  indicatorFilter.requirementId = undefined
+  indicatorFilter.code = ''
+  indicatorFilter.name = ''
+}
+
 const requirementRows = computed(() =>
-  requirements.value.map((requirement) => ({
-    code: requirement.requirementCode,
-    name: requirement.requirementName,
-    majorName: requirement.majorName || '-',
-    collegeName: requirement.collegeName || '-',
-    description: requirement.description || '-',
-    raw: requirement
-  }))
+  requirements.value
+    .filter((requirement) => {
+      if (requirementFilter.majorId && requirement.majorId !== requirementFilter.majorId) return false
+      const code = requirementFilter.code.trim().toLowerCase()
+      if (code && !(requirement.requirementCode || '').toLowerCase().includes(code)) return false
+      const name = requirementFilter.name.trim().toLowerCase()
+      if (name && !(requirement.requirementName || '').toLowerCase().includes(name)) return false
+      return true
+    })
+    .map((requirement) => ({
+      code: requirement.requirementCode,
+      name: requirement.requirementName,
+      majorName: requirement.majorName || '-',
+      collegeName: requirement.collegeName || '-',
+      description: requirement.description || '-',
+      raw: requirement
+    }))
 )
 
 const indicatorRows = computed(() =>
-  indicators.value.map((indicator) => ({
-    requirementCode: indicator.requirementCode || '-',
-    code: indicator.indicatorCode,
-    name: indicator.indicatorName,
-    description: indicator.description || '-',
-    raw: indicator
-  }))
+  indicators.value
+    .filter((indicator) => {
+      if (indicatorFilter.requirementId && indicator.requirementId !== indicatorFilter.requirementId) return false
+      const code = indicatorFilter.code.trim().toLowerCase()
+      if (code && !(indicator.indicatorCode || '').toLowerCase().includes(code)) return false
+      const name = indicatorFilter.name.trim().toLowerCase()
+      if (name && !(indicator.indicatorName || '').toLowerCase().includes(name)) return false
+      return true
+    })
+    .map((indicator) => ({
+      requirementCode: indicator.requirementCode || '-',
+      code: indicator.indicatorCode,
+      name: indicator.indicatorName,
+      description: indicator.description || '-',
+      raw: indicator
+    }))
 )
 
 const availableCourseMajors = computed<SysDictMajorSimpleVO[]>(() => {
@@ -848,6 +1274,119 @@ const openRequirementEditDialog = async (requirement: GraduationRequirementVO) =
   } catch (error) {
     const message = error instanceof Error ? error.message : '毕业要求详情加载失败'
     ElMessage.error(message)
+  }
+}
+
+// ===== 毕业要求导入 =====
+const openRequirementImportDialog = () => {
+  requirementImportFileList.value = []
+  requirementImportVisible.value = true
+}
+
+const handleRequirementImportChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.warning('仅支持 .xlsx/.xls 文件')
+    requirementImportFileList.value = []
+    return
+  }
+  requirementImportFileList.value = uploadFiles.slice(-1)
+}
+
+const handleRequirementImportRemove: UploadProps['onRemove'] = () => {
+  requirementImportFileList.value = []
+}
+
+const handleDownloadRequirementTemplate = async () => {
+  try {
+    const blob = await downloadGraduationRequirementTemplate()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = '毕业要求导入模板.xlsx'; a.click()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('模板已开始下载')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '模板下载失败')
+  }
+}
+
+const submitRequirementImport = async () => {
+  const file = requirementImportFileList.value[0]?.raw
+  if (!file) { ElMessage.warning('请先选择文件'); return }
+  submittingRequirementImport.value = true
+  try {
+    const result = await importGraduationRequirementsFromExcel(file as File)
+    requirementImportVisible.value = false
+    requirementImportFileList.value = []
+    await showRequirementIndicatorImportResult(result as Record<string, unknown>)
+    await Promise.all([loadRequirements(), loadIndicators()])
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '毕业要求导入失败')
+  } finally {
+    submittingRequirementImport.value = false
+  }
+}
+
+// ===== 指标点导入 =====
+const openIndicatorImportDialog = () => {
+  indicatorImportFileList.value = []
+  indicatorImportVisible.value = true
+}
+
+const handleIndicatorImportChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.warning('仅支持 .xlsx/.xls 文件')
+    indicatorImportFileList.value = []
+    return
+  }
+  indicatorImportFileList.value = uploadFiles.slice(-1)
+}
+
+const handleIndicatorImportRemove: UploadProps['onRemove'] = () => {
+  indicatorImportFileList.value = []
+}
+
+const handleDownloadIndicatorTemplate = async () => {
+  try {
+    const blob = await downloadIndicatorPointTemplate()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = '指标点导入模板.xlsx'; a.click()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('模板已开始下载')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '模板下载失败')
+  }
+}
+
+const submitIndicatorImport = async () => {
+  const file = indicatorImportFileList.value[0]?.raw
+  if (!file) { ElMessage.warning('请先选择文件'); return }
+  submittingIndicatorImport.value = true
+  try {
+    const result = await importIndicatorPointsFromExcel(file as File)
+    indicatorImportVisible.value = false
+    indicatorImportFileList.value = []
+    await showRequirementIndicatorImportResult(result as Record<string, unknown>)
+    await loadIndicators()
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '指标点导入失败')
+  } finally {
+    submittingIndicatorImport.value = false
+  }
+}
+
+const showRequirementIndicatorImportResult = async (result: Record<string, unknown>) => {
+  const failCount = Number(result.failCount || 0)
+  if (failCount > 0) {
+    const failDetails = result.failDetails as Array<Record<string, string>> | undefined
+    const preview = (failDetails ?? []).slice(0, 5)
+      .map((item) => `第 ${item.row || '-'} 行：${item.reason || '导入失败'}`).join('\n')
+    await ElMessageBox.alert(
+      `总计 ${result.total} 条，成功 ${result.successCount} 条，失败 ${failCount} 条。${preview ? `\n\n失败示例：\n${preview}` : ''}`,
+      '导入完成', { confirmButtonText: '知道了' }
+    )
+  } else {
+    ElMessage.success(`导入完成，共成功导入 ${result.successCount} 条`)
   }
 }
 
@@ -1397,8 +1936,16 @@ onMounted(async () => {
     )
   }
 
+  if (canManageStudentSection.value) {
+    loaders.push(
+      { label: '专业下拉', task: loadMajors() },
+      { label: '学生列表', task: loadStudents() }
+    )
+  }
+
   if (canManageRequirementSection.value) {
     loaders.push(
+      { label: '专业下拉', task: loadMajors() },
       { label: '毕业要求列表', task: loadRequirements() },
       { label: '指标点列表', task: loadIndicators() }
     )

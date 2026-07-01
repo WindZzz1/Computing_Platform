@@ -1,10 +1,12 @@
 package com.yupi.springbootinit.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.OwnershipHelper;
 import com.yupi.springbootinit.mapper.*;
 import com.yupi.springbootinit.model.dto.teachingClass.ClassStudentBindRequest;
 import com.yupi.springbootinit.model.dto.teachingClass.TeachingClassAddRequest;
@@ -12,6 +14,7 @@ import com.yupi.springbootinit.model.dto.teachingClass.TeachingClassQueryRequest
 import com.yupi.springbootinit.model.dto.teachingClass.TeachingClassUpdateRequest;
 import com.yupi.springbootinit.model.entity.*;
 import com.yupi.springbootinit.model.excel.ClassStudentExcel;
+import com.yupi.springbootinit.model.excel.TeachingClassExcel;
 import com.yupi.springbootinit.model.vo.StudentVO;
 import com.yupi.springbootinit.model.vo.TeachingClassVO;
 import com.yupi.springbootinit.service.TeachingClassService;
@@ -62,6 +65,9 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
 
     @Resource
     private SysDictCollegeMapper sysDictCollegeMapper;
+
+    @Resource
+    private OwnershipHelper ownershipHelper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -264,6 +270,20 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
     }
 
     @Override
+    public List<TeachingClassVO> listMyTeachingClasses() {
+        SysUser currentUser = ownershipHelper.getCurrentUser();
+        if (currentUser == null || currentUser.getId() == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        QueryWrapper<TeachingClass> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("teacher_id", currentUser.getId());
+        queryWrapper.orderByDesc("create_time");
+        return this.list(queryWrapper).stream()
+                .map(this::getTeachingClassVO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public Integer bindStudents(ClassStudentBindRequest classStudentBindRequest) {
         if (classStudentBindRequest == null || classStudentBindRequest.getClassId() == null) {
@@ -290,7 +310,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
             }
 
             // 检查是否已绑定
-            if (bindOrRestoreStudent(classId, studentId)) {
+            if (bindOrRestoreStudent(classId, studentId, teachingClass.getClassName())) {
                 bindCount++;
             }
         }
@@ -309,7 +329,20 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
         queryWrapper.eq("teaching_class_id", classId);
         queryWrapper.eq("student_id", studentId);
 
-        return classStudentMapper.delete(queryWrapper) > 0;
+        boolean result = classStudentMapper.delete(queryWrapper) > 0;
+
+        // 解绑后：检查学生是否还绑定在其他教学班，若未绑定则清除 className（使用 UpdateWrapper 强制设 null 避免 NOT_NULL 策略跳过）
+        if (result) {
+            QueryWrapper<ClassStudent> remainingWrapper = new QueryWrapper<>();
+            remainingWrapper.eq("student_id", studentId);
+            if (classStudentMapper.selectCount(remainingWrapper) == 0) {
+                UpdateWrapper<Student> updateWrapper = new UpdateWrapper<>();
+                updateWrapper.eq("id", studentId).set("class_name", null);
+                studentMapper.update(null, updateWrapper);
+            }
+        }
+
+        return result;
     }
 
     @Override
@@ -419,7 +452,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
                 }
 
                 // 检查是否已绑定
-                if (!bindOrRestoreStudent(classId, student.getId())) {
+                if (!bindOrRestoreStudent(classId, student.getId(), teachingClass.getClassName())) {
                     failCount++;
                     java.util.Map<String, String> detail = new java.util.HashMap<>();
                     detail.put("row", String.valueOf(i + 1));
@@ -525,7 +558,7 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
                     }
 
                     // 检查是否已绑定
-                    if (!bindOrRestoreStudent(classId, student.getId())) {
+                    if (!bindOrRestoreStudent(classId, student.getId(), teachingClass.getClassName())) {
                         failCount++;
                         Map<String, String> detail = new HashMap<>();
                         detail.put("row", String.valueOf(i + 2));
@@ -563,18 +596,182 @@ public class TeachingClassServiceImpl extends ServiceImpl<TeachingClassMapper, T
         }
     }
 
-    private boolean bindOrRestoreStudent(Long classId, Long studentId) {
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> importTeachingClassesFromExcel(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件不能为空");
+        }
+
+        // 验证文件类型
+        String filename = file.getOriginalFilename();
+        if (filename == null || (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件格式不正确，请上传Excel文件");
+        }
+
+        int successCount = 0;
+        int failCount = 0;
+        List<Map<String, String>> failDetails = new ArrayList<>();
+
+        try {
+            // 读取Excel数据
+            List<TeachingClassExcel> classExcels = com.alibaba.excel.EasyExcel.read(file.getInputStream())
+                    .head(TeachingClassExcel.class)
+                    .sheet(0)
+                    .doReadSync();
+
+            if (classExcels == null || classExcels.isEmpty()) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "Excel中没有数据");
+            }
+
+            for (int i = 0; i < classExcels.size(); i++) {
+                TeachingClassExcel excel = classExcels.get(i);
+                try {
+                    // 检查必填字段
+                    if (StringUtils.isAnyBlank(excel.getClassName(), excel.getCourseCode(),
+                            excel.getTeacherUsername(), excel.getYearName(), excel.getSemesterName())) {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName() != null ? excel.getClassName() : "");
+                        detail.put("reason", "必填字段为空（教学班名称、课程代码、教师用户名、学年、学期均必填）");
+                        failDetails.add(detail);
+                        continue;
+                    }
+
+                    // 查找课程（按课程代码）
+                    QueryWrapper<Course> courseQueryWrapper = new QueryWrapper<>();
+                    courseQueryWrapper.eq("course_code", excel.getCourseCode());
+                    Course course = courseMapper.selectOne(courseQueryWrapper);
+                    if (course == null) {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName());
+                        detail.put("reason", "课程代码不存在：" + excel.getCourseCode());
+                        failDetails.add(detail);
+                        continue;
+                    }
+
+                    // 查找教师（按用户名）
+                    QueryWrapper<SysUser> userQueryWrapper = new QueryWrapper<>();
+                    userQueryWrapper.eq("username", excel.getTeacherUsername());
+                    SysUser teacher = sysUserMapper.selectOne(userQueryWrapper);
+                    if (teacher == null) {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName());
+                        detail.put("reason", "教师用户名不存在：" + excel.getTeacherUsername());
+                        failDetails.add(detail);
+                        continue;
+                    }
+
+                    // 查找学年学期（按学年名称+学期名称）
+                    QueryWrapper<SysDictSchoolYear> termQueryWrapper = new QueryWrapper<>();
+                    termQueryWrapper.eq("year_name", excel.getYearName());
+                    termQueryWrapper.eq("semester_name", excel.getSemesterName());
+                    SysDictSchoolYear schoolYear = sysDictSchoolYearMapper.selectOne(termQueryWrapper);
+                    if (schoolYear == null) {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName());
+                        detail.put("reason", "学年学期不存在：" + excel.getYearName() + " " + excel.getSemesterName());
+                        failDetails.add(detail);
+                        continue;
+                    }
+
+                    // 检查唯一性约束：课程+教师+学期组合不能重复
+                    QueryWrapper<TeachingClass> existQueryWrapper = new QueryWrapper<>();
+                    existQueryWrapper.eq("course_id", course.getId());
+                    existQueryWrapper.eq("teacher_id", teacher.getId());
+                    existQueryWrapper.eq("term_id", schoolYear.getId());
+                    Long existCount = this.baseMapper.selectCount(existQueryWrapper);
+                    if (existCount > 0) {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName());
+                        detail.put("reason", "该课程、教师、学期组合已存在教学班");
+                        failDetails.add(detail);
+                        continue;
+                    }
+
+                    // 创建教学班
+                    TeachingClass teachingClass = new TeachingClass();
+                    teachingClass.setClassName(excel.getClassName());
+                    teachingClass.setCourseId(course.getId());
+                    teachingClass.setTeacherId(teacher.getId());
+                    teachingClass.setTermId(schoolYear.getId());
+
+                    if (this.save(teachingClass)) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                        Map<String, String> detail = new HashMap<>();
+                        detail.put("row", String.valueOf(i + 2));
+                        detail.put("className", excel.getClassName());
+                        detail.put("reason", "保存失败");
+                        failDetails.add(detail);
+                    }
+                } catch (Exception e) {
+                    failCount++;
+                    Map<String, String> detail = new HashMap<>();
+                    detail.put("row", String.valueOf(i + 2));
+                    detail.put("className", excel.getClassName() != null ? excel.getClassName() : "");
+                    detail.put("reason", "系统错误：" + e.getMessage());
+                    failDetails.add(detail);
+                }
+            }
+
+            // 原子导入：任一行失败则整批回滚
+            if (failCount > 0) {
+                // 拼接失败明细到异常消息中，方便用户定位问题
+                StringBuilder msg = new StringBuilder();
+                msg.append("Excel导入存在 ").append(failCount).append(" 条失败，已整体回滚，请修正后重新导入");
+                msg.append("\n\n失败明细：");
+                for (Map<String, String> detail : failDetails) {
+                    msg.append("\n第 ").append(detail.get("row")).append(" 行（")
+                       .append(detail.get("className")).append("）：")
+                       .append(detail.get("reason"));
+                }
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, msg.toString());
+            }
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("total", classExcels.size());
+            result.put("successCount", successCount);
+            result.put("failCount", failCount);
+            result.put("failDetails", failDetails);
+            return result;
+
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件读取失败: " + e.getMessage());
+        }
+    }
+
+    private boolean bindOrRestoreStudent(Long classId, Long studentId, String className) {
         ClassStudent existingRelation = classStudentMapper.selectAnyByClassIdAndStudentId(classId, studentId);
+        boolean bound;
         if (existingRelation != null) {
             if (existingRelation.getIsDeleted() != null && existingRelation.getIsDeleted() == 0) {
                 return false;
             }
-            return classStudentMapper.restoreById(existingRelation.getId()) > 0;
+            bound = classStudentMapper.restoreById(existingRelation.getId()) > 0;
+        } else {
+            ClassStudent classStudent = new ClassStudent();
+            classStudent.setClassId(classId);
+            classStudent.setStudentId(studentId);
+            bound = classStudentMapper.insert(classStudent) > 0;
         }
-
-        ClassStudent classStudent = new ClassStudent();
-        classStudent.setClassId(classId);
-        classStudent.setStudentId(studentId);
-        return classStudentMapper.insert(classStudent) > 0;
+        // 绑定成功后回填学生的班级字段（学生导入时不带班级，绑定教学班时再回填）
+        if (bound && StringUtils.isNotBlank(className)) {
+            Student updateStudent = new Student();
+            updateStudent.setId(studentId);
+            updateStudent.setClassName(className);
+            studentMapper.updateById(updateStudent);
+        }
+        return bound;
     }
 }

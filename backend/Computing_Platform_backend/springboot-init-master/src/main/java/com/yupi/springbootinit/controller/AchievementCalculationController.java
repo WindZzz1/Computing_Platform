@@ -48,7 +48,7 @@ public class AchievementCalculationController {
      * @return 计算状态
      */
     @PostMapping("/status")
-    @AuthCheck(anyRole = SysUserConstant.ROLE_TEACHER + "," + SysUserConstant.ROLE_ADMIN)
+    @AuthCheck(anyRole = SysUserConstant.ROLE_TEACHER + "," + SysUserConstant.ROLE_ADMIN + "," + SysUserConstant.ROLE_LEADER)
     public BaseResponse<Map<String, Object>> getCalculationStatus(@RequestBody AchievementCalculationRequest request) {
         if (request == null || request.getClassId() == null) {
             throw new RuntimeException("教学班级ID不能为空");
@@ -64,7 +64,7 @@ public class AchievementCalculationController {
      * @return 一级、二级达成度明细
      */
     @PostMapping("/detail")
-    @AuthCheck(anyRole = SysUserConstant.ROLE_TEACHER + "," + SysUserConstant.ROLE_ADMIN)
+    @AuthCheck(anyRole = SysUserConstant.ROLE_TEACHER + "," + SysUserConstant.ROLE_ADMIN + "," + SysUserConstant.ROLE_LEADER)
     public BaseResponse<Map<String, Object>> getCalculationDetail(@RequestBody AchievementCalculationRequest request) {
         if (request == null || request.getClassId() == null) {
             throw new RuntimeException("教学班级ID不能为空");

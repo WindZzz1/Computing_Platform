@@ -66,7 +66,7 @@ public class SysDictSchoolYearController {
     }
 
     @PostMapping("/list")
-    @AuthCheck(anyRole = SysUserConstant.ROLE_EDU + "," + SysUserConstant.ROLE_LEADER)
+    @AuthCheck
     public BaseResponse<List<SysDictSchoolYearVO>> listSchoolYear() {
         SysDictSchoolYearQueryRequest request = new SysDictSchoolYearQueryRequest();
         request.setCurrent(1);

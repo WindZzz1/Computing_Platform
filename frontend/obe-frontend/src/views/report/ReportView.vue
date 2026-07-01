@@ -12,47 +12,8 @@
       class="summary-alert"
     />
 
-    <section class="summary-metrics">
-      <el-card shadow="never" class="metric-card">
-        <span class="metric-label">可继续联调的能力</span>
-        <strong class="metric-value">{{ availableReportCount }}</strong>
-        <span class="metric-tip">当前角色可直接继续接的接口或导出能力</span>
-      </el-card>
-      <el-card shadow="never" class="metric-card">
-        <span class="metric-label">矩阵准备度</span>
-        <strong class="metric-value">{{ readyIndicatorCount }}/{{ indicatorRows.length || 0 }}</strong>
-        <span class="metric-tip">当前专业下已满足列权重要求的指标点数量</span>
-      </el-card>
-    </section>
-
-    <section class="page-grid top-grid">
-      <div class="panel" :class="canUseMajorPrep ? 'span-5' : 'span-12'">
-        <div class="toolbar">
-          <h3 class="panel-title">接口状态概览</h3>
-          <el-tag type="info" effect="plain">{{ user.roleName }}</el-tag>
-        </div>
-        <div class="status-overview-list">
-          <div
-            v-for="item in reportCatalog"
-            :key="item.name"
-            class="status-overview-item"
-            :class="`status-overview-item--${item.tagType}`"
-          >
-            <div class="status-overview-main">
-              <div class="status-overview-title-row">
-                <span class="status-overview-title">{{ item.name }}</span>
-                <span class="status-overview-role">{{ item.targetRole }}</span>
-              </div>
-              <p class="status-overview-tip">{{ item.tip }}</p>
-            </div>
-            <el-tag :type="item.tagType" effect="light" class="status-overview-tag">
-              {{ item.statusText }}
-            </el-tag>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="canUseMajorPrep" class="panel span-7">
+    <section v-if="canUseMajorPrep" class="page-grid top-grid">
+      <div class="panel span-12">
         <div class="toolbar">
           <h3 class="panel-title">指标点支撑情况</h3>
           <el-select v-model="selectedMajorId" style="width: 260px" placeholder="选择专业" @change="reloadMajorSupportData">
@@ -75,8 +36,7 @@
 
     <section v-if="canUseCourseReport" class="panel action-panel">
       <div class="toolbar">
-        <h3 class="panel-title">课程报表联调</h3>
-        <el-tag type="success">教师接口已开放</el-tag>
+        <h3 class="panel-title">课程报表</h3>
       </div>
       <div class="form-grid">
         <el-select
@@ -87,32 +47,6 @@
         >
           <el-option v-for="item in courseClasses" :key="item.id" :label="buildClassLabel(item)" :value="item.id" />
         </el-select>
-        <el-input-number
-          v-if="needsTeacherDirectClassInput"
-          v-model="selectedClassId"
-          :min="1"
-          :step="1"
-          controls-position="right"
-          style="width: 180px"
-          placeholder="教学班 ID"
-        />
-        <el-input-number
-          v-if="needsTeacherDirectClassInput"
-          v-model="directCourseId"
-          :min="1"
-          :step="1"
-          controls-position="right"
-          style="width: 180px"
-          placeholder="课程 ID"
-        />
-        <el-button
-          v-if="needsTeacherDirectClassInput"
-          :loading="courseActionLoading || rawScoreLoading"
-          :disabled="!selectedClassId"
-          @click="handleApplyTeacherDirectContext"
-        >
-          按当前 ID 联调
-        </el-button>
         <el-button :loading="courseActionLoading" @click="handleDownloadCourseTemplate">下载报表模板</el-button>
         <el-button type="primary" :loading="courseActionLoading" :disabled="!selectedClassId" @click="handleLoadCourseReport">查询报表数据</el-button>
         <el-button :loading="courseActionLoading" :disabled="!selectedClassId" @click="handleExportCourseReport('EXCEL')">导出 Excel</el-button>
@@ -120,13 +54,9 @@
       </div>
       <el-alert
         v-if="!hasCourseClassContext"
-        :title="needsTeacherDirectClassInput ? '教师端请手动输入教学班 ID 联调' : '当前账号下还没有可联调的教学班'"
+        title="当前账号下还没有可用教学班"
         type="info"
-        :description="
-          needsTeacherDirectClassInput
-            ? '当前教师账号没有教学班列表读取接口。可直接填写 classId；如果还要自动加载课程目标和考核点，请同时填写 courseId。'
-            : '请先在成绩管理页创建教学班并完成课程、教师、学期绑定，再回来联调课程报表接口。'
-        "
+        description="请先在成绩管理页创建教学班并完成课程、教师、学期绑定，再生成课程报表。"
         show-icon
         :closable="false"
         class="section-alert"
@@ -156,7 +86,7 @@
         </el-card>
 
         <el-card shadow="never" class="result-card">
-          <template #header>联调建议</template>
+          <template #header>操作建议</template>
           <div class="notice-list">
             <div v-for="item in courseReportPrepHints" :key="item.title" class="notice-item">
               <div>
@@ -214,8 +144,7 @@
 
     <section v-if="canUseMajorReport" class="panel action-panel">
       <div class="toolbar">
-        <h3 class="panel-title">专业报表联调</h3>
-        <el-tag type="success">接口已开放，服务层已实现</el-tag>
+        <h3 class="panel-title">专业报表</h3>
       </div>
       <div class="form-grid">
         <el-select v-model="selectedMajorId" placeholder="选择专业" style="width: 220px" :disabled="!majors.length" @change="reloadMajorSupportData">
@@ -249,16 +178,16 @@
         v-if="!majors.length || (!schoolYears.length && !canUseManualTermInput)"
         title="当前还缺少专业或学期基础数据"
         type="info"
-        description="请先在基础数据管理中补齐专业、毕业要求、学期信息，再进行专业报表联调。"
+        description="请先在基础数据管理中补齐专业、毕业要求、学期信息，再生成专业报表。"
         show-icon
         :closable="false"
         class="section-alert"
       />
       <el-alert
         v-else-if="canUseManualTermInput"
-        title="当前角色没有学期下拉目录，改为手动输入 termId 联调"
+        title="当前角色暂无学期目录，请手动输入学期 ID"
         type="info"
-        description="后端专业报表接口仍可调用，只是当前账号拿不到学期列表。请输入目标学期的 termId 后继续测试。"
+        description="当前账号暂未开放学期列表查询，请直接输入目标学期的 ID 后继续操作。"
         show-icon
         :closable="false"
         class="section-alert"
@@ -277,16 +206,6 @@
       </div>
 
       <div v-if="majorRadarData || majorPenetrationData" class="result-grid">
-        <el-card v-if="majorRadarData" shadow="never" class="result-card">
-          <template #header>雷达图接口返回摘要</template>
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="专业">{{ majorRadarData.majorName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="年级">{{ majorRadarData.grade || selectedGrade || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="指标点数">{{ majorRadarData.indicatorPoints?.length ?? 0 }}</el-descriptions-item>
-            <el-descriptions-item label="生成时间">{{ majorRadarData.generatedTime || '-' }}</el-descriptions-item>
-          </el-descriptions>
-        </el-card>
-
         <el-card v-if="majorRadarData" shadow="never" class="result-card wide-result-card">
           <template #header>雷达图指标点结果预览</template>
           <div v-if="majorRadarRows.length" ref="majorRadarChartRef" class="radar-chart-box"></div>
@@ -506,6 +425,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
+import * as XLSX from 'xlsx'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { getCourseAchievementCalculationStatus } from '@/api/calculation'
@@ -527,7 +447,7 @@ import {
 } from '@/api/report'
 import { listSchoolYears } from '@/api/schoolyear'
 import { listAssessmentPoints, listCourseObjectives } from '@/api/syllabus'
-import { pageTeachingClasses } from '@/api/teaching-class'
+import { listMyTeachingClasses, pageTeachingClasses } from '@/api/teaching-class'
 import { useUserStore } from '@/stores/user'
 import type {
   AssessmentPointVO,
@@ -553,14 +473,6 @@ type IndicatorSupportRow = {
   courseCount: number
   weightSum: string
   ready: boolean
-}
-
-type ReportCatalogRow = {
-  name: string
-  targetRole: string
-  statusText: string
-  tagType: 'success' | 'warning' | 'info'
-  tip: string
 }
 
 type MatrixLedgerRow = {
@@ -644,16 +556,10 @@ const rawScoreStatus = ref<StatusState>()
 const selectedMajor = computed(() => majors.value.find((item) => item.id === selectedMajorId.value))
 const selectedCourseClass = computed(() => courseClasses.value.find((item) => item.id === selectedClassId.value))
 const hasCourseClassContext = computed(() => Boolean(selectedClassId.value || courseClasses.value.length))
-const needsTeacherDirectClassInput = computed(() => user.role === 'teacher' && !courseClasses.value.length)
-const isTeacherDirectClassMode = computed(
-  () => needsTeacherDirectClassInput.value && Boolean(selectedClassId.value)
-)
 const resolvedCourseId = computed(() => Number(selectedCourseClass.value?.courseId || directCourseId.value || 0) || undefined)
 const canLoadRawScoreMetadata = computed(() => Boolean(resolvedCourseId.value))
-const courseClassSelectorDisabled = computed(() => needsTeacherDirectClassInput.value)
-const courseClassSelectPlaceholder = computed(() =>
-  needsTeacherDirectClassInput.value ? '教师端改为手动输入 classId' : '选择教学班'
-)
+const courseClassSelectorDisabled = computed(() => !courseClasses.value.length)
+const courseClassSelectPlaceholder = computed(() => '选择教学班')
 const selectedCourseClassLabel = computed(() => {
   if (selectedCourseClass.value) {
     return selectedCourseClass.value.className || buildClassLabel(selectedCourseClass.value)
@@ -661,8 +567,6 @@ const selectedCourseClassLabel = computed(() => {
   return selectedClassId.value ? `教学班 ${selectedClassId.value}` : '-'
 })
 const canSubmitMajorRequest = computed(() => Boolean(selectedMajorId.value && selectedTermId.value && selectedGrade.value))
-const availableReportCount = computed(() => reportCatalog.value.filter((item) => item.tagType === 'success').length)
-const readyIndicatorCount = computed(() => indicatorRows.value.filter((item) => item.ready).length)
 const courseReportPrep = computed(() => ({
   objectiveCount: courseObjectives.value.length,
   assessmentCount: rawScoreAssessmentPoints.value.length,
@@ -672,15 +576,6 @@ const courseReportPrep = computed(() => ({
 }))
 const courseReportPrepHints = computed(() => {
   const items: Array<{ title: string; desc: string; tag: string; type: 'success' | 'warning' | 'info' }> = []
-
-  if (isTeacherDirectClassMode.value) {
-    items.push({
-      title: '当前为单班直达联调模式',
-      desc: `当前教师账号没有教学班列表读取接口，页面正按 classId=${selectedClassId.value} 继续联调课程报表。`,
-      tag: '直达模式',
-      type: 'info'
-    })
-  }
 
   items.push(
     courseReportPrep.value.objectiveCount > 0
@@ -701,7 +596,7 @@ const courseReportPrepHints = computed(() => {
       : {
           title: '考核点待确认',
           desc: canLoadRawScoreMetadata.value
-            ? '先去课程大纲页补齐考核点，再继续导入成绩和联调报表。'
+            ? '先去课程大纲页补齐考核点，再继续导入成绩并生成报表。'
             : '当前缺少课程详情，页面暂时不能自动读取考核点列表。',
           tag: canLoadRawScoreMetadata.value ? '待处理' : '待补详情',
           type: canLoadRawScoreMetadata.value ? 'warning' : 'info'
@@ -710,14 +605,14 @@ const courseReportPrepHints = computed(() => {
 
   items.push(
     courseReportPrep.value.scoreRecordCount > 0
-      ? { title: '成绩记录已存在', desc: `当前教学班已查询到 ${courseReportPrep.value.scoreRecordCount} 条成绩记录。`, tag: '可联调', type: 'success' }
+      ? { title: '成绩记录已存在', desc: `当前教学班已查询到 ${courseReportPrep.value.scoreRecordCount} 条成绩记录。`, tag: '可用', type: 'success' }
       : { title: '还没有成绩记录', desc: '建议先去成绩页导入或检查当前教学班成绩，再回来验证课程报表。', tag: '待导入', type: 'info' }
   )
 
   items.push(
     courseReportPrep.value.hasCalculationResult
-      ? { title: '课程级结果已生成', desc: '当前教学班已经形成课程级达成度结果，后续联调课程报表和计算结果展示会更顺。', tag: '已生成', type: 'success' }
-      : { title: '课程级结果未生成', desc: '建议先去计算中心补课程级计算结果，再回来联调课程报表闭环。', tag: '待计算', type: 'info' }
+      ? { title: '课程级结果已生成', desc: '当前教学班已经形成课程级达成度结果，后续生成课程报表与展示计算结果会更顺。', tag: '已生成', type: 'success' }
+      : { title: '课程级结果未生成', desc: '建议先去计算中心补课程级计算结果，再回来生成课程报表。', tag: '待计算', type: 'info' }
   )
 
   return items
@@ -848,15 +743,20 @@ const routeGrade = computed(() => {
 const mergeMajorOptions = (items: Array<{ id?: number | null; majorId?: number | null; majorName?: string | null }>) => {
   const majorMap = new Map(majors.value.map((item) => [item.id, item]))
   items.forEach((item) => {
-    const majorId = Number(item.id ?? item.majorId)
+    // 用真正的专业 id（课程/毕业要求挂在 majorId 上），不能用记录自身 id，
+    // 否则每条课程/毕业要求都会被当成一个"专业"，产生大量同名重复项
+    const majorId = Number(item.majorId)
     const majorName = item.majorName?.trim()
     if (!Number.isFinite(majorId) || !majorName) {
       return
     }
-    majorMap.set(majorId, {
-      id: majorId,
-      majorName
-    })
+    // 仅补充字典里没有的专业，避免覆盖 listMajors 返回的完整项
+    if (!majorMap.has(majorId)) {
+      majorMap.set(majorId, {
+        id: majorId,
+        majorName
+      })
+    }
   })
   majors.value = Array.from(majorMap.values())
 }
@@ -864,25 +764,25 @@ const mergeMajorOptions = (items: Array<{ id?: number | null; majorId?: number |
 const roleSummary = computed<StatusState>(() => {
   if (user.role === 'admin') {
     return {
-      title: '当前角色可联调课程报表与专业报表两条链路',
+      title: '当前角色可使用课程报表与专业报表',
       description:
-        '管理员会同时显示课程报表、专业报表和矩阵台账准备能力；其中专业报表如果没有学期目录，会自动切换为手动输入 termId 的联调方式。',
+        '管理员会同时显示课程报表、专业报表和矩阵台账准备能力；其中专业报表如果没有学期目录，会自动切换为手动输入学期 ID。',
       type: 'success'
     }
   }
 
   if (canUseCourseReport.value) {
     return {
-      title: '当前角色可直接联调课程报表接口',
-      description: '课程报表模板下载、原始成绩明细查询、课程报表数据与 Excel/PDF 导出均已实现，可直接联调使用。',
+      title: '当前角色可生成课程报表',
+      description: '课程报表模板下载、原始成绩明细查询、课程报表数据与 Excel/PDF 导出均已实现，可直接使用。',
       type: 'success'
     }
   }
 
   if (canUseMajorReport.value) {
     return {
-      title: '当前角色可直接联调专业报表接口',
-      description: '专业雷达图、穿透式台账、达成度 Excel/PDF 导出均已实现可直接联调；若提示需先计算三级达成度，请先到「计算中心」执行专业级计算。',
+      title: '当前角色可生成专业报表',
+      description: '专业雷达图、穿透式台账、达成度 Excel/PDF 导出均已实现，可直接使用；若提示需先计算三级达成度，请先到「计算中心」执行专业级计算。',
       type: 'success'
     }
   }
@@ -893,43 +793,6 @@ const roleSummary = computed<StatusState>(() => {
     type: 'info'
   }
 })
-
-const reportCatalog = computed<ReportCatalogRow[]>(() => [
-  {
-    name: '课程目标达成情况评价表',
-    targetRole: '课程教师、管理员',
-    statusText: canUseCourseReport.value ? '可调用' : '当前角色不可调',
-    tagType: canUseCourseReport.value ? 'success' : 'info',
-    tip: canUseCourseReport.value
-      ? '模板下载、报表数据、Excel/PDF 导出均已实现，可直接联调。'
-      : '当前角色暂时不能直接联调这组接口。'
-  },
-  {
-    name: '专业毕业要求达成度报告',
-    targetRole: '专业负责人、教务',
-    statusText: canUseMajorReport.value ? '可调用' : '当前角色不可调',
-    tagType: canUseMajorReport.value ? 'success' : 'info',
-    tip: canUseMajorReport.value
-      ? '雷达图、穿透式台账、达成度 Excel/PDF 导出均已实现，可直接联调。'
-      : '当前角色可先看准备状态，不建议直接调用该接口。'
-  },
-  {
-    name: '宏观支撑矩阵台账',
-    targetRole: '管理员',
-    statusText: canUseMatrixLedger.value ? '前端可导出' : '当前角色不可调',
-    tagType: canUseMatrixLedger.value ? 'success' : 'info',
-    tip: '该能力使用当前矩阵配置数据做前端导出，不依赖额外后端报表服务。'
-  },
-  {
-    name: '学生考核点原始成绩明细',
-    targetRole: '课程教师、管理员',
-    statusText: canUseCourseReport.value ? '可查询' : '当前角色不可调',
-    tagType: canUseCourseReport.value ? 'success' : 'info',
-    tip: canUseCourseReport.value
-      ? '已接入真实成绩查询接口，支持按教学班预览并导出 CSV。'
-      : '当前角色暂时不能直接查询这组原始成绩明细。'
-  }
-])
 
 const indicatorRows = computed<IndicatorSupportRow[]>(() => {
   const config = matrixConfig.value
@@ -1125,29 +988,6 @@ const ensureRawScoreClassSelected = () => {
   return true
 }
 
-const handleApplyTeacherDirectContext = async () => {
-  if (!selectedClassId.value) {
-    ElMessage.warning('请先输入教学班 ID')
-    return
-  }
-
-  courseReportData.value = undefined
-  rawScorePage.value = {
-    records: [],
-    total: 0,
-    size: rawScoreQuery.value.pageSize,
-    current: 1,
-    pages: 0
-  }
-  rawScoreStudentNo.value = ''
-  await loadRawScoreAssessmentPoints()
-  ElMessage.success(
-    directCourseId.value
-      ? `已切换到 classId=${selectedClassId.value} / courseId=${directCourseId.value} 联调模式`
-      : `已切换到 classId=${selectedClassId.value} 联调模式`
-  )
-}
-
 const loadRawScoreAssessmentPoints = async () => {
   rawScoreAssessmentPoints.value = []
   courseObjectives.value = []
@@ -1155,25 +995,11 @@ const loadRawScoreAssessmentPoints = async () => {
   courseCalculationStatus.value = undefined
 
   if (!selectedClassId.value) {
-    if (isTeacherDirectClassMode.value) {
-      setRawScoreStatus(
-        '当前为单班直达联调模式',
-        `当前教师账号没有教学班列表/课程详情读取接口，页面会保留 classId=${selectedClassId.value} 的原始成绩查询入口，但暂时不能自动加载考核点筛选项。`,
-        'info'
-      )
-    }
     return
   }
 
   const selectedClass = courseClasses.value.find((item) => item.id === selectedClassId.value)
   if (!resolvedCourseId.value) {
-    if (isTeacherDirectClassMode.value) {
-      setRawScoreStatus(
-        '当前为单班直达联调模式',
-        `当前教师账号可继续按 classId=${selectedClassId.value} 查询原始成绩，但因为还没填写 courseId，考核点筛选列表暂时不会自动加载。`,
-        'info'
-      )
-    }
     return
   }
 
@@ -1724,12 +1550,17 @@ const exportMatrixLedgerExcel = () => {
     item.totalWeight
   ])
 
-  const csvContent = [headers, ...rows]
-    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\r\n')
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  worksheet['!cols'] = [{ wch: 18 }, { wch: 14 }, { wch: 24 }, { wch: 14 }, { wch: 24 }, { wch: 28 }, { wch: 10 }]
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, '宏观支撑矩阵台账')
+  const workbookBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
 
-  const fileName = `${selectedMajor.value?.majorName || '专业'}-宏观支撑矩阵台账.csv`
-  downloadBlob(new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }), fileName)
+  const fileName = `${selectedMajor.value?.majorName || '专业'}-宏观支撑矩阵台账.xlsx`
+  downloadBlob(
+    new Blob([workbookBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    fileName
+  )
   ElMessage.success('矩阵台账 Excel 已开始下载')
 }
 
@@ -1828,7 +1659,21 @@ onMounted(async () => {
     const loaders: Array<Promise<unknown>> = []
 
     if (canUseCourseReport.value) {
-      if (user.role === 'admin') {
+      if (user.role === 'teacher') {
+        loaders.push(
+          listMyTeachingClasses().then((list) => {
+            courseClasses.value = list
+            const routeMatchedClass = routeClassId.value
+              ? list.find((item) => item.id === routeClassId.value)
+              : undefined
+            selectedClassId.value = routeMatchedClass?.id ?? list[0]?.id
+            if (!list.length) {
+              setCourseStatus('当前没有主讲的教学班', '请联系教务管理员为你分配教学班并完成课程、教师、学期绑定，再生成课程报表。', 'info')
+              setRawScoreStatus('当前没有主讲的教学班', '请先准备教学班与成绩数据，再查询学生原始成绩明细。', 'info')
+            }
+          })
+        )
+      } else if (user.role === 'admin') {
         loaders.push(
           pageTeachingClasses({ current: 1, pageSize: 500 }).then((page) => {
             courseClasses.value = page.records
@@ -1837,23 +1682,10 @@ onMounted(async () => {
               : undefined
             selectedClassId.value = routeMatchedClass?.id ?? page.records[0]?.id
             if (!page.records.length) {
-              setCourseStatus('当前暂无可用教学班', '请先在成绩管理页创建教学班并绑定课程、教师、学期，再继续联调课程报表。', 'info')
+              setCourseStatus('当前暂无可用教学班', '请先在成绩管理页创建教学班并绑定课程、教师、学期，再生成课程报表。', 'info')
               setRawScoreStatus('当前暂无可用教学班', '请先在成绩管理页准备教学班和成绩数据，再查询学生原始成绩明细。', 'info')
             }
           })
-        )
-      } else {
-        selectedClassId.value = routeClassId.value
-        directCourseId.value = routeCourseId.value
-        setCourseStatus(
-          '教师端缺少教学班列表接口',
-          '当前后端没有给教师开放教学班列表读取接口，所以页面不会再自动请求这组接口；请直接填写 classId，如需自动加载考核点和课程目标，请同时填写 courseId。',
-          'info'
-        )
-        setRawScoreStatus(
-          '教师端缺少教学班列表接口',
-          '当前后端没有给教师开放教学班列表接口。你可以手动输入 classId 查询原始成绩，若要自动加载考核点筛选，请同时填写 courseId。',
-          'info'
         )
       }
     }
@@ -1882,7 +1714,7 @@ onMounted(async () => {
             selectedGrade.value = routeGrade.value
           }
           if (!majors.value.length || !termList.length) {
-            setMajorStatus('专业报表联调条件未就绪', '当前还缺少专业或学期基础数据，请先补齐基础数据后再联调专业报表。', 'info')
+            setMajorStatus('专业报表条件未就绪', '当前还缺少专业或学期基础数据，请先补齐基础数据后再生成专业报表。', 'info')
           }
         })
       )

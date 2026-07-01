@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.exception.BusinessException;
+import com.yupi.springbootinit.manager.OwnershipHelper;
 import com.yupi.springbootinit.mapper.CourseMapper;
 import com.yupi.springbootinit.mapper.SysDictCollegeMapper;
 import com.yupi.springbootinit.mapper.SysDictMajorMapper;
@@ -15,6 +16,7 @@ import com.yupi.springbootinit.model.dto.course.CourseUpdateRequest;
 import com.yupi.springbootinit.model.entity.Course;
 import com.yupi.springbootinit.model.entity.SysDictCollege;
 import com.yupi.springbootinit.model.entity.SysDictMajor;
+import com.yupi.springbootinit.model.entity.SysUser;
 import com.yupi.springbootinit.model.excel.CourseExcel;
 import com.yupi.springbootinit.model.vo.CourseSimpleVO;
 import com.yupi.springbootinit.model.vo.CourseVO;
@@ -57,6 +59,9 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
 
     @Resource
     private SysDictCollegeMapper sysDictCollegeMapper;
+
+    @Resource
+    private OwnershipHelper ownershipHelper;
 
     @Override
     public Long createCourse(CourseAddRequest courseAddRequest) {
@@ -494,5 +499,14 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
             simpleVO.setCourseName(course.getCourseName());
             return simpleVO;
         }).collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    public List<CourseSimpleVO> listMyCourses() {
+        SysUser currentUser = ownershipHelper.getCurrentUser();
+        if (currentUser == null || currentUser.getId() == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        return courseMapper.listSimpleByTeacherId(currentUser.getId());
     }
 }

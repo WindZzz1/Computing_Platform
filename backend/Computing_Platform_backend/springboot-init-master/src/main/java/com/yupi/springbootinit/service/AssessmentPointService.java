@@ -8,6 +8,9 @@ import com.yupi.springbootinit.model.dto.assessment.AssessmentPointQueryRequest;
 import com.yupi.springbootinit.model.dto.assessment.AssessmentPointUpdateRequest;
 import com.yupi.springbootinit.model.entity.AssessmentPoint;
 import com.yupi.springbootinit.model.vo.AssessmentPointVO;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 //课程考核点服务
 
@@ -68,4 +71,19 @@ public interface AssessmentPointService extends IService<AssessmentPoint> {
      * @return 考核点VO
      */
     AssessmentPointVO getAssessmentPointVO(AssessmentPoint assessmentPoint);
+
+    /**
+     * 通过Excel批量导入考核点（含考核点-课程目标支撑权重）
+     *
+     * @param file Excel文件
+     * @return 导入结果 { total, successCount, failCount, failDetails }
+     */
+    Map<String, Object> importAssessmentPointsFromExcel(MultipartFile file);
+
+    /**
+     * 生成考核点导入模板
+     *
+     * @return Excel文件字节数组
+     */
+    byte[] generateAssessmentPointTemplate();
 }

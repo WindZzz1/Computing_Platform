@@ -154,7 +154,7 @@ function divider(no, label, title, sub, iconData, pageNo) {
     rect(s, 1.12, 4.42, 3.4, 0.05, C.TEAL);
     txt(s, "工作进展 · 功能演示 · 难点攻克 · AI 编程实践 · 组间交流", { x: 1.1, y: 4.62, w: 11, h: 0.4, fontSize: 16, color: "C7D6E8", margin: 0 });
     txt(s, "计算平台开发组", { x: 1.1, y: 5.5, w: 6, h: 0.4, fontSize: 18, bold: true, color: "FFFFFF", margin: 0 });
-    txt(s, "汇报日期：2026-06-21（第十六周）   |   仓库：WindZzz1/Computing_Platform", { x: 1.1, y: 5.95, w: 11, h: 0.4, fontSize: 12.5, color: "9DB4CC", margin: 0 });
+    txt(s, "汇报周期：第十六周（2026.06.15 – 06.21）   |   仓库：WindZzz1/Computing_Platform", { x: 1.1, y: 5.95, w: 11, h: 0.4, fontSize: 12.5, color: "9DB4CC", margin: 0 });
     txt(s, "Spring Boot · Vue3 · MySQL · EasyExcel · PDFBox", { x: 1.1, y: 6.95, w: 11, h: 0.3, fontSize: 10.5, color: "6E86A2", margin: 0 });
   }
 
@@ -830,7 +830,7 @@ function divider(no, label, title, sub, iconData, pageNo) {
     txt(s, "THANKS", { x: 1.0, y: 2.5, w: 11, h: 1.2, fontSize: 80, bold: true, color: "FFFFFF", charSpacing: 6, margin: 0 });
     rect(s, 1.05, 3.95, 3.2, 0.05, C.TEAL);
     txt(s, "感谢聆听 · 欢迎提问与交流", { x: 1.02, y: 4.15, w: 11, h: 0.5, fontSize: 20, color: C.MINT, margin: 0 });
-    txt(s, "仓库：WindZzz1/Computing_Platform   |   计算平台开发组   |   2026-06-21", { x: 1.02, y: 5.6, w: 11, h: 0.4, fontSize: 13, color: "C7D6E8", margin: 0 });
+    txt(s, "仓库：WindZzz1/Computing_Platform   |   计算平台开发组   |   2026.06.15 – 06.21", { x: 1.02, y: 5.6, w: 11, h: 0.4, fontSize: 13, color: "C7D6E8", margin: 0 });
   }
 
   await pres.writeFile({ fileName: "../第十六周工作汇报.pptx" });

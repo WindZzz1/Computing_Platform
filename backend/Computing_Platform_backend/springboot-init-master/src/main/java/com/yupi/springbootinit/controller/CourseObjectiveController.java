@@ -12,12 +12,15 @@ import com.yupi.springbootinit.model.dto.course.CourseObjectiveUpdateRequest;
 import com.yupi.springbootinit.model.vo.CourseObjectiveVO;
 import com.yupi.springbootinit.service.CourseObjectiveService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 //课程目标接口
 
@@ -104,5 +107,41 @@ public class CourseObjectiveController {
         request.setCurrent(1);
         request.setPageSize(1000);
         return ResultUtils.success(courseObjectiveService.pageCourseObjective(request));
+    }
+
+    /**
+     * 通过Excel批量导入课程目标
+     *
+     * @param file Excel文件
+     * @return 导入结果
+     */
+    @PostMapping("/import/excel")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
+    public BaseResponse<Map<String, Object>> importCourseObjectivesFromExcel(@RequestParam("file") MultipartFile file) {
+        Map<String, Object> result = courseObjectiveService.importCourseObjectivesFromExcel(file);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 下载课程目标导入模板
+     */
+    @GetMapping("/template")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_TEACHER)
+    @com.yupi.springbootinit.annotation.NoLog
+    public void downloadCourseObjectiveTemplate(HttpServletResponse response) throws Exception {
+        String filename = "课程目标导入模板.xlsx";
+        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
+                .replaceAll("\\+", "%20");
+
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFilename);
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setHeader("Expires", "0");
+
+        byte[] templateBytes = courseObjectiveService.generateCourseObjectiveTemplate();
+        ServletOutputStream outputStream = response.getOutputStream();
+        outputStream.write(templateBytes);
+        outputStream.flush();
     }
 }

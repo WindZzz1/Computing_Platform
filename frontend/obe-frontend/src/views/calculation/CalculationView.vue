@@ -4,7 +4,7 @@
     <p class="page-desc">当前页接通课程级与专业级真实计算接口，支持按角色查看准备情况、触发计算和读取结果。</p>
 
     <section class="page-grid">
-      <div class="panel span-12">
+      <div v-if="canViewCourseCalculation" class="panel span-12">
         <div class="toolbar">
           <div>
             <h3 class="panel-title">课程级达成度计算</h3>
@@ -205,7 +205,7 @@
         </template>
       </div>
 
-      <div class="panel span-12">
+      <div v-if="canMajorQueryData" class="panel span-12">
         <div class="toolbar">
           <div>
             <h3 class="panel-title">专业级达成度计算</h3>
@@ -232,7 +232,7 @@
           <el-select v-model="selectedMajorId" placeholder="请选择专业" style="width: 240px" filterable @change="reloadMajorData">
             <el-option v-for="major in majors" :key="major.id" :label="major.name" :value="major.id" />
           </el-select>
-          <el-select v-if="schoolYears.length" v-model="selectedTermId" placeholder="请选择学年学期" style="width: 220px" filterable @change="reloadMajorData">
+          <el-select v-model="selectedTermId" placeholder="请选择学年学期" style="width: 220px" filterable @change="reloadMajorData">
             <el-option
               v-for="term in schoolYears"
               :key="term.id"
@@ -240,27 +240,9 @@
               :value="term.id"
             />
           </el-select>
-          <el-input-number
-            v-else
-            v-model="selectedTermId"
-            :min="1"
-            :step="1"
-            controls-position="right"
-            style="width: 220px"
-            placeholder="请输入 termId"
-            @change="reloadMajorData"
-          />
           <el-input v-model="selectedGrade" placeholder="请输入年级，例如 2022" style="width: 180px" @change="reloadMajorData" />
           <el-switch v-model="majorForceRecalculate" active-text="强制重算" />
         </div>
-
-        <el-alert
-          v-if="canUseManualMajorTermInput"
-          title="当前角色没有学年学期下拉目录，改为手动输入 termId"
-          type="info"
-          show-icon
-          class="block-alert"
-        />
 
         <div class="run-bar">
           <el-button :disabled="!canQueryMajorCalculation" @click="reloadMajorData">刷新看板</el-button>
@@ -438,7 +420,7 @@ import { exportCourseAchievementReportExcel, exportCourseAchievementReportPdf, e
 import { listMajors } from '@/api/major'
 import { pageGraduationRequirements } from '@/api/indicator'
 import { listSchoolYears } from '@/api/schoolyear'
-import { pageTeachingClasses } from '@/api/teaching-class'
+import { listMyTeachingClasses, pageTeachingClasses } from '@/api/teaching-class'
 import type {
   AchievementCalculationDetailVO,
   AchievementCalculationResultVO,
@@ -503,22 +485,11 @@ const canLoadMajorOptions = computed(() => userStore.role === 'admin' || userSto
 const canLoadSchoolYearOptions = computed(() => userStore.role === 'admin' || userStore.role === 'edu' || userStore.role === 'leader')
 const canLoadTeachingClasses = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
 const canLoadCourseCatalog = computed(() => userStore.role === 'admin' || userStore.role === 'edu')
-const canUseManualMajorTermInput = computed(() => canMajorQueryData.value && !schoolYears.value.length)
 
-const teacherTeachingClasses = computed(() => {
-  if (userStore.role === 'teacher') {
-    return teachingClasses.value.filter((item) => item.teacherName === userStore.name)
-  }
-  return teachingClasses.value
-})
+const teacherTeachingClasses = computed(() => teachingClasses.value)
 const hasCourseClassContext = computed(() => Boolean(selectedCourseClassId.value || teacherTeachingClasses.value.length))
-const isTeacherDirectClassMode = computed(
-  () => userStore.role === 'teacher' && !teacherTeachingClasses.value.length && Boolean(selectedCourseClassId.value)
-)
-const courseClassSelectorDisabled = computed(() => userStore.role === 'teacher' && !teacherTeachingClasses.value.length)
-const courseClassSelectPlaceholder = computed(() =>
-  isTeacherDirectClassMode.value ? '当前按 classId 直达单个教学班' : '请选择教学班'
-)
+const courseClassSelectorDisabled = computed(() => !teacherTeachingClasses.value.length)
+const courseClassSelectPlaceholder = computed(() => '请选择教学班')
 
 const selectedCourseClass = computed(() =>
   teacherTeachingClasses.value.find((item) => item.id === selectedCourseClassId.value)
@@ -597,14 +568,6 @@ const courseGuideMessage = computed(() => {
   if (courseCalculationError.value) {
     return ''
   }
-  if (isTeacherDirectClassMode.value) {
-    if (!courseCalculationStatus.value?.hasCalculationResult) {
-      return `当前教师账号没有教学班列表读取接口，页面已按 classId=${selectedCourseClassId.value} 进入单班联调模式，可以直接查看状态或执行课程级计算。`
-    }
-    return canExportCourseReport.value
-      ? `当前教师账号正按 classId=${selectedCourseClassId.value} 联调该教学班，课程级结果已具备，可以继续导出课程报表。`
-      : `当前教师账号正按 classId=${selectedCourseClassId.value} 联调该教学班，课程级结果已具备。`
-  }
   if (!canRunCourseCalculation.value && courseCalculationStatus.value?.hasCalculationResult) {
     return '当前角色可以查看这个班级的课程级结果。'
   }
@@ -659,19 +622,6 @@ const routeGrade = computed(() => {
   const value = Array.isArray(raw) ? raw[0] : raw
   return typeof value === 'string' ? value.trim() : ''
 })
-
-const mergeMajorOptions = (items: Array<{ id?: number | null; majorId?: number | null; majorName?: string | null }>) => {
-  const majorMap = new Map(majors.value.map((item) => [item.id, item.name]))
-  items.forEach((item) => {
-    const majorId = Number(item.id ?? item.majorId)
-    const majorName = item.majorName?.trim()
-    if (!Number.isFinite(majorId) || !majorName) {
-      return
-    }
-    majorMap.set(majorId, majorName)
-  })
-  majors.value = Array.from(majorMap.entries()).map(([id, name]) => ({ id, name }))
-}
 
 const majorGuideMessage = computed(() => {
   if (!canMajorQueryData.value) {
@@ -1192,7 +1142,11 @@ async function loadBaseOptions() {
     const [majorList, schoolYearList, classPage, coursePage, requirementPage] = await Promise.all([
       userStore.role === 'admin' ? listMajors() : Promise.resolve([]),
       canLoadSchoolYearOptions.value ? listSchoolYears() : Promise.resolve([]),
-      canLoadTeachingClasses.value ? pageTeachingClasses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
+      userStore.role === 'teacher'
+        ? listMyTeachingClasses().then((list) => ({ records: list }))
+        : canLoadTeachingClasses.value
+          ? pageTeachingClasses({ current: 1, pageSize: 500 })
+          : Promise.resolve({ records: [] } as any),
       canLoadCourseCatalog.value ? pageCourses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
       userStore.role === 'leader' ? pageGraduationRequirements({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any)
     ])
@@ -1213,8 +1167,6 @@ async function loadBaseOptions() {
     majors.value = Array.from(majorMap.entries()).map(([id, name]) => ({ id, name }))
     schoolYears.value = schoolYearList
     teachingClasses.value = classPage.records
-    mergeMajorOptions(coursePage.records)
-    mergeMajorOptions(requirementPage.records)
 
     const routeMatchedClass = routeClassId.value
       ? teacherTeachingClasses.value.find((item) => item.id === routeClassId.value)

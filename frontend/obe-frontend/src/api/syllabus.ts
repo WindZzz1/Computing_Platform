@@ -1,5 +1,7 @@
+import request from './request'
 import {
   apiPost,
+  type ApiResponse,
   type AssessmentPointCreateRequest,
   type AssessmentPointUpdateRequest,
   type AssessmentPointVO,
@@ -78,4 +80,82 @@ export function checkObjectiveIndicatorWeights(
     courseId,
     weightList: items
   })
+}
+
+// 课程目标 Excel 批量导入
+export async function importCourseObjectivesFromExcel(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await request.post<ApiResponse<Record<string, unknown>>>(
+    '/course/objective/import/excel',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  )
+
+  if (response.data.code !== 0) {
+    throw new Error(response.data.message || '课程目标导入失败')
+  }
+
+  return response.data.data
+}
+
+// 下载课程目标导入模板
+export async function downloadCourseObjectiveTemplate() {
+  const response = await request.get('/course/objective/template', {
+    responseType: 'blob'
+  })
+  return response.data as Blob
+}
+
+// 考核点 Excel 批量导入（含支撑权重）
+export async function importAssessmentPointsFromExcel(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await request.post<ApiResponse<Record<string, unknown>>>(
+    '/assessment/point/import/excel',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  )
+
+  if (response.data.code !== 0) {
+    throw new Error(response.data.message || '考核点导入失败')
+  }
+
+  return response.data.data
+}
+
+// 下载考核点导入模板
+export async function downloadAssessmentPointTemplate() {
+  const response = await request.get('/assessment/point/template', {
+    responseType: 'blob'
+  })
+  return response.data as Blob
+}
+
+// 内部贡献权重 Excel 批量导入
+export async function importObjectiveIndicatorWeightsFromExcel(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await request.post<ApiResponse<Record<string, unknown>>>(
+    '/weight/objective-indicator/import/excel',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  )
+
+  if (response.data.code !== 0) {
+    throw new Error(response.data.message || '内部贡献权重导入失败')
+  }
+
+  return response.data.data
+}
+
+// 下载内部贡献权重导入模板
+export async function downloadObjectiveWeightTemplate() {
+  const response = await request.get('/weight/objective-indicator/template', {
+    responseType: 'blob'
+  })
+  return response.data as Blob
 }

@@ -8,6 +8,9 @@ import com.yupi.springbootinit.model.dto.indicator.IndicatorPointQueryRequest;
 import com.yupi.springbootinit.model.dto.indicator.IndicatorPointUpdateRequest;
 import com.yupi.springbootinit.model.entity.IndicatorPoint;
 import com.yupi.springbootinit.model.vo.IndicatorPointVO;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 /**
  * 二级指标点服务
@@ -71,4 +74,19 @@ public interface IndicatorPointService extends IService<IndicatorPoint> {
      * @return 二级指标点VO
      */
     IndicatorPointVO getIndicatorPointVO(IndicatorPoint indicatorPoint);
+
+    /**
+     * 通过Excel批量导入指标点
+     *
+     * @param file Excel文件
+     * @return 导入结果 { total, successCount, failCount, failDetails }
+     */
+    Map<String, Object> importIndicatorPointsFromExcel(MultipartFile file);
+
+    /**
+     * 生成指标点导入模板
+     *
+     * @return Excel文件字节数组
+     */
+    byte[] generateIndicatorPointTemplate();
 }

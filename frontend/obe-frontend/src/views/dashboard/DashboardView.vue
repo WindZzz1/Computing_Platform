@@ -106,7 +106,7 @@
           <div class="major-course-status-head">
             <div>
               <div class="major-course-status-title">专业级计算前置明细</div>
-              <div class="muted">首页直接显示当前专业还差哪些课程级结果，方便继续联调和补数据。</div>
+              <div class="muted">首页直接显示当前专业还差哪些课程级结果，方便继续完善数据。</div>
             </div>
             <el-tag :type="pendingMajorCourseStatusList.length ? 'warning' : 'success'" effect="light">
               {{ pendingMajorCourseStatusList.length ? `待补 ${pendingMajorCourseStatusList.length}` : '已全部齐备' }}
@@ -285,7 +285,7 @@
       <div class="panel span-4">
         <div class="toolbar">
           <div>
-            <h3 class="panel-title">联调提示</h3>
+            <h3 class="panel-title">系统提示</h3>
             <span class="muted">根据当前首页状态，把最值得优先处理的问题拆得更细一点。</span>
           </div>
           <el-tag :type="noticeSummaryType">{{ noticeSummaryTag }}</el-tag>
@@ -487,13 +487,13 @@ const router = useRouter()
 
 const canAccessScore = computed(() => canAccessFeature(user.role, 'score'))
 const canAccessMatrix = computed(() => canAccessFeature(user.role, 'matrix'))
-const canLoadCourseCatalog = computed(() => user.role === 'admin' || user.role === 'edu')
+const canLoadCourseCatalog = computed(() => user.role === 'admin' || user.role === 'edu' || user.role === 'leader')
 const canLoadRequirementCatalog = computed(() => user.role === 'admin' || user.role === 'leader')
-const canLoadTeachingClassCatalog = computed(() => user.role === 'admin' || user.role === 'edu')
+const canLoadTeachingClassCatalog = computed(() => user.role === 'admin' || user.role === 'edu' || user.role === 'leader')
 const canLoadSchoolYearCatalog = computed(() => user.role === 'admin' || user.role === 'edu' || user.role === 'leader')
-const canLoadMatrixData = computed(() => user.role === 'admin' || user.role === 'edu')
+const canLoadMatrixData = computed(() => user.role === 'admin' || user.role === 'edu' || user.role === 'leader')
 const canLoadMajorCalculation = computed(() => user.role === 'admin' || user.role === 'edu' || user.role === 'leader')
-const canLoadGlobalCourseStatus = computed(() => user.role === 'admin' || user.role === 'teacher')
+const canLoadGlobalCourseStatus = computed(() => user.role === 'admin' || user.role === 'teacher' || user.role === 'leader')
 const canUseManualMajorTermInput = computed(() => canLoadMajorCalculation.value && !canLoadSchoolYearCatalog.value)
 
 const pieEl = ref<HTMLDivElement>()
@@ -683,7 +683,7 @@ const noticeSummaryTag = computed(() => {
   if (majorCalculationDashboard.value?.canCalculate && !currentMajorHasCalculationResult.value) return '可推进专业级'
   if (currentMajorHasCalculationResult.value) return '可复核结果'
   if (!matrixCheckValid.value) return '矩阵待完善'
-  return '继续联调'
+  return '继续完善'
 })
 const noticeSummaryType = computed<'success' | 'warning' | 'info'>(() => {
   if (!selectedMajorId.value) return 'info'
@@ -926,7 +926,7 @@ const majorOverviewRows = computed<OverviewRow[]>(() => {
             : '指标点待补充',
         statusType:
           readyIndicatorCount.value === majorIndicators.value.length && majorIndicators.value.length ? 'success' : 'warning',
-        hint: '只有权重列和约等于 1 的指标点，才算真正可用于后续联调'
+        hint: '只有权重列和约等于 1 的指标点，才算真正可用于后续计算'
     }
   ]
 })
@@ -1272,7 +1272,7 @@ const recentCalculationFocus = computed(() => {
       .join('、')
     return `当前专业还差 ${pendingMajorCourseStatusList.value.length} 门课程完成课程级结果，优先处理 ${pendingNames}${pendingMajorCourseStatusList.value.length > 2 ? ' 等' : ''}。`
   }
-  return '首页已经切到真实联调状态，下一步可以继续补首页穿透、结果细化和计算页联动。'
+  return '首页已展示真实业务数据，可继续完善穿透台账与计算结果的联动展示。'
 })
 
 const majorCalculationSummaryType = computed<'success' | 'warning' | 'info'>(() => {
@@ -1457,15 +1457,20 @@ const renderPieChart = () => {
 const mergeMajorOptions = (items: Array<{ id?: number | null; majorId?: number | null; majorName?: string | null }>) => {
   const majorMap = new Map(majors.value.map((item) => [item.id, item]))
   items.forEach((item) => {
-    const majorId = Number(item.id ?? item.majorId)
+    // 用真正的专业 id（课程/毕业要求挂在 majorId 上），不能用记录自身 id，
+    // 否则每条课程/毕业要求都会被当成一个"专业"，产生大量同名重复项
+    const majorId = Number(item.majorId)
     const majorName = item.majorName?.trim()
     if (!Number.isFinite(majorId) || !majorName) {
       return
     }
-    majorMap.set(majorId, {
-      id: majorId,
-      majorName
-    })
+    // 仅补充字典里没有的专业，避免覆盖 listMajors 返回的完整项
+    if (!majorMap.has(majorId)) {
+      majorMap.set(majorId, {
+        id: majorId,
+        majorName
+      })
+    }
   })
   majors.value = Array.from(majorMap.values())
 }
@@ -1563,7 +1568,7 @@ const loadPageData = async () => {
   try {
     const [majorResult, schoolYearResult, courseListResult, coursePageResult, classPageResult, requirementPageResult, indicatorPageResult] =
       await Promise.all([
-        user.role === 'admin' ? listMajors() : Promise.resolve([]),
+        user.role === 'admin' || user.role === 'leader' || user.role === 'edu' ? listMajors() : Promise.resolve([]),
         canLoadSchoolYearCatalog.value ? listSchoolYears() : Promise.resolve([]),
         canLoadCourseCatalog.value ? listCourses() : Promise.resolve([]),
         canLoadCourseCatalog.value ? pageCourses({ current: 1, pageSize: 300 }) : Promise.resolve({ records: [] } as any),
