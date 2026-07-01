@@ -999,19 +999,69 @@ const showImportResult = async (result: StudentImportResult, title: string) => {
   }
 }
 
+const gradeImportMessageLimit = 12
+
+const escapeImportHtml = (value: unknown) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+const highlightGradeImportMessage = (message: string) =>
+  escapeImportHtml(message)
+    .replace(/第\s*(\d+)\s*行/g, '<strong class="grade-import-line">第 $1 行</strong>')
+    .replace(/学号[:：]?\s*([A-Za-z0-9_-]+)/g, '学号：<strong class="grade-import-key">$1</strong>')
+    .replace(/考核点[:：]?\s*([A-Za-z0-9_.-]+)/g, '考核点：<strong class="grade-import-key">$1</strong>')
+
+const buildGradeImportMessageSection = (title: string, messages: string[], type: 'error' | 'warning') => {
+  if (!messages.length) {
+    return ''
+  }
+
+  const visibleMessages = messages.slice(0, gradeImportMessageLimit)
+  const hiddenCount = messages.length - visibleMessages.length
+
+  return `
+    <section class="grade-import-section ${type}">
+      <h4>${title}（共 ${messages.length} 条）</h4>
+      <ol>
+        ${visibleMessages.map((message) => `<li>${highlightGradeImportMessage(message)}</li>`).join('')}
+      </ol>
+      ${
+        hiddenCount > 0
+          ? `<p class="grade-import-more">还有 ${hiddenCount} 条未展示，请修正当前问题后重新导入，或联系后端同学查看完整日志。</p>`
+          : ''
+      }
+    </section>
+  `
+}
+
 const showGradeImportResult = async (result: GradeImportResultVO) => {
-  const details: string[] = [`导入学生数：${result.studentCount ?? 0}`, `成绩记录数：${result.scoreCount ?? 0}`]
+  const warningMessages = result.warningMessages ?? []
+  const errorMessages = result.errorMessages ?? []
+  const hasProblem = warningMessages.length > 0 || errorMessages.length > 0 || result.success === false
 
-  if (result.warningMessages?.length) {
-    details.push('', '警告信息：', ...result.warningMessages.slice(0, 8))
-  }
-  if (result.errorMessages?.length) {
-    details.push('', '错误信息：', ...result.errorMessages.slice(0, 8))
-  }
+  if (hasProblem) {
+    const html = `
+      <div class="grade-import-result">
+        <div class="grade-import-summary">
+          <div><span>导入学生数</span><strong>${result.studentCount ?? 0}</strong></div>
+          <div><span>成绩记录数</span><strong>${result.scoreCount ?? 0}</strong></div>
+          <div><span>错误数量</span><strong>${errorMessages.length}</strong></div>
+          <div><span>警告数量</span><strong>${warningMessages.length}</strong></div>
+        </div>
+        ${buildGradeImportMessageSection('错误信息', errorMessages, 'error')}
+        ${buildGradeImportMessageSection('警告信息', warningMessages, 'warning')}
+        <p class="grade-import-tip">请优先根据高亮的行号、学号和考核点定位 Excel 原始数据，修改后再重新导入。</p>
+      </div>
+    `
 
-  if (result.warningMessages?.length || result.errorMessages?.length || result.success === false) {
-    await ElMessageBox.alert(details.join('\n'), '成绩导入结果', {
-      confirmButtonText: '知道了'
+    await ElMessageBox.alert(html, '成绩导入结果', {
+      confirmButtonText: '知道了',
+      dangerouslyUseHTMLString: true,
+      customClass: 'grade-import-result-dialog'
     })
     return
   }
@@ -1836,5 +1886,98 @@ onMounted(async () => {
   gap: 16px;
   margin-top: 16px;
   flex-wrap: wrap;
+}
+
+:global(.grade-import-result-dialog) {
+  width: min(720px, calc(100vw - 32px));
+}
+
+:global(.grade-import-result-dialog .el-message-box__message) {
+  max-height: 62vh;
+  overflow-y: auto;
+}
+
+:global(.grade-import-result) {
+  color: #1e3555;
+  line-height: 1.6;
+}
+
+:global(.grade-import-summary) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+:global(.grade-import-summary div) {
+  padding: 10px 12px;
+  border: 1px solid #dbe7f5;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+:global(.grade-import-summary span) {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+:global(.grade-import-summary strong) {
+  color: #102a4c;
+  font-size: 20px;
+}
+
+:global(.grade-import-section) {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #dbe7f5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+:global(.grade-import-section.error) {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+:global(.grade-import-section.warning) {
+  border-color: #fed7aa;
+  background: #fffaf0;
+}
+
+:global(.grade-import-section h4) {
+  margin: 0 0 8px;
+  color: #102a4c;
+}
+
+:global(.grade-import-section ol) {
+  margin: 0;
+  padding-left: 20px;
+}
+
+:global(.grade-import-section li + li) {
+  margin-top: 6px;
+}
+
+:global(.grade-import-line) {
+  color: #dc2626;
+  font-weight: 800;
+}
+
+:global(.grade-import-key) {
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+:global(.grade-import-more),
+:global(.grade-import-tip) {
+  margin: 10px 0 0;
+  color: #64748b;
+}
+
+@media (max-width: 720px) {
+  :global(.grade-import-summary) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>
