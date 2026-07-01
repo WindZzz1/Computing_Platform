@@ -15,6 +15,7 @@ import com.yupi.springbootinit.mapper.CourseMapper;
 import com.yupi.springbootinit.mapper.CourseObjectiveMapper;
 import com.yupi.springbootinit.mapper.MajorIndicatorAchievementMapper;
 import com.yupi.springbootinit.mapper.RelPointObjectiveMapper;
+import com.yupi.springbootinit.mapper.StudentMajorAchievementMapper;
 import com.yupi.springbootinit.mapper.StudentMapper;
 import com.yupi.springbootinit.mapper.StudentObjectiveAchievementMapper;
 import com.yupi.springbootinit.mapper.StudentScoreMapper;
@@ -31,6 +32,7 @@ import com.yupi.springbootinit.model.entity.CourseObjective;
 import com.yupi.springbootinit.model.entity.MajorIndicatorAchievement;
 import com.yupi.springbootinit.model.entity.RelPointObjective;
 import com.yupi.springbootinit.model.entity.Student;
+import com.yupi.springbootinit.model.entity.StudentMajorAchievement;
 import com.yupi.springbootinit.model.entity.StudentObjectiveAchievement;
 import com.yupi.springbootinit.model.entity.StudentScore;
 import com.yupi.springbootinit.model.entity.SysDictMajor;
@@ -63,6 +65,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -129,6 +132,9 @@ public class MajorReportServiceImpl implements MajorReportService {
 
     @Resource
     private CourseObjectiveMapper courseObjectiveMapper;
+
+    @Resource
+    private StudentMajorAchievementMapper studentMajorAchievementMapper;
 
     // ==================== 雷达图（PR-1） ====================
 
@@ -541,6 +547,37 @@ public class MajorReportServiceImpl implements MajorReportService {
             writer.write(data, EasyExcel.writerSheet(0, "专业毕业要求达成度")
                     .head(headOf("毕业要求编号", "毕业要求名称", "指标点编号",
                             "指标点名称", "达成度")).build());
+
+            // Sheet 2：学生专业达成度（每学生一行，列为各指标点 + 整体达成度）
+            Map<String, Object> studentData = buildStudentMajorAchievement(
+                    request.getMajorId(), request.getTermId(), request.getGrade());
+            @SuppressWarnings("unchecked")
+            List<String> indicatorCodes = (List<String>) studentData.get("indicatorCodes");
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> studentRows = (List<Map<String, Object>>) studentData.get("rows");
+            if (!studentRows.isEmpty()) {
+                List<String> columns = new ArrayList<>();
+                columns.add("学号");
+                columns.add("姓名");
+                columns.addAll(indicatorCodes);
+                columns.add("整体达成度");
+
+                List<List<Object>> data2 = new ArrayList<>();
+                for (Map<String, Object> row : studentRows) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, BigDecimal> indicatorMap = (Map<String, BigDecimal>) row.get("indicatorMap");
+                    List<Object> r = new ArrayList<>();
+                    r.add(row.get("studentNo"));
+                    r.add(row.get("studentName"));
+                    for (String code : indicatorCodes) {
+                        r.add(indicatorMap.get(code));
+                    }
+                    r.add(row.get("overall"));
+                    data2.add(r);
+                }
+                writer.write(data2, EasyExcel.writerSheet(1, "学生专业达成度")
+                        .head(headOf(columns.toArray(new String[0]))).build());
+            }
         } finally {
             writer.finish();
         }
@@ -593,6 +630,25 @@ public class MajorReportServiceImpl implements MajorReportService {
                 renderer.drawTable("指标点达成度",
                         new String[]{"毕业要求", "指标点编号", "指标点名称", "达成度"},
                         rows, new float[]{1.2f, 1.2f, 3f, 1.2f});
+
+                // 学生专业达成度
+                Map<String, Object> studentData = buildStudentMajorAchievement(
+                        request.getMajorId(), request.getTermId(), request.getGrade());
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> studentRows = (List<Map<String, Object>>) studentData.get("rows");
+                if (!studentRows.isEmpty()) {
+                    List<String[]> studentPdfRows = studentRows.stream()
+                            .map(r -> new String[]{
+                                    nullToEmpty((String) r.get("studentNo")),
+                                    nullToEmpty((String) r.get("studentName")),
+                                    nullToEmpty((String) r.get("indicatorText")),
+                                    fmt((BigDecimal) r.get("overall"))
+                            })
+                            .collect(Collectors.toList());
+                    renderer.drawTable("学生专业达成度",
+                            new String[]{"学号", "姓名", "各指标点达成度", "整体达成度"},
+                            studentPdfRows, new float[]{1.5f, 1.5f, 4f, 1.5f});
+                }
             } finally {
                 renderer.close();
             }
@@ -602,6 +658,86 @@ public class MajorReportServiceImpl implements MajorReportService {
                     "PDF生成失败: " + e.getMessage());
         }
         return baos.toByteArray();
+    }
+
+    /**
+     * 构建学生专业达成度展示数据。
+     * 返回：indicatorCodes（按首次出现排序的指标点编号）+ rows（每学生一条）。
+     * 每行含：studentNo、studentName、indicatorMap(指标点编号->达成度)、indicatorText（拼接）、overall（各指标点算术平均）。
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildStudentMajorAchievement(Long majorId, Long termId, String grade) {
+        Map<String, Object> result = new HashMap<>();
+        List<StudentMajorAchievement> all = studentMajorAchievementMapper
+                .selectByMajorTermGrade(majorId, termId, grade);
+        if (all == null || all.isEmpty()) {
+            result.put("indicatorCodes", Collections.emptyList());
+            result.put("rows", Collections.emptyList());
+            return result;
+        }
+
+        // 指标点编号（去重后按 x.y 数值自然排序，避免导出表头乱序）
+        List<String> indicatorCodes = all.stream()
+                .map(StudentMajorAchievement::getIndicatorCode)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted(MajorReportServiceImpl::compareIndicatorCode)
+                .collect(Collectors.toList());
+
+        // 按学生分组（查询已按 student_id, indicator_id 排序）
+        Map<Long, List<StudentMajorAchievement>> byStudent = new LinkedHashMap<>();
+        for (StudentMajorAchievement a : all) {
+            byStudent.computeIfAbsent(a.getStudentId(), k -> new ArrayList<>()).add(a);
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (List<StudentMajorAchievement> list : byStudent.values()) {
+            StudentMajorAchievement first = list.get(0);
+            Map<String, BigDecimal> indicatorMap = new LinkedHashMap<>();
+            for (StudentMajorAchievement a : list) {
+                if (a.getIndicatorCode() != null) {
+                    indicatorMap.put(a.getIndicatorCode(), a.getAchievement());
+                }
+            }
+            String indicatorText = indicatorCodes.stream()
+                    .map(code -> {
+                        BigDecimal v = indicatorMap.get(code);
+                        return v == null ? null : code + ":" + fmt(v);
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.joining("; "));
+            BigDecimal overall = average(list.stream()
+                    .map(StudentMajorAchievement::getAchievement)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList()));
+
+            Map<String, Object> row = new HashMap<>();
+            row.put("studentNo", first.getStudentNo());
+            row.put("studentName", first.getStudentName());
+            row.put("indicatorMap", indicatorMap);
+            row.put("indicatorText", indicatorText);
+            row.put("overall", overall);
+            rows.add(row);
+        }
+
+        result.put("indicatorCodes", indicatorCodes);
+        result.put("rows", rows);
+        return result;
+    }
+
+    /** 指标点编号按 x.y 数值比较（1.1 < 1.2 < 2.1 < 10.1），避免字符串字典序把 10.1 排到 2.1 前。 */
+    private static int compareIndicatorCode(String a, String b) {
+        if (a == null) return b == null ? 0 : -1;
+        if (b == null) return 1;
+        String[] pa = a.split("\\.");
+        String[] pb = b.split("\\.");
+        int cmp = Integer.compare(intAt(pa, 0), intAt(pb, 0));
+        return cmp != 0 ? cmp : Integer.compare(intAt(pa, 1), intAt(pb, 1));
+    }
+
+    private static int intAt(String[] parts, int idx) {
+        if (idx >= parts.length) return 0;
+        try { return Integer.parseInt(parts[idx]); } catch (NumberFormatException e) { return 0; }
     }
 
     @Override

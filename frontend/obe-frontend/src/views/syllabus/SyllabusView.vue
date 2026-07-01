@@ -27,7 +27,10 @@
       <div class="panel span-5">
         <div class="toolbar">
           <h3 class="panel-title">课程目标</h3>
-          <el-button type="primary" :disabled="!currentCourseId" @click="openObjectiveCreateDialog">新增目标</el-button>
+          <div style="display: flex; gap: 8px">
+            <el-button type="primary" :disabled="!currentCourseId" @click="openObjectiveCreateDialog">新增目标</el-button>
+            <el-button :disabled="!currentCourseId" @click="openObjectiveImportDialog">批量导入</el-button>
+          </div>
         </div>
         <el-table v-loading="loading" :data="objectiveRows" border>
           <el-table-column prop="code" label="目标编号" width="120" />
@@ -45,7 +48,10 @@
       <div class="panel span-7">
         <div class="toolbar">
           <h3 class="panel-title">内部贡献权重</h3>
-          <el-tag :type="weightCheckValid ? 'success' : 'warning'">{{ weightCheckValid ? '当前校验已通过' : '当前校验待处理' }}</el-tag>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <el-tag :type="weightCheckValid ? 'success' : 'warning'">{{ weightCheckValid ? '当前校验已通过' : '当前校验待处理' }}</el-tag>
+            <el-button :disabled="!currentCourseId || !objectives.length" @click="openWeightImportDialog">批量导入</el-button>
+          </div>
         </div>
         <el-alert
           :type="weightCheckValid ? 'success' : 'warning'"
@@ -103,9 +109,12 @@
       <div class="panel span-12">
         <div class="toolbar">
           <h3 class="panel-title">考核点管理</h3>
-          <el-button type="primary" :disabled="!currentCourseId || !objectives.length" @click="openAssessmentCreateDialog">
-            新增考核点
-          </el-button>
+          <div style="display: flex; gap: 8px">
+            <el-button type="primary" :disabled="!currentCourseId || !objectives.length" @click="openAssessmentCreateDialog">
+              新增考核点
+            </el-button>
+            <el-button :disabled="!currentCourseId || !objectives.length" @click="openAssessmentImportDialog">批量导入</el-button>
+          </div>
         </div>
         <el-table v-loading="loading" :data="assessmentRows" border>
           <el-table-column prop="code" label="考核点编号" width="120" />
@@ -122,6 +131,96 @@
         </el-table>
       </div>
     </section>
+
+    <!-- 课程目标批量导入 -->
+    <el-dialog v-model="objectiveImportVisible" title="批量导入课程目标" width="560px" destroy-on-close>
+      <div class="import-tips">
+        <p>支持上传 <code>.xlsx</code> / <code>.xls</code>，字段：课程代码*、目标编号*、目标名称*、目标描述。建议先下载模板再填写。</p>
+        <div class="import-actions">
+          <el-button @click="handleDownloadObjectiveTemplate">下载模板</el-button>
+        </div>
+      </div>
+      <el-upload
+        v-model:file-list="objectiveImportFileList"
+        drag
+        action="#"
+        :auto-upload="false"
+        :limit="1"
+        accept=".xlsx,.xls"
+        :on-change="handleObjectiveImportChange"
+        :on-remove="handleObjectiveImportRemove"
+      >
+        <el-icon class="upload-icon"><UploadFilled /></el-icon>
+        <div class="upload-title">拖拽课程目标 Excel 到这里，或点击选择文件</div>
+        <template #tip>
+          <div class="muted">导入完成后会自动刷新课程目标列表。</div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="objectiveImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingObjectiveImport" @click="submitObjectiveImport">开始导入</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 考核点批量导入 -->
+    <el-dialog v-model="assessmentImportVisible" title="批量导入考核点" width="560px" destroy-on-close>
+      <div class="import-tips">
+        <p>支持上传 <code>.xlsx</code> / <code>.xls</code>，字段：课程代码*、考核点编号*、考核点名称*、满分值*、关联目标编号*、支撑权重*。<br/>关联目标编号与支撑权重用英文逗号分隔，按位置一一对应。</p>
+        <div class="import-actions">
+          <el-button @click="handleDownloadAssessmentTemplate">下载模板</el-button>
+        </div>
+      </div>
+      <el-upload
+        v-model:file-list="assessmentImportFileList"
+        drag
+        action="#"
+        :auto-upload="false"
+        :limit="1"
+        accept=".xlsx,.xls"
+        :on-change="handleAssessmentImportChange"
+        :on-remove="handleAssessmentImportRemove"
+      >
+        <el-icon class="upload-icon"><UploadFilled /></el-icon>
+        <div class="upload-title">拖拽考核点 Excel 到这里，或点击选择文件</div>
+        <template #tip>
+          <div class="muted">导入完成后会自动刷新考核点列表。</div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="assessmentImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingAssessmentImport" @click="submitAssessmentImport">开始导入</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 内部贡献权重批量导入 -->
+    <el-dialog v-model="weightImportVisible" title="批量导入内部贡献权重" width="560px" destroy-on-close>
+      <div class="import-tips">
+        <p>支持上传 <code>.xlsx</code> / <code>.xls</code>，字段：课程代码*、课程目标编号*、指标点编号*、内部权重*。<br/>约束：同一课程下，支撑同一指标点的所有课程目标内部权重之和必须为 1.0。</p>
+        <div class="import-actions">
+          <el-button @click="handleDownloadWeightTemplate">下载模板</el-button>
+        </div>
+      </div>
+      <el-upload
+        v-model:file-list="weightImportFileList"
+        drag
+        action="#"
+        :auto-upload="false"
+        :limit="1"
+        accept=".xlsx,.xls"
+        :on-change="handleWeightImportChange"
+        :on-remove="handleWeightImportRemove"
+      >
+        <el-icon class="upload-icon"><UploadFilled /></el-icon>
+        <div class="upload-title">拖拽内部贡献权重 Excel 到这里，或点击选择文件</div>
+        <template #tip>
+          <div class="muted">导入完成后会自动刷新权重矩阵。</div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="weightImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingWeightImport" @click="submitWeightImport">开始导入</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="objectiveDialogVisible" :title="objectiveEditing ? '编辑课程目标' : '新增课程目标'" width="520px" destroy-on-close>
       <el-form ref="objectiveFormRef" :model="objectiveForm" :rules="objectiveRules" label-width="88px">
@@ -175,7 +274,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
+import { UploadFilled } from '@element-plus/icons-vue'
+import type { FormInstance, FormRules, UploadProps } from 'element-plus'
 import { listCourses, listMyCourses } from '@/api/course'
 import { useUserStore } from '@/stores/user'
 import {
@@ -184,8 +284,14 @@ import {
   createCourseObjective,
   deleteAssessmentPoint,
   deleteCourseObjective,
+  downloadAssessmentPointTemplate,
+  downloadCourseObjectiveTemplate,
   getAssessmentPoint,
   getCourseObjective,
+  importAssessmentPointsFromExcel,
+  importCourseObjectivesFromExcel,
+  importObjectiveIndicatorWeightsFromExcel,
+  downloadObjectiveWeightTemplate,
   listAssessmentPoints,
   listAvailableIndicators,
   listCourseObjectives,
@@ -269,6 +375,21 @@ const objectiveRules: FormRules<CourseObjectiveCreateRequest> = {
   objCode: [{ required: true, message: '请输入目标编号', trigger: 'blur' }],
   objName: [{ required: true, message: '请输入目标名称', trigger: 'blur' }]
 }
+
+// 课程目标导入
+const objectiveImportVisible = ref(false)
+const objectiveImportFileList = ref<UploadProps['fileList']>([])
+const submittingObjectiveImport = ref(false)
+
+// 考核点导入
+const assessmentImportVisible = ref(false)
+const assessmentImportFileList = ref<UploadProps['fileList']>([])
+const submittingAssessmentImport = ref(false)
+
+// 内部贡献权重导入
+const weightImportVisible = ref(false)
+const weightImportFileList = ref<UploadProps['fileList']>([])
+const submittingWeightImport = ref(false)
 
 const assessmentRules: FormRules<AssessmentPointCreateRequest> = {
   pointCode: [{ required: true, message: '请输入考核点编号', trigger: 'blur' }],
@@ -576,6 +697,197 @@ const handleDeleteAssessment = async (assessment: AssessmentPointVO) => {
   }
 }
 
+// ===== 课程目标批量导入 =====
+const openObjectiveImportDialog = () => {
+  objectiveImportFileList.value = []
+  objectiveImportVisible.value = true
+}
+
+const handleObjectiveImportChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.warning('仅支持上传以 .xlsx 或 .xls 结尾的 Excel 文件')
+    return
+  }
+  objectiveImportFileList.value = uploadFiles.slice(-1)
+}
+
+const handleObjectiveImportRemove: UploadProps['onRemove'] = () => {
+  objectiveImportFileList.value = []
+}
+
+const handleDownloadObjectiveTemplate = async () => {
+  try {
+    const blob = await downloadCourseObjectiveTemplate()
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = '课程目标导入模板.xlsx'
+    link.click()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('模板已开始下载')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '模板下载失败'
+    ElMessage.error(message)
+  }
+}
+
+const submitObjectiveImport = async () => {
+  const file = objectiveImportFileList.value?.[0]?.raw
+  if (!file) {
+    ElMessage.warning('请先选择要导入的 Excel 文件')
+    return
+  }
+
+  submittingObjectiveImport.value = true
+  try {
+    const result = await importCourseObjectivesFromExcel(file as File)
+    objectiveImportVisible.value = false
+    objectiveImportFileList.value = []
+    await reloadCourseData()
+    await showImportResult(result as Record<string, unknown>)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '课程目标导入失败'
+    ElMessage.error(message)
+  } finally {
+    submittingObjectiveImport.value = false
+  }
+}
+
+// ===== 考核点批量导入 =====
+const openAssessmentImportDialog = () => {
+  assessmentImportFileList.value = []
+  assessmentImportVisible.value = true
+}
+
+const handleAssessmentImportChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.warning('仅支持上传以 .xlsx 或 .xls 结尾的 Excel 文件')
+    return
+  }
+  assessmentImportFileList.value = uploadFiles.slice(-1)
+}
+
+const handleAssessmentImportRemove: UploadProps['onRemove'] = () => {
+  assessmentImportFileList.value = []
+}
+
+const handleDownloadAssessmentTemplate = async () => {
+  try {
+    const blob = await downloadAssessmentPointTemplate()
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = '考核点导入模板.xlsx'
+    link.click()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('模板已开始下载')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '模板下载失败'
+    ElMessage.error(message)
+  }
+}
+
+const submitAssessmentImport = async () => {
+  const file = assessmentImportFileList.value?.[0]?.raw
+  if (!file) {
+    ElMessage.warning('请先选择要导入的 Excel 文件')
+    return
+  }
+
+  submittingAssessmentImport.value = true
+  try {
+    const result = await importAssessmentPointsFromExcel(file as File)
+    assessmentImportVisible.value = false
+    assessmentImportFileList.value = []
+    await reloadCourseData()
+    await showImportResult(result as Record<string, unknown>)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '考核点导入失败'
+    ElMessage.error(message)
+  } finally {
+    submittingAssessmentImport.value = false
+  }
+}
+
+// ===== 内部贡献权重批量导入 =====
+const openWeightImportDialog = () => {
+  weightImportFileList.value = []
+  weightImportVisible.value = true
+}
+
+const handleWeightImportChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  const fileName = uploadFile.name.toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ElMessage.warning('仅支持上传以 .xlsx 或 .xls 结尾的 Excel 文件')
+    return
+  }
+  weightImportFileList.value = uploadFiles.slice(-1)
+}
+
+const handleWeightImportRemove: UploadProps['onRemove'] = () => {
+  weightImportFileList.value = []
+}
+
+const handleDownloadWeightTemplate = async () => {
+  try {
+    const blob = await downloadObjectiveWeightTemplate()
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = '内部贡献权重导入模板.xlsx'
+    link.click()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('模板已开始下载')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '模板下载失败'
+    ElMessage.error(message)
+  }
+}
+
+const submitWeightImport = async () => {
+  const file = weightImportFileList.value?.[0]?.raw
+  if (!file) {
+    ElMessage.warning('请先选择要导入的 Excel 文件')
+    return
+  }
+
+  submittingWeightImport.value = true
+  try {
+    const result = await importObjectiveIndicatorWeightsFromExcel(file as File)
+    weightImportVisible.value = false
+    weightImportFileList.value = []
+    await reloadCourseData()
+    await showImportResult(result as Record<string, unknown>)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '内部贡献权重导入失败'
+    ElMessage.error(message)
+  } finally {
+    submittingWeightImport.value = false
+  }
+}
+
+// 通用导入结果展示
+const showImportResult = async (result: Record<string, unknown>) => {
+  const failCount = Number(result.failCount || 0)
+  if (failCount > 0) {
+    const failDetails = result.failDetails as Array<Record<string, string>> | undefined
+    const preview = (failDetails ?? [])
+      .slice(0, 5)
+      .map((item) => `第 ${item.row || '-'} 行：${item.reason || '导入失败'}`)
+      .join('\n')
+
+    await ElMessageBox.alert(
+      `总计 ${result.total} 条，成功 ${result.successCount} 条，失败 ${failCount} 条。${preview ? `\n\n失败示例：\n${preview}` : ''}`,
+      '导入完成',
+      { confirmButtonText: '知道了' }
+    )
+  } else {
+    ElMessage.success(`导入完成，共成功导入 ${result.successCount} 条`)
+  }
+}
+
 const saveWeights = async () => {
   if (!currentCourseId.value) return
 
@@ -625,6 +937,31 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.import-tips {
+  margin-bottom: 16px;
+}
+
+.import-tips p {
+  margin: 0 0 8px;
+  color: #606266;
+  font-size: 14px;
+}
+
+.import-actions {
+  margin-bottom: 8px;
+}
+
+.upload-icon {
+  font-size: 48px;
+  color: #c0c4cc;
+}
+
+.upload-title {
+  margin-top: 12px;
+  color: #606266;
+  font-size: 14px;
 }
 
 .weight-footer {

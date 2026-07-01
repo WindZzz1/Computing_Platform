@@ -2,10 +2,13 @@ package com.yupi.springbootinit.controller;
 
 import com.yupi.springbootinit.annotation.AuthCheck;
 import com.yupi.springbootinit.common.BaseResponse;
+import com.yupi.springbootinit.common.DeleteRequest;
 import com.yupi.springbootinit.common.ResultUtils;
 import com.yupi.springbootinit.constant.SysUserConstant;
+import com.yupi.springbootinit.model.dto.student.StudentAddRequest;
 import com.yupi.springbootinit.model.dto.student.StudentImportRequest;
 import com.yupi.springbootinit.model.dto.student.StudentQueryRequest;
+import com.yupi.springbootinit.model.dto.student.StudentUpdateRequest;
 import com.yupi.springbootinit.model.vo.PageResultVO;
 import com.yupi.springbootinit.model.vo.StudentVO;
 import com.yupi.springbootinit.service.StudentService;
@@ -42,10 +45,49 @@ public class StudentController {
      * @return 学生分页结果
      */
     @PostMapping("/page")
-    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    @AuthCheck(anyRole = SysUserConstant.ROLE_EDU + "," + SysUserConstant.ROLE_TEACHER)
     public BaseResponse<PageResultVO<StudentVO>> pageStudents(@RequestBody StudentQueryRequest studentQueryRequest) {
         Page<StudentVO> studentPage = studentService.pageStudents(studentQueryRequest);
         return ResultUtils.success(PageResultVO.from(studentPage));
+    }
+
+    /**
+     * 新增学生
+     *
+     * @param studentAddRequest 新增请求
+     * @return 新增学生ID
+     */
+    @PostMapping("/add")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    public BaseResponse<Long> addStudent(@RequestBody StudentAddRequest studentAddRequest) {
+        Long id = studentService.addStudent(studentAddRequest);
+        return ResultUtils.success(id);
+    }
+
+    /**
+     * 更新学生
+     *
+     * @param studentUpdateRequest 更新请求
+     * @return 是否成功
+     */
+    @PostMapping("/update")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    public BaseResponse<Boolean> updateStudent(@RequestBody StudentUpdateRequest studentUpdateRequest) {
+        Boolean result = studentService.updateStudent(studentUpdateRequest);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 删除学生（已被教学班绑定的学生不允许删除）
+     *
+     * @param deleteRequest 删除请求（含id）
+     * @return 是否成功
+     */
+    @PostMapping("/delete")
+    @AuthCheck(mustRole = SysUserConstant.ROLE_EDU)
+    public BaseResponse<Boolean> deleteStudent(@RequestBody DeleteRequest deleteRequest) {
+        Boolean result = studentService.deleteStudent(deleteRequest.getId());
+        return ResultUtils.success(result);
     }
 
     /**

@@ -1,5 +1,7 @@
+import request from './request'
 import {
   apiPost,
+  type ApiResponse,
   type GraduationRequirementCreateRequest,
   type GraduationRequirementPageQuery,
   type GraduationRequirementUpdateRequest,
@@ -49,4 +51,36 @@ export function updateGraduationRequirement(payload: GraduationRequirementUpdate
 
 export function deleteGraduationRequirement(id: number) {
   return apiPost<boolean>('/requirement/graduation/delete', { id })
+}
+
+export async function importGraduationRequirementsFromExcel(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await request.post<ApiResponse<Record<string, unknown>>>(
+    '/requirement/graduation/import/excel', formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  )
+  if (response.data.code !== 0) throw new Error(response.data.message || '毕业要求导入失败')
+  return response.data.data
+}
+
+export async function downloadGraduationRequirementTemplate() {
+  const response = await request.get('/requirement/graduation/template', { responseType: 'blob' })
+  return response.data as Blob
+}
+
+export async function importIndicatorPointsFromExcel(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await request.post<ApiResponse<Record<string, unknown>>>(
+    '/requirement/indicator/import/excel', formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  )
+  if (response.data.code !== 0) throw new Error(response.data.message || '指标点导入失败')
+  return response.data.data
+}
+
+export async function downloadIndicatorPointTemplate() {
+  const response = await request.get('/requirement/indicator/template', { responseType: 'blob' })
+  return response.data as Blob
 }

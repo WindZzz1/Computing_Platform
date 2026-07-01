@@ -8,6 +8,9 @@ import com.yupi.springbootinit.model.dto.course.CourseObjectiveQueryRequest;
 import com.yupi.springbootinit.model.dto.course.CourseObjectiveUpdateRequest;
 import com.yupi.springbootinit.model.entity.CourseObjective;
 import com.yupi.springbootinit.model.vo.CourseObjectiveVO;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 //课程目标服务
 
@@ -68,4 +71,19 @@ public interface CourseObjectiveService extends IService<CourseObjective> {
      * @return 课程目标VO
      */
     CourseObjectiveVO getCourseObjectiveVO(CourseObjective courseObjective);
+
+    /**
+     * 通过Excel批量导入课程目标
+     *
+     * @param file Excel文件
+     * @return 导入结果 { total, successCount, failCount, failDetails }
+     */
+    Map<String, Object> importCourseObjectivesFromExcel(MultipartFile file);
+
+    /**
+     * 生成课程目标导入模板
+     *
+     * @return Excel文件字节数组
+     */
+    byte[] generateCourseObjectiveTemplate();
 }
