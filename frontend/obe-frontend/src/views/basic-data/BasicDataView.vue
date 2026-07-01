@@ -256,6 +256,22 @@
     <el-dialog v-model="importDialogVisible" title="批量导入课程" width="560px" destroy-on-close>
       <div class="import-tips">
         <p>支持上传 `.xlsx` / `.xls`，建议先下载模板再填写，减少校验失败。</p>
+        <div class="template-field-help">
+          <div class="template-field-help__title">课程模板字段说明</div>
+          <ul>
+            <li><strong>课程代码、课程名称、学分、课程性质、所属专业</strong>为必填项。</li>
+            <li>课程性质建议填写：<strong>必修</strong> 或 <strong>选修</strong>，需与系统字典保持一致。</li>
+            <li>所属专业请填写系统已有专业名称或专业代码，例如：计算机科学与技术 / CS。</li>
+            <li>所属学院由专业字典自动关联；若模板中包含学院列，请填写系统已有学院名称。</li>
+            <li>学分填写数字，支持小数，例如：3、3.5、4。</li>
+            <li>学生数、学年学期通常由教学班和成绩管理维护，课程导入时无需手动统计。</li>
+            <li>状态如需填写，建议使用：进行中、已锁定、未提交等系统已有状态。</li>
+            <li>同一课程代码请勿重复导入，导入前可先在课程库中确认是否已存在。</li>
+          </ul>
+          <div class="template-field-help__example">
+            示例：CS101 ｜ 数据结构 ｜ 4 ｜ 必修 ｜ 计算机科学与技术 ｜ 计算机学院
+          </div>
+        </div>
         <div class="import-actions">
           <el-button @click="handleDownloadTemplate">下载模板</el-button>
         </div>
@@ -1992,6 +2008,35 @@ onMounted(async () => {
 
 .import-tips {
   margin-bottom: 16px;
+}
+
+.template-field-help {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #dbe7f5;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #1e3555;
+}
+
+.template-field-help__title {
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.template-field-help ul {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.7;
+}
+
+.template-field-help__example {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #eef6ff;
+  color: #1d4ed8;
+  font-size: 13px;
 }
 
 .import-actions {
