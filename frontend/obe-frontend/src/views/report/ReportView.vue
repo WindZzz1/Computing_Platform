@@ -49,8 +49,20 @@
         </el-select>
         <el-button :loading="courseActionLoading" @click="handleDownloadCourseTemplate">下载报表模板</el-button>
         <el-button type="primary" :loading="courseActionLoading" :disabled="!selectedClassId" @click="handleLoadCourseReport">查询报表数据</el-button>
-        <el-button :loading="courseActionLoading" :disabled="!selectedClassId" @click="handleExportCourseReport('EXCEL')">导出 Excel</el-button>
-        <el-button :loading="courseActionLoading" :disabled="!selectedClassId" @click="handleExportCourseReport('PDF')">导出 PDF</el-button>
+        <el-tooltip :disabled="canExportCourseReport" content="请先查询课程报表数据，再导出文件" placement="top">
+          <span>
+            <el-button :loading="courseActionLoading" :disabled="!canExportCourseReport" @click="handleExportCourseReport('EXCEL')">
+              导出 Excel
+            </el-button>
+          </span>
+        </el-tooltip>
+        <el-tooltip :disabled="canExportCourseReport" content="请先查询课程报表数据，再导出文件" placement="top">
+          <span>
+            <el-button :loading="courseActionLoading" :disabled="!canExportCourseReport" @click="handleExportCourseReport('PDF')">
+              导出 PDF
+            </el-button>
+          </span>
+        </el-tooltip>
       </div>
       <el-alert
         v-if="!hasCourseClassContext"
@@ -170,9 +182,27 @@
         <el-input v-model.trim="selectedGrade" placeholder="输入年级，例如 2021" style="width: 200px" />
         <el-button type="primary" :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleLoadMajorRadar">查询雷达图数据</el-button>
         <el-button :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleLoadPenetrationAccount">查询穿透式台账</el-button>
-        <el-button :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleExportMajorAccount">导出台账 Excel</el-button>
-        <el-button :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleExportMajorIndicator('EXCEL')">导出达成度 Excel</el-button>
-        <el-button :loading="majorActionLoading" :disabled="!canSubmitMajorRequest" @click="handleExportMajorIndicator('PDF')">导出达成度 PDF</el-button>
+        <el-tooltip :disabled="canExportMajorAccount" content="请先查询穿透式台账，再导出台账" placement="top">
+          <span>
+            <el-button :loading="majorActionLoading" :disabled="!canExportMajorAccount" @click="handleExportMajorAccount">
+              导出台账 Excel
+            </el-button>
+          </span>
+        </el-tooltip>
+        <el-tooltip :disabled="canExportMajorIndicator" content="请先查询雷达图数据，再导出达成度" placement="top">
+          <span>
+            <el-button :loading="majorActionLoading" :disabled="!canExportMajorIndicator" @click="handleExportMajorIndicator('EXCEL')">
+              导出达成度 Excel
+            </el-button>
+          </span>
+        </el-tooltip>
+        <el-tooltip :disabled="canExportMajorIndicator" content="请先查询雷达图数据，再导出达成度" placement="top">
+          <span>
+            <el-button :loading="majorActionLoading" :disabled="!canExportMajorIndicator" @click="handleExportMajorIndicator('PDF')">
+              导出达成度 PDF
+            </el-button>
+          </span>
+        </el-tooltip>
       </div>
       <el-alert
         v-if="!majors.length || (!schoolYears.length && !canUseManualTermInput)"
@@ -567,6 +597,9 @@ const selectedCourseClassLabel = computed(() => {
   return selectedClassId.value ? `教学班 ${selectedClassId.value}` : '-'
 })
 const canSubmitMajorRequest = computed(() => Boolean(selectedMajorId.value && selectedTermId.value && selectedGrade.value))
+const canExportCourseReport = computed(() => Boolean(selectedClassId.value && courseReportData.value && !courseActionLoading.value))
+const canExportMajorAccount = computed(() => Boolean(canSubmitMajorRequest.value && majorPenetrationData.value && !majorActionLoading.value))
+const canExportMajorIndicator = computed(() => Boolean(canSubmitMajorRequest.value && majorRadarData.value && !majorActionLoading.value))
 const courseReportPrep = computed(() => ({
   objectiveCount: courseObjectives.value.length,
   assessmentCount: rawScoreAssessmentPoints.value.length,
@@ -1122,6 +1155,12 @@ const handleExportCourseReport = async (format: 'EXCEL' | 'PDF') => {
   if (!ensureCourseClassSelected()) {
     return
   }
+  if (!courseReportData.value) {
+    const message = '请先查询课程报表数据，再导出文件'
+    setCourseStatus('暂无法导出课程报表', message, 'info')
+    ElMessage.info(message)
+    return
+  }
 
   courseActionLoading.value = true
   try {
@@ -1414,6 +1453,12 @@ const handleExportMajorAccount = async () => {
   if (!ensureMajorRequestReady()) {
     return
   }
+  if (!majorPenetrationData.value) {
+    const message = '请先查询穿透式台账，再导出台账 Excel'
+    setMajorStatus('暂无法导出专业台账', message, 'info')
+    ElMessage.info(message)
+    return
+  }
 
   majorActionLoading.value = true
   try {
@@ -1434,6 +1479,12 @@ const handleExportMajorAccount = async () => {
 
 const handleExportMajorIndicator = async (format: 'EXCEL' | 'PDF') => {
   if (!ensureMajorRequestReady()) {
+    return
+  }
+  if (!majorRadarData.value) {
+    const message = '请先查询雷达图数据，再导出专业达成度'
+    setMajorStatus('暂无法导出专业达成度', message, 'info')
+    ElMessage.info(message)
     return
   }
 
