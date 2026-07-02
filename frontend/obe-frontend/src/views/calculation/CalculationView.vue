@@ -68,10 +68,25 @@
           </el-button>
         </div>
 
-        <el-empty
+        <el-alert
           v-if="!hasCourseClassContext"
-          description="当前没有可用于课程级计算的教学班。请先确认自己名下已有教学班并且完成成绩录入。"
-        />
+          title="课程级计算缺少教学班数据"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="block-alert"
+        >
+          <template #default>
+            <div class="precondition-help">
+              <p>当前没有可用于课程级计算的教学班，请先完成以下准备：</p>
+              <ol>
+                <li>在成绩管理中创建教学班，并绑定课程、主讲教师和学年学期。</li>
+                <li>在课程大纲中维护课程目标、考核点和内部贡献权重。</li>
+                <li>导入学生名单和考核点成绩后，再回到计算中心执行课程级计算。</li>
+              </ol>
+            </div>
+          </template>
+        </el-alert>
 
         <template v-else>
           <div class="summary-cards">
@@ -291,6 +306,21 @@
           show-icon
           class="block-alert"
         />
+
+        <el-alert
+          v-if="majorPreconditionTips.length"
+          title="专业级计算前置数据提示"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="block-alert"
+        >
+          <template #default>
+            <ul class="precondition-list">
+              <li v-for="tip in majorPreconditionTips" :key="tip">{{ tip }}</li>
+            </ul>
+          </template>
+        </el-alert>
 
         <el-alert
           v-if="majorFilterSyncMessage"
@@ -597,6 +627,36 @@ const majorFilterSyncMessage = computed(() => {
     return ''
   }
   return '你已经切换了专业级筛选条件，页面正在按新的专业、学年学期和年级重新联动结果。'
+})
+const majorPreconditionTips = computed(() => {
+  if (!canMajorQueryData.value) {
+    return []
+  }
+
+  const tips: string[] = []
+
+  if (!selectedMajorId.value) {
+    tips.push('缺少专业：请先在基础数据管理中维护专业，并在本页选择目标专业。')
+  }
+  if (!selectedTermId.value) {
+    tips.push('缺少学年学期：请先在基础数据管理中维护学年学期，并选择本次计算所属学期。')
+  }
+  if (!selectedGrade.value.trim()) {
+    tips.push('缺少年级：请输入参与专业级统计的年级，例如 2022。')
+  }
+  if (canQueryMajorCalculation.value && majorDashboard.value && (majorDashboard.value.totalCourses ?? 0) === 0) {
+    tips.push('当前专业看板没有课程：请先在课程库中维护该专业课程，并创建对应教学班。')
+  }
+  if (
+    canQueryMajorCalculation.value &&
+    majorDashboard.value &&
+    (majorDashboard.value.totalCourses ?? 0) > 0 &&
+    !majorDashboard.value.canCalculate
+  ) {
+    tips.push('当前专业还有课程缺少课程级结果：请先完成课程大纲配置、成绩导入和课程级达成度计算。')
+  }
+
+  return tips
 })
 const majorCalculationRows = computed(() => majorCalculationResult.value?.achievements ?? [])
 const routeClassId = computed(() => {
@@ -1310,6 +1370,21 @@ onBeforeUnmount(() => {
 
 .block-alert {
   margin-bottom: 14px;
+}
+
+.precondition-help {
+  line-height: 1.7;
+}
+
+.precondition-help p {
+  margin: 0 0 6px;
+}
+
+.precondition-help ol,
+.precondition-list {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.8;
 }
 
 .result-grid {
