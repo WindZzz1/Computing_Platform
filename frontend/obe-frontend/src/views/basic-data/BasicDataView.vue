@@ -13,6 +13,12 @@
           </div>
         </div>
         <el-table v-loading="loadingCourses" :data="courseRows" border>
+          <template #empty>
+            <div class="table-empty">
+              <strong>暂无课程数据</strong>
+              <span>请先维护专业和学年学期，再通过“新增课程”或“批量导入”建立课程库。</span>
+            </div>
+          </template>
           <el-table-column prop="code" label="课程代码" width="120" />
           <el-table-column prop="name" label="课程名称" min-width="150" />
           <el-table-column prop="credit" label="学分" width="80" />
@@ -51,6 +57,12 @@
           <el-button @click="resetStudentQuery">重置</el-button>
         </div>
         <el-table v-loading="loadingStudents" :data="studentRows" border size="small">
+          <template #empty>
+            <div class="table-empty">
+              <strong>{{ studentEmptyTitle }}</strong>
+              <span>{{ studentEmptyDescription }}</span>
+            </div>
+          </template>
           <el-table-column prop="studentNo" label="学号" width="130" />
           <el-table-column prop="name" label="姓名" width="120" />
           <el-table-column prop="grade" label="年级" width="90" />
@@ -84,6 +96,12 @@
           <el-button type="primary" @click="openCollegeCreateDialog">新增学院</el-button>
         </div>
         <el-table v-loading="loadingColleges" :data="collegeRows" border size="small">
+          <template #empty>
+            <div class="table-empty">
+              <strong>暂无学院数据</strong>
+              <span>请先新增学院，后续专业、用户和课程才能关联到正确学院。</span>
+            </div>
+          </template>
           <el-table-column prop="collegeName" label="学院名称" min-width="160" />
           <el-table-column label="操作" width="130">
             <template #default="{ row }">
@@ -100,6 +118,12 @@
           <el-button type="primary" @click="openMajorCreateDialog">新增专业</el-button>
         </div>
         <el-table v-loading="loadingMajors" :data="majorRows" border size="small">
+          <template #empty>
+            <div class="table-empty">
+              <strong>暂无专业数据</strong>
+              <span>请先新增专业并绑定学院，课程库、学生库和毕业要求会依赖专业数据。</span>
+            </div>
+          </template>
           <el-table-column prop="majorCode" label="专业代码" width="110" />
           <el-table-column prop="majorName" label="专业名称" min-width="130" />
           <el-table-column prop="collegeName" label="所属学院" min-width="120" />
@@ -118,6 +142,12 @@
           <el-button type="primary" @click="openSchoolYearCreateDialog">新增学年学期</el-button>
         </div>
         <el-table v-loading="loadingSchoolYears" :data="schoolYearRows" border size="small">
+          <template #empty>
+            <div class="table-empty">
+              <strong>暂无学年学期数据</strong>
+              <span>请先新增学年学期，教学班、成绩导入和达成度计算都需要选择学期。</span>
+            </div>
+          </template>
           <el-table-column prop="yearName" label="学年" min-width="130" />
           <el-table-column prop="semesterName" label="学期" min-width="110" />
           <el-table-column label="操作" width="130">
@@ -147,8 +177,15 @@
         </div>
         <el-empty
           v-if="!loadingUsers && !userRows.length"
-          :description="`${currentUserRoleLabel}列表暂时为空，创建后会自动显示在这里。`"
-        />
+          :description="`${currentUserRoleLabel}列表暂时为空，请点击“新增用户”创建账号，创建后会自动显示在这里。`"
+        >
+          <template #description>
+            <div class="table-empty">
+              <strong>{{ currentUserRoleLabel }}列表暂时为空</strong>
+              <span>请点击“新增用户”创建账号，创建后会自动显示在这里。</span>
+            </div>
+          </template>
+        </el-empty>
         <el-table v-else v-loading="loadingUsers" :data="userRows" border size="small">
           <el-table-column prop="username" label="用户名" min-width="120" />
           <el-table-column prop="roleLabel" label="角色" width="100" />
@@ -178,6 +215,12 @@
           <el-button @click="resetRequirementFilter">重置</el-button>
         </div>
         <el-table v-loading="loadingRequirements" :data="requirementRows" border>
+          <template #empty>
+            <div class="table-empty">
+              <strong>{{ requirementEmptyTitle }}</strong>
+              <span>{{ requirementEmptyDescription }}</span>
+            </div>
+          </template>
           <el-table-column prop="code" label="毕业要求编号" width="140" />
           <el-table-column prop="name" label="毕业要求名称" min-width="180" />
           <el-table-column prop="majorName" label="所属专业" min-width="150" />
@@ -210,6 +253,12 @@
           <el-button @click="resetIndicatorFilter">重置</el-button>
         </div>
         <el-table v-loading="loadingIndicators" :data="indicatorRows" border>
+          <template #empty>
+            <div class="table-empty">
+              <strong>{{ indicatorEmptyTitle }}</strong>
+              <span>{{ indicatorEmptyDescription }}</span>
+            </div>
+          </template>
           <el-table-column prop="requirementCode" label="毕业要求" width="130" />
           <el-table-column prop="code" label="指标点编号" width="120" />
           <el-table-column prop="name" label="指标点名称" min-width="180" />
@@ -1027,6 +1076,36 @@ const userRows = computed(() =>
 
 const requirementFilter = reactive({ majorId: undefined as number | undefined, code: '', name: '' })
 const indicatorFilter = reactive({ requirementId: undefined as number | undefined, code: '', name: '' })
+
+const hasStudentFilter = computed(
+  () => Boolean(studentQuery.studentNo.trim() || studentQuery.studentName.trim() || studentQuery.majorId)
+)
+const studentEmptyTitle = computed(() => (hasStudentFilter.value ? '没有匹配的学生' : '暂无学生数据'))
+const studentEmptyDescription = computed(() =>
+  hasStudentFilter.value
+    ? '当前筛选条件下没有学生记录，请调整学号、姓名或专业条件后重试。'
+    : '请先新增学生或批量导入学生名单，后续成绩导入和课程级计算会使用这些学生数据。'
+)
+
+const hasRequirementFilter = computed(
+  () => Boolean(requirementFilter.majorId || requirementFilter.code.trim() || requirementFilter.name.trim())
+)
+const requirementEmptyTitle = computed(() => (hasRequirementFilter.value ? '没有匹配的毕业要求' : '暂无毕业要求数据'))
+const requirementEmptyDescription = computed(() =>
+  hasRequirementFilter.value
+    ? '当前筛选条件下没有毕业要求，请清空筛选条件或调整编号、名称后重试。'
+    : '请先选择专业后新增或批量导入毕业要求，指标点和专业级达成度会依赖这些数据。'
+)
+
+const hasIndicatorFilter = computed(
+  () => Boolean(indicatorFilter.requirementId || indicatorFilter.code.trim() || indicatorFilter.name.trim())
+)
+const indicatorEmptyTitle = computed(() => (hasIndicatorFilter.value ? '没有匹配的指标点' : '暂无指标点数据'))
+const indicatorEmptyDescription = computed(() =>
+  hasIndicatorFilter.value
+    ? '当前筛选条件下没有指标点，请清空筛选条件或调整编号、名称后重试。'
+    : '请先维护毕业要求，再新增或批量导入指标点，课程目标和达成度计算会映射到这些指标点。'
+)
 
 const resetRequirementFilter = () => {
   requirementFilter.majorId = undefined
@@ -1982,6 +2061,27 @@ onMounted(async () => {
   color: #22543d;
   font-size: 13px;
   font-weight: 600;
+}
+
+.table-empty {
+  display: flex;
+  min-height: 72px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #6b7280;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.table-empty strong {
+  color: #1f2f46;
+  font-size: 14px;
+}
+
+.table-empty span {
+  max-width: 520px;
 }
 
 .toolbar-actions {
