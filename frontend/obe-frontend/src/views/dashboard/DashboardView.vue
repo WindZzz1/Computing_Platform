@@ -5,6 +5,21 @@
       首页只展示当前后端已经提供的数据能力，方便我们先把已具备的课程、指标点、教学班和矩阵配置全部接起来。
     </p>
 
+    <el-alert
+      v-if="hasDashboardFallback"
+      title="部分首页统计正在降级展示"
+      type="warning"
+      show-icon
+      :closable="false"
+      class="dashboard-fallback-alert"
+    >
+      <template #default>
+        <div class="fallback-message-list">
+          <span v-for="message in dashboardFallbackMessages" :key="message">{{ message }}</span>
+        </div>
+      </template>
+    </el-alert>
+
     <section class="metric-grid">
       <div v-for="metric in metrics" :key="metric.label" class="metric-card">
         <div class="metric-icon" :class="metric.tone">
@@ -523,6 +538,34 @@ const majorMatrixConfig = ref<MatrixConfigVO>()
 const majorMatrixCheck = ref<MatrixWeightCheckVO>()
 const majorCalculationDashboard = ref<MajorCalculationDashboardVO>()
 const majorCalculationResult = ref<MajorCalculationResultVO>()
+const globalFallbackMessages = ref<string[]>([])
+const majorFallbackMessages = ref<string[]>([])
+
+const dashboardFallbackMessages = computed(() => [...globalFallbackMessages.value, ...majorFallbackMessages.value])
+const hasDashboardFallback = computed(() => dashboardFallbackMessages.value.length > 0)
+
+const formatDashboardError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || '接口异常')
+  const lower = message.toLowerCase()
+  if (message.includes('502')) return '后端网关返回 502，请检查后端服务和 Nginx /api 代理。'
+  if (lower.includes('timeout') || lower.includes('exceeded')) return '接口请求超时，请检查后端服务、数据库连接或服务器网络。'
+  if (lower.includes('network') || message.includes('Failed to fetch')) return '无法连接后端接口，请检查后端是否启动或接口地址是否正确。'
+  return message
+}
+
+const addFallbackMessage = (scope: 'global' | 'major', label: string, error: unknown) => {
+  const target = scope === 'global' ? globalFallbackMessages : majorFallbackMessages
+  target.value.push(`${label}加载失败，已使用默认值展示。${formatDashboardError(error)}`)
+}
+
+const safeLoad = async <T,>(scope: 'global' | 'major', label: string, task: Promise<T>, fallback: T) => {
+  try {
+    return await task
+  } catch (error) {
+    addFallbackMessage(scope, label, error)
+    return fallback
+  }
+}
 
 const selectedMajorName = computed(
   () => majors.value.find((item) => item.id === selectedMajorId.value)?.majorName || ''
@@ -1487,6 +1530,7 @@ const buildMatrixItems = () =>
   }))
 
 const reloadMajorBoard = async () => {
+  majorFallbackMessages.value = []
   if (!selectedMajorId.value) {
     majorCourseRows.value = []
     majorRequirements.value = []
@@ -1505,14 +1549,20 @@ const reloadMajorBoard = async () => {
   try {
     const [coursePage, requirementPage, indicatorPage, classPage, matrix] = await Promise.all([
       canLoadCourseCatalog.value
-        ? pageCourses({ current: 1, pageSize: 300, majorId: selectedMajorId.value })
+        ? safeLoad('major', '专业课程统计', pageCourses({ current: 1, pageSize: 300, majorId: selectedMajorId.value }), { records: [] } as any)
         : Promise.resolve({ records: [] } as any),
       canLoadRequirementCatalog.value
-        ? pageGraduationRequirements({ current: 1, pageSize: 200, majorId: selectedMajorId.value })
+        ? safeLoad('major', '专业毕业要求统计', pageGraduationRequirements({ current: 1, pageSize: 200, majorId: selectedMajorId.value }), { records: [] } as any)
         : Promise.resolve({ records: [] } as any),
-      canLoadRequirementCatalog.value ? pageIndicators({ current: 1, pageSize: 300 }) : Promise.resolve({ records: [] } as any),
-      canLoadTeachingClassCatalog.value ? pageTeachingClasses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
-      canLoadMatrixData.value ? getMatrixConfig(selectedMajorId.value) : Promise.resolve(undefined)
+      canLoadRequirementCatalog.value
+        ? safeLoad('major', '指标点统计', pageIndicators({ current: 1, pageSize: 300 }), { records: [] } as any)
+        : Promise.resolve({ records: [] } as any),
+      canLoadTeachingClassCatalog.value
+        ? safeLoad('major', '教学班统计', pageTeachingClasses({ current: 1, pageSize: 500 }), { records: [] } as any)
+        : Promise.resolve({ records: [] } as any),
+      canLoadMatrixData.value
+        ? safeLoad('major', '矩阵配置', getMatrixConfig(selectedMajorId.value), undefined)
+        : Promise.resolve(undefined)
     ])
 
     majorCourseRows.value = coursePage.records
@@ -1529,7 +1579,11 @@ const reloadMajorBoard = async () => {
 
     const matrixItems = buildMatrixItems()
     majorMatrixCheck.value = canLoadMatrixData.value && matrixItems.length
-      ? await checkMatrixConfig(selectedMajorId.value, matrixItems)
+      ? await safeLoad('major', '矩阵校验', checkMatrixConfig(selectedMajorId.value, matrixItems), {
+          valid: false,
+          message: '矩阵校验接口暂不可用，首页已降级展示矩阵状态',
+          columnSums: {}
+        })
       : {
           valid: false,
           message: canLoadMatrixData.value ? '当前专业还没有矩阵配置数据' : '当前角色不读取矩阵配置接口',
@@ -1543,8 +1597,8 @@ const reloadMajorBoard = async () => {
         grade: selectedGrade.value.trim()
       }
       const [dashboard, result] = await Promise.all([
-        getMajorCalculationDashboard({ ...request, current: 1, pageSize: 100 }),
-        getMajorCalculationResult(request)
+        safeLoad('major', '专业级看板', getMajorCalculationDashboard({ ...request, current: 1, pageSize: 100 }), undefined),
+        safeLoad('major', '专业级结果', getMajorCalculationResult(request), undefined)
       ])
       majorCalculationDashboard.value = dashboard
       majorCalculationResult.value = result
@@ -1556,8 +1610,7 @@ const reloadMajorBoard = async () => {
     await nextTick()
     renderPieChart()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '首页专业概览加载失败'
-    ElMessage.error(message)
+    addFallbackMessage('major', '首页专业概览', error)
   } finally {
     majorLoading.value = false
   }
@@ -1565,16 +1618,27 @@ const reloadMajorBoard = async () => {
 
 const loadPageData = async () => {
   pageLoading.value = true
+  globalFallbackMessages.value = []
   try {
     const [majorResult, schoolYearResult, courseListResult, coursePageResult, classPageResult, requirementPageResult, indicatorPageResult] =
       await Promise.all([
-        user.role === 'admin' || user.role === 'leader' || user.role === 'edu' ? listMajors() : Promise.resolve([]),
-        canLoadSchoolYearCatalog.value ? listSchoolYears() : Promise.resolve([]),
-        canLoadCourseCatalog.value ? listCourses() : Promise.resolve([]),
-        canLoadCourseCatalog.value ? pageCourses({ current: 1, pageSize: 300 }) : Promise.resolve({ records: [] } as any),
-        canLoadTeachingClassCatalog.value ? pageTeachingClasses({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any),
-        canLoadRequirementCatalog.value ? pageGraduationRequirements({ current: 1, pageSize: 300 }) : Promise.resolve({ records: [] } as any),
-        canLoadRequirementCatalog.value ? pageIndicators({ current: 1, pageSize: 500 }) : Promise.resolve({ records: [] } as any)
+        user.role === 'admin' || user.role === 'leader' || user.role === 'edu'
+          ? safeLoad('global', '专业列表', listMajors(), [])
+          : Promise.resolve([]),
+        canLoadSchoolYearCatalog.value ? safeLoad('global', '学年学期列表', listSchoolYears(), []) : Promise.resolve([]),
+        canLoadCourseCatalog.value ? safeLoad('global', '课程下拉列表', listCourses(), []) : Promise.resolve([]),
+        canLoadCourseCatalog.value
+          ? safeLoad('global', '课程统计', pageCourses({ current: 1, pageSize: 300 }), { records: [] } as any)
+          : Promise.resolve({ records: [] } as any),
+        canLoadTeachingClassCatalog.value
+          ? safeLoad('global', '教学班统计', pageTeachingClasses({ current: 1, pageSize: 500 }), { records: [] } as any)
+          : Promise.resolve({ records: [] } as any),
+        canLoadRequirementCatalog.value
+          ? safeLoad('global', '毕业要求统计', pageGraduationRequirements({ current: 1, pageSize: 300 }), { records: [] } as any)
+          : Promise.resolve({ records: [] } as any),
+        canLoadRequirementCatalog.value
+          ? safeLoad('global', '指标点统计', pageIndicators({ current: 1, pageSize: 500 }), { records: [] } as any)
+          : Promise.resolve({ records: [] } as any)
       ])
 
     majors.value = majorResult
@@ -1605,14 +1669,17 @@ const loadPageData = async () => {
       allCalculationStatuses.value = statusResults
         .filter((item): item is PromiseFulfilledResult<AchievementCalculationStatusVO> => item.status === 'fulfilled')
         .map((item) => item.value)
+      const failedCount = statusResults.filter((item) => item.status === 'rejected').length
+      if (failedCount) {
+        globalFallbackMessages.value.push(`有 ${failedCount} 个教学班课程级状态读取失败，课程级统计已按可用结果降级展示。`)
+      }
     } else {
       allCalculationStatuses.value = []
     }
 
     await reloadMajorBoard()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '首页数据加载失败'
-    ElMessage.error(message)
+    addFallbackMessage('global', '首页统计', error)
   } finally {
     pageLoading.value = false
   }
@@ -1636,6 +1703,16 @@ onBeforeUnmount(() => {
   margin-top: 14px;
   color: #52637a;
   font-size: 13px;
+}
+
+.dashboard-fallback-alert {
+  margin-bottom: 16px;
+}
+
+.fallback-message-list {
+  display: grid;
+  gap: 4px;
+  line-height: 1.6;
 }
 
 .notice-title {
