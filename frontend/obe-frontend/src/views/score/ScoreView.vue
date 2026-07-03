@@ -526,6 +526,7 @@ import {
   updateTeachingClass
 } from '@/api/teaching-class'
 import { listAssessmentPoints, listAvailableIndicators, listCourseObjectives } from '@/api/syllabus'
+import { formatTemplateDownloadError } from '@/utils/downloadError'
 import type {
   AssessmentPointVO,
   CourseObjectiveVO,
@@ -1183,8 +1184,7 @@ const handleDownloadTemplate = async () => {
     downloadBlob(blob, '学生导入模板.xlsx')
     ElMessage.success('学生模板已开始下载')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '模板下载失败'
-    ElMessage.error(message)
+    ElMessage.error(formatTemplateDownloadError(error, '学生模板下载失败'))
   } finally {
     downloadingTemplate.value = false
   }
@@ -1203,8 +1203,7 @@ const handleDownloadClassTemplate = async () => {
     downloadBlob(blob, fileName)
     ElMessage.success('教学班学生模板已开始下载')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '教学班模板下载失败'
-    ElMessage.error(message)
+    ElMessage.error(formatTemplateDownloadError(error, '教学班学生模板下载失败'))
   } finally {
     downloadingClassTemplate.value = false
   }
@@ -1217,8 +1216,7 @@ const handleDownloadClassBatchTemplate = async () => {
     downloadBlob(blob, '教学班导入模板.xlsx')
     ElMessage.success('教学班导入模板已开始下载')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '教学班模板下载失败'
-    ElMessage.error(message)
+    ElMessage.error(formatTemplateDownloadError(error, '教学班模板下载失败'))
   } finally {
     downloadingClassBatchTemplate.value = false
   }
@@ -1261,8 +1259,7 @@ const handleDownloadGradeTemplate = async () => {
     downloadBlob(blob, fileName)
     ElMessage.success('成绩模板已开始下载')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '成绩模板下载失败'
-    ElMessage.error(message)
+    ElMessage.error(formatTemplateDownloadError(error, '成绩模板下载失败'))
   } finally {
     gradeTemplateLoading.value = false
   }

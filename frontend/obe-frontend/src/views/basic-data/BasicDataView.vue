@@ -543,6 +543,7 @@ import { pageTeachingClasses, importStudentsFromExcel, downloadStudentTemplate }
 import { createStudent, deleteStudent, pageStudents, updateStudent } from '@/api/student'
 import StatusTag from '@/components/StatusTag/StatusTag.vue'
 import { useUserStore } from '@/stores/user'
+import { formatTemplateDownloadError } from '@/utils/downloadError'
 import type {
   CourseCreateRequest,
   CourseImportResult,
@@ -835,7 +836,7 @@ const handleDownloadStudentTemplate = async () => {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '模板下载失败')
+    ElMessage.error(formatTemplateDownloadError(e, '学生模板下载失败'))
   }
 }
 
@@ -1305,7 +1306,7 @@ const handleDownloadRequirementTemplate = async () => {
     window.URL.revokeObjectURL(url)
     ElMessage.success('模板已开始下载')
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '模板下载失败')
+    ElMessage.error(formatTemplateDownloadError(e, '毕业要求模板下载失败'))
   }
 }
 
@@ -1354,7 +1355,7 @@ const handleDownloadIndicatorTemplate = async () => {
     window.URL.revokeObjectURL(url)
     ElMessage.success('模板已开始下载')
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '模板下载失败')
+    ElMessage.error(formatTemplateDownloadError(e, '指标点模板下载失败'))
   }
 }
 
@@ -1872,8 +1873,7 @@ const handleDownloadTemplate = async () => {
     window.URL.revokeObjectURL(url)
     ElMessage.success('模板已开始下载')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '模板下载失败'
-    ElMessage.error(message)
+    ElMessage.error(formatTemplateDownloadError(error, '课程模板下载失败'))
   }
 }
 

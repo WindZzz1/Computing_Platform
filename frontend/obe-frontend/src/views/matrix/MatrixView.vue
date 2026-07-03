@@ -79,6 +79,7 @@ import type { UploadProps } from 'element-plus'
 import WeightMatrix from '@/components/WeightMatrix/WeightMatrix.vue'
 import { listMajors } from '@/api/major'
 import { checkMatrixConfig, getMatrixConfig, saveMatrixConfig, importMatrixFromExcel, downloadMatrixTemplate } from '@/api/matrix'
+import { formatTemplateDownloadError } from '@/utils/downloadError'
 import type { MatrixConfigVO, MatrixWeightCheckVO, SysDictMajorSimpleVO } from '@/api/backend'
 
 type MatrixRow = {
@@ -258,7 +259,7 @@ const handleDownloadMatrixTemplate = async () => {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url; a.download = '宏观支撑矩阵导入模板.xlsx'; a.click()
     window.URL.revokeObjectURL(url); ElMessage.success('模板已开始下载')
-  } catch (e) { ElMessage.error(e instanceof Error ? e.message : '模板下载失败') }
+  } catch (e) { ElMessage.error(formatTemplateDownloadError(e, '矩阵模板下载失败')) }
 }
 const submitMatrixImport = async () => {
   const file = matrixImportFileList.value?.[0]?.raw
