@@ -35,3 +35,7 @@ export const getCourseList = () => request.get('/courses')
 ```
 
 页面中逐步替换 `src/api/mock.ts` 里的假数据即可。
+
+## 相关文档
+
+- `ROLE_PERMISSIONS.md`：前端角色权限、默认首页、页面访问范围和联调排查说明。
