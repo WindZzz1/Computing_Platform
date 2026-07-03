@@ -554,6 +554,7 @@ const majorStatus = ref<StatusState>()
 const rawScoreStatus = ref<StatusState>()
 
 const selectedMajor = computed(() => majors.value.find((item) => item.id === selectedMajorId.value))
+const selectedTerm = computed(() => schoolYears.value.find((item) => item.id === selectedTermId.value))
 const selectedCourseClass = computed(() => courseClasses.value.find((item) => item.id === selectedClassId.value))
 const hasCourseClassContext = computed(() => Boolean(selectedClassId.value || courseClasses.value.length))
 const resolvedCourseId = computed(() => Number(selectedCourseClass.value?.courseId || directCourseId.value || 0) || undefined)
@@ -1072,6 +1073,34 @@ const downloadBlob = (blob: Blob, fileName: string) => {
   window.URL.revokeObjectURL(url)
 }
 
+const sanitizeFileNamePart = (value?: string | number | null) => {
+  const text = String(value ?? '').trim()
+  return text
+    ? text.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '').replace(/-+/g, '-')
+    : '未命名'
+}
+
+const exportDateLabel = () => {
+  const now = new Date()
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0')
+  ].join('')
+}
+
+const buildReportFileName = (parts: Array<string | number | undefined | null>, extension: string) => {
+  const normalizedParts = ['OBE', ...parts, exportDateLabel()].map(sanitizeFileNamePart)
+  return `${normalizedParts.join('_')}.${extension}`
+}
+
+const selectedTermName = computed(() => {
+  if (selectedTerm.value) {
+    return [selectedTerm.value.yearName, selectedTerm.value.semesterName].filter(Boolean).join('')
+  }
+  return selectedTermId.value ? `学期${selectedTermId.value}` : '未选学期'
+})
+
 const handleDownloadCourseTemplate = async () => {
   courseActionLoading.value = true
   try {
@@ -1139,7 +1168,10 @@ const handleExportCourseReport = async (format: 'EXCEL' | 'PDF') => {
 
     const suffix = format === 'EXCEL' ? 'xlsx' : 'pdf'
     const selectedClass = courseClasses.value.find((item) => item.id === selectedClassId.value)
-    const fileName = `${selectedClass?.className || '课程报表'}.${suffix}`
+    const fileName = buildReportFileName(
+      [selectedClass?.className || '课程报表', selectedClass?.courseName, '课程目标达成情况评价报表'],
+      suffix
+    )
     downloadBlob(blob, fileName)
     setCourseStatus(`${format} 导出成功`, '当前导出接口已返回文件流，可以继续完善文件命名与导出入口。', 'success')
   } catch (error) {
@@ -1418,7 +1450,10 @@ const handleExportMajorAccount = async () => {
   majorActionLoading.value = true
   try {
     const blob = await exportMajorPenetrationAccountExcel(buildMajorRequest())
-    const fileName = `${selectedMajor.value?.majorName || '专业'}_${selectedGrade.value}_穿透式台账.xlsx`
+    const fileName = buildReportFileName(
+      [selectedMajor.value?.majorName || '专业', selectedTermName.value, selectedGrade.value, '穿透式台账'],
+      'xlsx'
+    )
     downloadBlob(blob, fileName)
     setMajorStatus('专业台账导出成功', '后端已返回 Excel 文件流，可以继续补导出入口和文件命名优化。', 'success')
   } catch (error) {
@@ -1444,7 +1479,10 @@ const handleExportMajorIndicator = async (format: 'EXCEL' | 'PDF') => {
         ? await exportMajorIndicatorAchievementExcel(buildMajorRequest())
         : await exportMajorIndicatorAchievementPdf(buildMajorRequest())
     const suffix = format === 'EXCEL' ? 'xlsx' : 'pdf'
-    const fileName = `${selectedMajor.value?.majorName || '专业'}_${selectedGrade.value}_专业达成度.${suffix}`
+    const fileName = buildReportFileName(
+      [selectedMajor.value?.majorName || '专业', selectedTermName.value, selectedGrade.value, '专业指标点达成度'],
+      suffix
+    )
     downloadBlob(blob, fileName)
     setMajorStatus(
       `${format === 'EXCEL' ? 'Excel' : 'PDF'} 导出成功`,
@@ -1515,7 +1553,10 @@ const handleExportRawScores = async () => {
       .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
       .join('\r\n')
     const selectedClass = courseClasses.value.find((item) => item.id === selectedClassId.value)
-    const fileName = `${selectedClass?.className || '教学班'}_学生原始成绩明细.csv`
+    const fileName = buildReportFileName(
+      [selectedClass?.className || '教学班', selectedClass?.courseName, '学生原始成绩明细'],
+      'csv'
+    )
     downloadBlob(new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }), fileName)
     ElMessage.success('学生原始成绩明细已开始下载')
   } finally {
@@ -1556,7 +1597,7 @@ const exportMatrixLedgerExcel = () => {
   XLSX.utils.book_append_sheet(workbook, worksheet, '宏观支撑矩阵台账')
   const workbookBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
 
-  const fileName = `${selectedMajor.value?.majorName || '专业'}-宏观支撑矩阵台账.xlsx`
+  const fileName = buildReportFileName([selectedMajor.value?.majorName || '专业', '宏观支撑矩阵台账'], 'xlsx')
   downloadBlob(
     new Blob([workbookBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
     fileName
@@ -1592,7 +1633,7 @@ const exportMatrixLedgerPdf = () => {
     return
   }
 
-  const title = `${selectedMajor.value?.majorName || '专业'} - 宏观支撑矩阵台账`
+  const title = buildReportFileName([selectedMajor.value?.majorName || '专业', '宏观支撑矩阵台账'], 'pdf').replace(/\.pdf$/, '')
   printWindow.document.write(`
     <!doctype html>
     <html lang="zh-CN">
@@ -1631,7 +1672,7 @@ const exportMatrixLedgerPdf = () => {
       </head>
       <body>
         <h1>${title}</h1>
-        <p>共 ${matrixLedgerRows.value.length} 条矩阵台账记录，可在打印窗口中直接另存为 PDF。</p>
+        <p>共 ${matrixLedgerRows.value.length} 条矩阵台账记录，可在打印窗口中直接另存为 PDF，建议文件名使用：${title}.pdf。</p>
         <table>
           <thead>
             <tr>
