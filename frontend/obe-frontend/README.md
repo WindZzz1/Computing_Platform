@@ -24,6 +24,14 @@ npm run dev
 - 报表导出页面
 - `api/request.ts` 已预留 Axios 封装，后续可直接对接 Swagger 接口
 
+## 业务概念说明
+
+课程目标、考核点、毕业要求指标点、课程级达成度和专业级达成度之间的关系可参考：
+
+```text
+OBE_CONCEPTS.md
+```
+
 ## 推荐后续对接方式
 
 后端 Swagger 完成后，把接口统一写到 `src/api` 目录，例如：
