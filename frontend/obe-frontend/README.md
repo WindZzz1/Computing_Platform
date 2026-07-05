@@ -35,3 +35,7 @@ export const getCourseList = () => request.get('/courses')
 ```
 
 页面中逐步替换 `src/api/mock.ts` 里的假数据即可。
+
+## 相关文档
+
+- `DEMO_FLOW.md`：从基础数据到专业级达成度的完整前端演示流程。
