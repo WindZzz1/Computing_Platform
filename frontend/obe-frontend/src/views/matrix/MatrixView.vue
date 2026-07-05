@@ -30,6 +30,20 @@
           :title="matrixCheckMessage"
           style="margin-bottom: 12px"
         />
+        <div v-if="indicatorRows.length" class="matrix-check-summary">
+          <div class="summary-item success">
+            <strong>{{ validIndicatorCount }}</strong>
+            <span>已通过指标点</span>
+          </div>
+          <div class="summary-item warning">
+            <strong>{{ invalidIndicators.length }}</strong>
+            <span>待调整指标点</span>
+          </div>
+          <div class="summary-item">
+            <strong>1.00</strong>
+            <span>每列目标合计</span>
+          </div>
+        </div>
         <WeightMatrix :loading="loading" :indicators="indicatorRows" :rows="matrixRows" />
         <div v-if="matrixCheckPendingItems.length" class="matrix-warning-list">
           <span class="formula">待处理：</span>
@@ -41,6 +55,16 @@
           >
             {{ item.label }}
           </el-tag>
+        </div>
+        <div v-if="matrixCheckPendingItems.length" class="matrix-check-detail">
+          <div class="detail-title">权重调整建议</div>
+          <div v-for="item in matrixCheckPendingItems" :key="`detail-${item.id}`" class="detail-item">
+            <div>
+              <strong>{{ item.code }}</strong>
+              <span>{{ item.name }}</span>
+            </div>
+            <small>{{ item.suggestion }}</small>
+          </div>
         </div>
       </div>
     </section>
@@ -119,7 +143,10 @@ const matrixCheckMessage = computed(() => {
 const matrixCheckPendingItems = computed(() =>
   invalidIndicators.value.map((indicator) => ({
     id: indicator.id,
-    label: `${indicator.indicatorCode} 当前合计 ${getColumnSum(indicator.id).toFixed(2)}`
+    code: indicator.indicatorCode,
+    name: indicator.indicatorName || '未命名指标点',
+    label: `${indicator.indicatorCode} 当前合计 ${getColumnSum(indicator.id).toFixed(2)}`,
+    suggestion: buildColumnSuggestion(indicator.id)
   }))
 )
 
@@ -129,6 +156,15 @@ const getColumnSum = (indicatorId: number) =>
 const invalidIndicators = computed(() =>
   indicatorRows.value.filter((indicator) => Math.abs(getColumnSum(indicator.id) - 1) > 0.001)
 )
+const validIndicatorCount = computed(() => Math.max(indicatorRows.value.length - invalidIndicators.value.length, 0))
+
+const buildColumnSuggestion = (indicatorId: number) => {
+  const sum = getColumnSum(indicatorId)
+  const diff = Number((1 - sum).toFixed(2))
+  if (Math.abs(diff) <= 0.001) return '该列权重合计已达到 1.00。'
+  if (diff > 0) return `当前合计 ${sum.toFixed(2)}，距离 1.00 还差 ${diff.toFixed(2)}，请在支撑该指标点的课程中补足权重。`
+  return `当前合计 ${sum.toFixed(2)}，已超过 1.00 ${Math.abs(diff).toFixed(2)}，请降低部分课程的支撑权重。`
+}
 
 const buildMatrixItems = () =>
   matrixRows.value.flatMap((row) =>
@@ -203,7 +239,7 @@ const saveMatrix = async () => {
   }
 
   if (invalidIndicators.value.length) {
-    ElMessage.warning(`以下指标点列合计不为 1：${invalidIndicators.value.map((item) => item.indicatorCode).join('、')}`)
+    ElMessage.warning(`请先调整 ${invalidIndicators.value.length} 个指标点列：${matrixCheckPendingItems.value.map((item) => item.code).join('、')}`)
     return
   }
 
@@ -300,11 +336,88 @@ onMounted(async () => {
   color: var(--muted);
 }
 
+.matrix-check-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.summary-item {
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.summary-item strong {
+  display: block;
+  color: #1f2f46;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.summary-item span {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.summary-item.success {
+  background: #f0f9eb;
+  border-color: #d9ecff;
+}
+
+.summary-item.warning {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
 .matrix-warning-list {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 12px;
+}
+
+.matrix-check-detail {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
+.detail-title {
+  color: #9a3412;
+  font-weight: 700;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding-top: 10px;
+  border-top: 1px solid #fde7c7;
+}
+
+.detail-item strong {
+  margin-right: 8px;
+  color: #1f2f46;
+}
+
+.detail-item span,
+.detail-item small {
+  color: #64748b;
+}
+
+.detail-item small {
+  max-width: 560px;
+  line-height: 1.6;
 }
 
 .import-tips { margin-bottom: 16px; }
