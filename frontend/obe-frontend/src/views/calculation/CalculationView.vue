@@ -344,6 +344,27 @@
           <el-button :loading="majorExporting" :disabled="!canQueryMajorCalculation" @click="handleExportMajorIndicator('PDF')">导出达成度 PDF</el-button>
         </div>
 
+        <el-alert
+          v-if="majorCalculationResult?.achievements?.length"
+          title="专业级达成度阈值说明"
+          type="info"
+          show-icon
+          :closable="false"
+          class="block-alert threshold-alert"
+        >
+          <template #default>
+            <div class="threshold-help">
+              <p>
+                当前阈值为 <strong>{{ formatNumber(majorCalculationResult.threshold) }}</strong>。
+                单个指标点达成度 <strong>大于或等于阈值</strong> 时判定为“达标”，低于阈值时判定为“待提升”。
+              </p>
+              <p>
+                平均达成度、最低达成度和最高达成度用于观察专业整体水平；毕业要求是否满足仍应结合每个指标点是否达到阈值判断。
+              </p>
+            </div>
+          </template>
+        </el-alert>
+
         <div v-if="majorCalculationResult?.achievements?.length" class="result-grid">
           <el-card shadow="never" class="result-card">
             <template #header>专业级结果摘要</template>
@@ -1310,6 +1331,22 @@ onBeforeUnmount(() => {
 
 .block-alert {
   margin-bottom: 14px;
+}
+
+.threshold-help {
+  line-height: 1.7;
+}
+
+.threshold-help p {
+  margin: 0;
+}
+
+.threshold-help p + p {
+  margin-top: 6px;
+}
+
+.threshold-help strong {
+  color: #1d4ed8;
 }
 
 .result-grid {
