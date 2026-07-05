@@ -15,6 +15,28 @@ npm run build
 release/
 ```
 
+### 本地 `dist` 目录权限异常处理
+
+如果本地曾经执行过默认构建，项目中可能残留 `dist` 目录。部分 Windows 环境下，`dist` 可能因为文件被浏览器、编辑器、压缩工具或同步软件占用，导致再次执行构建时出现无法删除、无法写入或权限不足的报错。
+
+遇到这类问题时，优先按下面顺序排查：
+
+1. 关闭正在访问 `dist` 目录的浏览器、预览服务、压缩软件或文件管理器窗口。
+2. 手动删除 `frontend/obe-frontend/dist` 后重新执行构建。
+3. 如果只是为了验证构建或临时部署，可以指定新的输出目录，避开受权限影响的 `dist`：
+
+```bash
+npm exec -- vite build --outDir verify-dist --emptyOutDir
+```
+
+用于部署时也可以生成临时目录：
+
+```bash
+npm exec -- vite build --outDir deploy-dist --emptyOutDir
+```
+
+`verify-dist` 和 `deploy-dist` 只属于本地验证/部署临时产物，不需要提交到 Git。项目 `.gitignore` 已忽略这些目录。
+
 ## 2. 前后端接口约定
 
 前端默认请求：
