@@ -400,20 +400,25 @@
       <div class="student-picker-toolbar">
         <el-input
           v-model="studentQuery.studentNo"
-          placeholder="按学号搜索"
+          placeholder="输入学号，回车搜索"
           clearable
           style="width: 220px"
           @keyup.enter="loadStudentPool(1)"
         />
         <el-input
           v-model="studentQuery.studentName"
-          placeholder="按姓名搜索"
+          placeholder="输入姓名，回车搜索"
           clearable
           style="width: 220px"
           @keyup.enter="loadStudentPool(1)"
         />
         <el-button :loading="studentPickerLoading" @click="loadStudentPool(1)">查询</el-button>
         <el-button @click="resetStudentQuery">重置</el-button>
+      </div>
+      <div class="student-picker-status">
+        <el-tag v-if="hasStudentPickerFilter" type="warning" effect="plain">{{ studentPickerFilterLabel }}</el-tag>
+        <el-tag v-else type="info" effect="plain">当前显示系统学生库全部学生</el-tag>
+        <span class="muted">当前教学班已有 {{ boundStudentIdSet.size }} 名学生，已绑定学生会自动禁选。</span>
       </div>
       <el-table
         ref="studentPickerTableRef"
@@ -423,6 +428,12 @@
         row-key="id"
         @selection-change="handleStudentPickerSelectionChange"
       >
+        <template #empty>
+          <div class="student-picker-empty">
+            <strong>{{ studentPickerEmptyTitle }}</strong>
+            <span>{{ studentPickerEmptyDescription }}</span>
+          </div>
+        </template>
         <el-table-column type="selection" width="56" :selectable="isStudentSelectable" reserve-selection />
         <el-table-column prop="studentNo" label="学号" width="140" />
         <el-table-column prop="name" label="姓名" width="120" />
@@ -763,14 +774,43 @@ const selectedStudentCount = computed(() =>
   studentPickerSelection.value.filter((student) => !boundStudentIdSet.value.has(student.id)).length
 )
 
+const hasStudentPickerFilter = computed(() =>
+  Boolean(studentQuery.studentNo?.trim() || studentQuery.studentName?.trim())
+)
+
+const studentPickerFilterLabel = computed(() => {
+  const filters = [
+    studentQuery.studentNo?.trim() ? `学号：${studentQuery.studentNo.trim()}` : '',
+    studentQuery.studentName?.trim() ? `姓名：${studentQuery.studentName.trim()}` : ''
+  ].filter(Boolean)
+  return filters.length ? `当前筛选 ${filters.join('，')}` : '当前未设置筛选条件'
+})
+
+const currentPageBoundStudentCount = computed(() =>
+  studentPickerRows.value.filter((student) => boundStudentIdSet.value.has(student.id)).length
+)
+
+const currentPageBindableStudentCount = computed(() =>
+  studentPickerRows.value.length - currentPageBoundStudentCount.value
+)
+
+const studentPickerEmptyTitle = computed(() => (hasStudentPickerFilter.value ? '没有匹配的学生' : '系统学生库暂无学生'))
+const studentPickerEmptyDescription = computed(() =>
+  hasStudentPickerFilter.value
+    ? '请检查学号或姓名是否输入正确，也可以点击“重置”后重新查询。'
+    : '请先在学生库中新增或批量导入学生，再回到这里绑定教学班。'
+)
+
 const studentPickerSummary = computed(() => {
   if (!selectedClassId.value) {
     return '请先选择教学班后再从系统学生库中选人。'
   }
   if (!studentPickerTotal.value) {
-    return '当前查询结果为空。'
+    return hasStudentPickerFilter.value
+      ? '当前筛选条件下没有学生，建议调整关键词或点击重置。'
+      : '系统学生库暂时没有学生，请先导入学生数据。'
   }
-  return `当前查到 ${studentPickerTotal.value} 名学生，已勾选 ${selectedStudentCount.value} 名可绑定学生。`
+  return `当前查到 ${studentPickerTotal.value} 名学生，本页 ${currentPageBindableStudentCount.value} 名可绑定、${currentPageBoundStudentCount.value} 名已在当前班，已勾选 ${selectedStudentCount.value} 名。`
 })
 
 const results = computed(() => {
@@ -1863,7 +1903,32 @@ onMounted(async () => {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.student-picker-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-bottom: 16px;
+}
+
+.student-picker-empty {
+  display: flex;
+  min-height: 84px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #6b7280;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.student-picker-empty strong {
+  color: #1f2f46;
+  font-size: 14px;
 }
 
 .section-title {
