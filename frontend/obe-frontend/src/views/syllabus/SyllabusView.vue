@@ -300,6 +300,7 @@ import {
   updateAssessmentPoint,
   updateCourseObjective
 } from '@/api/syllabus'
+import { formatTemplateDownloadError } from '@/utils/downloadError'
 import type {
   AssessmentPointCreateRequest,
   AssessmentPointUpdateRequest,
@@ -727,8 +728,7 @@ const handleDownloadObjectiveTemplate = async () => {
     window.URL.revokeObjectURL(url)
     ElMessage.success('模板已开始下载')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '模板下载失败'
-    ElMessage.error(message)
+    ElMessage.error(formatTemplateDownloadError(error, '课程目标模板下载失败'))
   }
 }
 
@@ -784,8 +784,7 @@ const handleDownloadAssessmentTemplate = async () => {
     window.URL.revokeObjectURL(url)
     ElMessage.success('模板已开始下载')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '模板下载失败'
-    ElMessage.error(message)
+    ElMessage.error(formatTemplateDownloadError(error, '考核点模板下载失败'))
   }
 }
 
@@ -841,8 +840,7 @@ const handleDownloadWeightTemplate = async () => {
     window.URL.revokeObjectURL(url)
     ElMessage.success('模板已开始下载')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '模板下载失败'
-    ElMessage.error(message)
+    ElMessage.error(formatTemplateDownloadError(error, '内部贡献权重模板下载失败'))
   }
 }
 

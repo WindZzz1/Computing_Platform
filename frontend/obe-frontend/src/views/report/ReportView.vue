@@ -480,6 +480,7 @@ import { listSchoolYears } from '@/api/schoolyear'
 import { listAssessmentPoints, listCourseObjectives } from '@/api/syllabus'
 import { getTeachingClassStudents, listMyTeachingClasses, pageTeachingClasses } from '@/api/teaching-class'
 import { useUserStore } from '@/stores/user'
+import { formatTemplateDownloadError } from '@/utils/downloadError'
 import type {
   AssessmentPointVO,
   AchievementCalculationStatusVO,
@@ -1152,7 +1153,7 @@ const handleDownloadCourseTemplate = async () => {
     downloadBlob(blob, '课程目标达成情况评价报表模板.xlsx')
     setCourseStatus('模板下载成功', '课程报表模板接口可正常访问，说明教师报表入口已经接通。', 'success')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '课程报表模板下载失败'
+    const message = formatTemplateDownloadError(error, '课程报表模板下载失败')
     const normalized = normalizeBackendMessage(message, 'course')
     setCourseStatus('模板下载失败', normalized, 'error')
     ElMessage.error(normalized)
